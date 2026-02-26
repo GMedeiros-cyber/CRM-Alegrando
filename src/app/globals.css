@@ -1,0 +1,406 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================
+   ALEGRANDO CRM — DESIGN SYSTEM (DARK MODE)
+   Fonts: Outfit (headings) + Plus Jakarta Sans (body)
+   ============================================ */
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/outfit/v11/QGYyz_MVcBeNP4NjuGObqx1XmO1I4W71C5E.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/plusjakartasans/v8/LDIbaomQNQcsA88c7O9yZ4KMCoOg4IA6-91aHEjcWuA_qU79TR_V.woff2') format('woff2');
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-display: 'Outfit', system-ui, sans-serif;
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Alegrando Brand Colors */
+  --color-brand-50: #fef3f2;
+  --color-brand-100: #fee4e2;
+  --color-brand-200: #fececa;
+  --color-brand-300: #fcaaa4;
+  --color-brand-400: #f87a70;
+  --color-brand-500: #ef5544;
+  --color-brand-600: #dc3626;
+  --color-brand-700: #b9291c;
+  --color-brand-800: #99261b;
+  --color-brand-900: #7f261d;
+
+  /* Temperatura colors */
+  --color-temp-frio: #3b82f6;
+  --color-temp-morno: #f59e0b;
+  --color-temp-quente: #ef4444;
+
+  /* Surface colors (dark mode) */
+  --color-surface: #1e293b;
+  --color-surface-muted: #1e293b;
+  --color-surface-subtle: #1e293b;
+
+  /* Sidebar specific (orange light) */
+  --color-sidebar-bg: #fff7ed;
+  --color-sidebar-hover: #fed7aa;
+  --color-sidebar-active: #ef5544;
+  --color-sidebar-text: #1e293b;
+}
+
+:root {
+  --radius: 0.75rem;
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --card: #1e293b;
+  --card-foreground: #e2e8f0;
+  --popover: #1e293b;
+  --popover-foreground: #e2e8f0;
+  --primary: #ef5544;
+  --primary-foreground: #ffffff;
+  --secondary: #334155;
+  --secondary-foreground: #e2e8f0;
+  --muted: #334155;
+  --muted-foreground: #94a3b8;
+  --accent: #334155;
+  --accent-foreground: #e2e8f0;
+  --destructive: #ef4444;
+  --border: #334155;
+  --input: #334155;
+  --ring: #ef5544;
+  --chart-1: #ef5544;
+  --chart-2: #3b82f6;
+  --chart-3: #f59e0b;
+  --chart-4: #22c55e;
+  --chart-5: #8b5cf6;
+  --sidebar: #fff7ed;
+  --sidebar-foreground: #1e293b;
+  --sidebar-primary: #ef5544;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fed7aa;
+  --sidebar-accent-foreground: #1e293b;
+  --sidebar-border: #fdba74;
+  --sidebar-ring: #ef5544;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.025em;
+  }
+}
+
+/* Bento Box Card Styles (Dark Mode) */
+@layer components {
+  .bento-card {
+    @apply bg-slate-800 rounded-2xl border-2 border-slate-700 shadow-sm transition-all duration-300 ease-out;
+  }
+
+  .bento-card:hover {
+    @apply shadow-md border-slate-600;
+    transform: translateY(-1px);
+  }
+
+  .bento-card-static {
+    @apply bg-slate-800 rounded-2xl border border-slate-700/60 shadow-sm;
+    outline: none !important;
+  }
+
+  .bento-card-static *:focus,
+  .bento-card-static *:active {
+    outline: none !important;
+  }
+
+  /* KPI card gradient overlays (Dark Mode) */
+  .kpi-gradient-coral {
+    background: linear-gradient(135deg, rgba(239, 85, 68, 0.15) 0%, rgba(239, 85, 68, 0.05) 100%);
+  }
+
+  .kpi-gradient-blue {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.05) 100%);
+  }
+
+  .kpi-gradient-amber {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.05) 100%);
+  }
+
+  .kpi-gradient-emerald {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%);
+  }
+
+  .kpi-gradient-violet {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%);
+  }
+
+  /* Stagger animation for dashboard bento items */
+  .bento-enter {
+    animation: bento-fade-in 0.5s ease-out forwards;
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  @keyframes bento-fade-in {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* Scrollbar styling (Dark) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* ============================================
+   FULLCALENDAR DARK MODE OVERRIDES
+   ============================================ */
+.agenda-dark-calendar {
+  --fc-border-color: #334155;
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: #1e293b;
+  --fc-list-event-hover-bg-color: #334155;
+  --fc-today-bg-color: rgba(239, 85, 68, 0.08);
+  --fc-highlight-color: rgba(239, 85, 68, 0.12);
+  --fc-non-business-color: rgba(15, 23, 42, 0.5);
+  --fc-event-text-color: #ffffff;
+}
+
+/* Toolbar */
+.agenda-dark-calendar .fc-toolbar-title {
+  color: #f1f5f9 !important;
+  font-family: var(--font-display) !important;
+  font-weight: 700 !important;
+  font-size: 1.25rem !important;
+}
+
+.agenda-dark-calendar .fc-button {
+  background-color: #1e293b !important;
+  border-color: #475569 !important;
+  color: #cbd5e1 !important;
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  padding: 0.4rem 0.8rem !important;
+  border-radius: 0.75rem !important;
+  text-transform: capitalize !important;
+  transition: all 0.15s !important;
+}
+
+.agenda-dark-calendar .fc-button:hover {
+  background-color: #334155 !important;
+  border-color: #64748b !important;
+  color: #ffffff !important;
+}
+
+.agenda-dark-calendar .fc-button-active,
+.agenda-dark-calendar .fc-button:active {
+  background-color: #ef5544 !important;
+  border-color: #ef5544 !important;
+  color: #ffffff !important;
+}
+
+.agenda-dark-calendar .fc-button-group .fc-button {
+  border-radius: 0 !important;
+}
+
+.agenda-dark-calendar .fc-button-group .fc-button:first-child {
+  border-radius: 0.75rem 0 0 0.75rem !important;
+}
+
+.agenda-dark-calendar .fc-button-group .fc-button:last-child {
+  border-radius: 0 0.75rem 0.75rem 0 !important;
+}
+
+/* Day headers */
+.agenda-dark-calendar .fc-col-header-cell {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+.agenda-dark-calendar .fc-col-header-cell-cushion {
+  color: #94a3b8 !important;
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  padding: 0.6rem 0 !important;
+}
+
+/* Day cells */
+.agenda-dark-calendar .fc-daygrid-day {
+  background-color: transparent !important;
+  border-color: #334155 !important;
+  cursor: pointer !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.agenda-dark-calendar .fc-daygrid-day:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.agenda-dark-calendar .fc-daygrid-day:hover .fc-daygrid-day-number {
+  color: #ef5544 !important;
+}
+
+.agenda-dark-calendar .fc-daygrid-day-number {
+  color: #e2e8f0 !important;
+  font-weight: 500 !important;
+  font-size: 0.85rem !important;
+  padding: 0.5rem !important;
+}
+
+.agenda-dark-calendar .fc-day-today .fc-daygrid-day-number {
+  color: #ef5544 !important;
+  font-weight: 800 !important;
+}
+
+.agenda-dark-calendar .fc-day-other .fc-daygrid-day-number {
+  color: #475569 !important;
+}
+
+/* Events */
+.agenda-dark-calendar .fc-event {
+  border-radius: 0.5rem !important;
+  border-width: 0 !important;
+  border-left-width: 3px !important;
+  padding: 2px 6px !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: transform 0.1s, box-shadow 0.1s !important;
+}
+
+.agenda-dark-calendar .fc-event:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* "more" link */
+.agenda-dark-calendar .fc-daygrid-more-link {
+  color: #ef5544 !important;
+  font-weight: 700 !important;
+  font-size: 0.7rem !important;
+}
+
+/* Time grid */
+.agenda-dark-calendar .fc-timegrid-slot {
+  border-color: #334155 !important;
+}
+
+.agenda-dark-calendar .fc-timegrid-slot-label-cushion {
+  color: #64748b !important;
+  font-size: 0.7rem !important;
+}
+
+.agenda-dark-calendar .fc-timegrid-axis-cushion {
+  color: #64748b !important;
+}
+
+/* Now indicator */
+.agenda-dark-calendar .fc-timegrid-now-indicator-line {
+  border-color: #ef5544 !important;
+  border-width: 2px !important;
+}
+
+.agenda-dark-calendar .fc-timegrid-now-indicator-arrow {
+  border-color: #ef5544 !important;
+}
+
+/* Popover */
+.agenda-dark-calendar .fc-popover {
+  background-color: #1e293b !important;
+  border-color: #475569 !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+}
+
+.agenda-dark-calendar .fc-popover-header {
+  background-color: #334155 !important;
+  color: #e2e8f0 !important;
+  border-radius: 0.75rem 0.75rem 0 0 !important;
+}
+
+/* Table borders */
+.agenda-dark-calendar table,
+.agenda-dark-calendar td,
+.agenda-dark-calendar th {
+  border-color: #334155 !important;
+}
