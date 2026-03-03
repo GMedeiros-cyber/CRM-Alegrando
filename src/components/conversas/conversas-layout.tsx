@@ -22,6 +22,7 @@ import {
     sendMessage,
     getTransportadores,
     getKanbanColumnsForSelect,
+    getAvailableDestinations,
 } from "@/lib/actions/leads";
 import type {
     LeadListItem,
@@ -82,6 +83,7 @@ export function ConversasLayout() {
     const [msgs, setMsgs] = useState<LeadMessage[]>([]);
     const [transportadoresOpts, setTransportadoresOpts] = useState<TransportadorOption[]>([]);
     const [kanbanColumnsOpts, setKanbanColumnsOpts] = useState<{ id: string; name: string }[]>([]);
+    const [destinosOpts, setDestinosOpts] = useState<string[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(true);
     const [loadingLead, setLoadingLead] = useState(false);
@@ -138,11 +140,12 @@ export function ConversasLayout() {
     const loadLead = useCallback(async (id: string) => {
         setLoadingLead(true);
         try {
-            const [leadData, messagesData, transOpts, colOpts] = await Promise.all([
+            const [leadData, messagesData, transOpts, colOpts, destOpts] = await Promise.all([
                 getLeadById(id),
                 getLeadMessages(id),
                 getTransportadores(),
                 getKanbanColumnsForSelect(),
+                getAvailableDestinations(),
             ]);
 
             if (leadData) {
@@ -164,6 +167,7 @@ export function ConversasLayout() {
             setMsgs(messagesData);
             setTransportadoresOpts(transOpts);
             setKanbanColumnsOpts(colOpts);
+            setDestinosOpts(destOpts);
         } catch (err) {
             setToast({ type: "error", text: `Erro ao carregar lead: ${err}` });
         } finally {
@@ -652,14 +656,27 @@ export function ConversasLayout() {
                                 icon={<MapPin className="w-3 h-3" />}
                                 label="Destino"
                             >
-                                <Input
-                                    value={form.destino}
-                                    onChange={(e) =>
-                                        setForm((f) => ({ ...f, destino: e.target.value }))
+                                <Select
+                                    value={form.destino || "none"}
+                                    onValueChange={(v) =>
+                                        setForm((f) => ({
+                                            ...f,
+                                            destino: v === "none" ? "" : v,
+                                        }))
                                     }
-                                    placeholder="Ex: Museu Imperial"
-                                    className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
-                                />
+                                >
+                                    <SelectTrigger className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white">
+                                        <SelectValue placeholder="Sem destino" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">Sem destino</SelectItem>
+                                        {destinosOpts.map((d) => (
+                                            <SelectItem key={d} value={d}>
+                                                {d}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </FieldGroup>
 
                             <FieldGroup

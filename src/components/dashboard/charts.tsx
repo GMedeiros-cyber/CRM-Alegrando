@@ -14,6 +14,8 @@ import {
     Area,
     AreaChart,
 } from "recharts";
+import { useState, useEffect } from "react";
+// import { getTopDestinos } from "@/lib/actions/leads"; // Comentado para mocks
 
 // =========================================
 // Mock data
@@ -183,66 +185,76 @@ export function TemperaturaChart() {
     );
 }
 
-export function ConversoesSemanaChart() {
+// =========================================
+// Top Destinos (dados reais do banco)
+// =========================================
+
+const mockDestinos = [
+    { destino: "Parque Nacional da Tijuca", total: 45 },
+    { destino: "Museu do Amanhã", total: 32 },
+    { destino: "Petrópolis", total: 28 },
+    { destino: "Paraty", total: 15 },
+    { destino: "Cristo Redentor", total: 10 },
+];
+
+export function TopDestinosChart() {
+    const [data, setData] = useState<{ destino: string; total: number }[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        // FIXME: Mocks temporários para visualização
+        setData(mockDestinos);
+        setLoading(false);
+        /* 
+        getTopDestinos()
+            .then(res => setData(res as { destino: string; total: number }[]))
+            .finally(() => setLoading(false));
+        */
+    }, []);
+
     return (
-        <div className="bento-card-static p-6 bento-enter" style={{ animationDelay: "400ms" }}>
+        <div className="bento-card-static p-6 bento-enter bg-slate-800" style={{ animationDelay: "500ms" }}>
             <div className="mb-6">
                 <h3 className="font-display text-lg font-semibold text-white">
-                    Atividade da Semana
+                    Top Destinos & Passeios
                 </h3>
                 <p className="text-sm text-slate-400 mt-0.5">
-                    Novos leads vs. conversões
+                    Destinos mais requisitados pelos leads
                 </p>
             </div>
-            <div className="h-[200px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={conversoesSemana}>
-                        <defs>
-                            <linearGradient id="gradNovos" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-                            </linearGradient>
-                            <linearGradient id="gradConvertidos" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#22c55e" stopOpacity={0.3} />
-                                <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid
-                            strokeDasharray="3 3"
-                            vertical={false}
-                            stroke="#334155"
-                        />
-                        <XAxis
-                            dataKey="dia"
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 12, fill: "#94a3b8" }}
-                        />
-                        <YAxis
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 12, fill: "#94a3b8" }}
-                        />
-                        <Tooltip content={<CustomTooltipContent />} cursor={false} />
-                        <Area
-                            type="monotone"
-                            dataKey="novos"
-                            stroke="#3b82f6"
-                            strokeWidth={2}
-                            fill="url(#gradNovos)"
-                            name="Novos"
-                        />
-                        <Area
-                            type="monotone"
-                            dataKey="convertidos"
-                            stroke="#22c55e"
-                            strokeWidth={2}
-                            fill="url(#gradConvertidos)"
-                            name="Convertidos"
-                        />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </div>
+            {loading ? (
+                <div className="h-[220px] flex items-center justify-center">
+                    <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+            ) : data.length > 0 ? (
+                <div className="h-[220px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data} layout="vertical" barCategoryGap="25%">
+                            <XAxis
+                                type="number"
+                                hide
+                            />
+                            <YAxis
+                                type="category"
+                                dataKey="destino"
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 13, fill: "#e2e8f0" }}
+                                width={140}
+                            />
+                            <Tooltip content={<CustomTooltipContent />} cursor={{ fill: 'transparent' }} />
+                            <Bar dataKey="total" name="Leads" radius={[0, 4, 4, 0]} fill="#fb923c">
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            ) : (
+                <div className="h-[220px] flex items-center justify-center">
+                    <p className="text-sm text-slate-400">
+                        Nenhum destino registrado ainda.
+                    </p>
+                </div>
+            )}
         </div>
     );
 }

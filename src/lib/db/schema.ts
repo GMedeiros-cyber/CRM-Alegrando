@@ -7,6 +7,7 @@ import {
     boolean,
     date,
     jsonb,
+    bigint,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -255,3 +256,15 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
         references: [leads.id],
     }),
 }));
+
+// =============================================
+// DOCUMENTS (Tabela gerenciada pelo n8n - READ ONLY)
+// =============================================
+export const documents = pgTable("documents", {
+    id: bigint("id", { mode: "number" }).primaryKey(),
+    content: text("content"),
+    metadata: jsonb("metadata"),
+    tipoPasseio: text("tipo_passeio"),
+    categoria: text("categoria"),
+    destaque: boolean("destaque"),
+});

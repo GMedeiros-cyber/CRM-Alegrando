@@ -12,7 +12,7 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import {
     LeadsPorMesChart,
     TemperaturaChart,
-    ConversoesSemanaChart,
+    TopDestinosChart,
 } from "@/components/dashboard/charts";
 
 // Mock data
@@ -75,6 +75,7 @@ export default function DashboardPage() {
                 <MetricCard
                     title="Total de Leads"
                     value={127}
+                    subtitle="Acumulado geral"
                     icon={Users}
                     trend={{ value: 12, label: "vs mês" }}
                     gradient="kpi-gradient-coral"
@@ -124,7 +125,7 @@ export default function DashboardPage() {
 
             {/* Bottom Row: Activity + Upcoming */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ConversoesSemanaChart />
+                <TopDestinosChart />
 
                 {/* Próximos Agendamentos */}
                 <div

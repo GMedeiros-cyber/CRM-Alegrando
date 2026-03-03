@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { leads, messages, transportadores, kanbanColumns, leadTags, tags } from "@/lib/db/schema";
+import { leads, messages, transportadores, kanbanColumns, leadTags, tags, documents } from "@/lib/db/schema";
 import { eq, asc, isNull, desc, ilike, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
@@ -269,4 +269,37 @@ export async function sendMessage(
     }
 
     return msg;
+}
+
+/**
+ * Busca o top 5 destinos solicitados com contagem de leads.
+ */
+export async function getTopDestinos() {
+    const results = await db
+        .select({
+            destino: leads.destino,
+            total: sql<number>`count(${leads.id})`.mapWith(Number),
+        })
+        .from(leads)
+        .where(sql`${leads.destino} IS NOT NULL AND TRIM(${leads.destino}) != ''`)
+        .groupBy(leads.destino)
+        .orderBy(desc(sql<number>`count(${leads.id})`))
+        .limit(5);
+
+    return results;
+}
+
+/**
+ * Busca os destinos únicos disponíveis na tabela documents.
+ */
+export async function getAvailableDestinations(): Promise<string[]> {
+    const results = await db
+        .selectDistinct({
+            tipoPasseio: documents.tipoPasseio,
+        })
+        .from(documents)
+        .where(sql`${documents.tipoPasseio} IS NOT NULL AND TRIM(${documents.tipoPasseio}) != ''`)
+        .orderBy(asc(documents.tipoPasseio));
+
+    return results.map(r => r.tipoPasseio as string);
 }

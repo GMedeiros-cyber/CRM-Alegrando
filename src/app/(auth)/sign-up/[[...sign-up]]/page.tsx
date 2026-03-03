@@ -9,6 +9,7 @@ export default function SignUpPage() {
             </div>
             <div className="relative z-10">
                 <SignUp
+                    fallbackRedirectUrl="/dashboard"
                     appearance={{
                         elements: {
                             cardBox: "shadow-xl shadow-black/5 rounded-2xl border border-border/30",
