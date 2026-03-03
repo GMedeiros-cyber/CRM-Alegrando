@@ -1,45 +1,36 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { leads, messages, transportadores, kanbanColumns, leadTags, tags, documents } from "@/lib/db/schema";
-import { eq, asc, isNull, desc, ilike, or, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { clientesWhatsapp, documents } from "@/lib/db/schema";
+import { asc, desc, sql, ilike, or } from "drizzle-orm";
 
 // =============================================
 // TYPES
 // =============================================
-export type LeadListItem = {
-    id: string;
-    nomeEscola: string;
-    telefone: string | null;
-    temperatura: string;
-    kanbanColumnId: string;
-    kanbanColumnName: string;
-    kanbanColumnColor: string | null;
+
+/** Item da lista lateral de conversas */
+export type ClienteListItem = {
+    telefone: string;
+    nome: string | null;
+    status: string | null;
+    statusAtendimento: string | null;
     iaAtiva: boolean;
-    lastMessageAt: Date | null;
     createdAt: Date | null;
 };
 
-export type LeadDetail = {
-    id: string;
-    nomeEscola: string;
-    telefone: string | null;
+/** Detalhe completo do cliente selecionado */
+export type ClienteDetail = {
+    telefone: string;
+    nome: string | null;
+    status: string | null;
+    cpf: string | null;
     email: string | null;
-    temperatura: string;
-    dataEvento: string | null;
-    destino: string | null;
-    quantidadeAlunos: number | null;
-    pacoteEscolhido: string | null;
-    transportadoraId: string | null;
-    kanbanColumnId: string;
+    statusAtendimento: string | null;
     iaAtiva: boolean;
-    whatsappChatId: string | null;
-    observacoes: string | null;
     createdAt: Date | null;
-    updatedAt: Date | null;
 };
 
+/** Mensagem individual do chat */
 export type LeadMessage = {
     id: string;
     senderType: string;
@@ -48,245 +39,99 @@ export type LeadMessage = {
     createdAt: Date | null;
 };
 
-export type TransportadorOption = {
-    id: string;
-    nome: string;
-};
-
 // =============================================
 // QUERIES
 // =============================================
 
 /**
- * Lista todos os leads com nome da coluna kanban, ordenados por atividade recente.
+ * Lista todos os clientes da tabela Clientes _WhatsApp.
+ * Ordenados por created_at DESC (mais recentes primeiro).
  */
-export async function listLeads(search?: string): Promise<LeadListItem[]> {
+export async function listClientes(search?: string): Promise<ClienteListItem[]> {
     let query = db
         .select({
-            id: leads.id,
-            nomeEscola: leads.nomeEscola,
-            telefone: leads.telefone,
-            temperatura: leads.temperatura,
-            kanbanColumnId: leads.kanbanColumnId,
-            kanbanColumnName: kanbanColumns.name,
-            kanbanColumnColor: kanbanColumns.color,
-            iaAtiva: leads.iaAtiva,
-            createdAt: leads.createdAt,
+            telefone: clientesWhatsapp.telefone,
+            nome: clientesWhatsapp.nome,
+            status: clientesWhatsapp.status,
+            statusAtendimento: clientesWhatsapp.statusAtendimento,
+            iaAtiva: clientesWhatsapp.iaAtiva,
+            createdAt: clientesWhatsapp.createdAt,
         })
-        .from(leads)
-        .innerJoin(kanbanColumns, eq(leads.kanbanColumnId, kanbanColumns.id))
-        .where(isNull(leads.deletedAt))
-        .orderBy(desc(leads.updatedAt));
+        .from(clientesWhatsapp)
+        .orderBy(desc(clientesWhatsapp.createdAt));
 
     const results = await query;
 
-    // Filtrar por busca no lado do servidor
+    // Filtrar por busca
     let filtered = results;
     if (search && search.trim()) {
         const term = search.toLowerCase();
         filtered = results.filter(
             (r) =>
-                r.nomeEscola.toLowerCase().includes(term) ||
-                r.telefone?.toLowerCase().includes(term) ||
-                r.kanbanColumnName.toLowerCase().includes(term)
+                r.nome?.toLowerCase().includes(term) ||
+                r.telefone?.includes(term)
         );
     }
 
-    return filtered.map((r) => ({
-        ...r,
-        lastMessageAt: null, // será preenchido quando houver mensagens
-    }));
+    return filtered;
 }
 
 /**
- * Busca um lead pelo ID com todos os detalhes.
+ * Busca um cliente pelo telefone.
  */
-export async function getLeadById(id: string): Promise<LeadDetail | null> {
-    const [lead] = await db
+export async function getClienteByTelefone(telefone: string): Promise<ClienteDetail | null> {
+    const results = await db
         .select()
-        .from(leads)
-        .where(eq(leads.id, id))
+        .from(clientesWhatsapp)
+        .where(sql`${clientesWhatsapp.telefone}::text = ${telefone}`)
         .limit(1);
 
-    if (!lead) return null;
+    const cliente = results[0];
+    if (!cliente) return null;
 
     return {
-        id: lead.id,
-        nomeEscola: lead.nomeEscola,
-        telefone: lead.telefone,
-        email: lead.email,
-        temperatura: lead.temperatura,
-        dataEvento: lead.dataEvento,
-        destino: lead.destino,
-        quantidadeAlunos: lead.quantidadeAlunos,
-        pacoteEscolhido: lead.pacoteEscolhido,
-        transportadoraId: lead.transportadoraId,
-        kanbanColumnId: lead.kanbanColumnId,
-        iaAtiva: lead.iaAtiva,
-        whatsappChatId: lead.whatsappChatId,
-        observacoes: lead.observacoes,
-        createdAt: lead.createdAt,
-        updatedAt: lead.updatedAt,
+        telefone: cliente.telefone,
+        nome: cliente.nome,
+        status: cliente.status,
+        cpf: cliente.cpf,
+        email: cliente.email,
+        statusAtendimento: cliente.statusAtendimento,
+        iaAtiva: cliente.iaAtiva,
+        createdAt: cliente.createdAt,
     };
 }
 
 /**
- * Busca as mensagens de um lead.
+ * Atualiza ia_ativa do cliente.
  */
-export async function getLeadMessages(leadId: string): Promise<LeadMessage[]> {
-    return db
-        .select({
-            id: messages.id,
-            senderType: messages.senderType,
-            senderName: messages.senderName,
-            content: messages.content,
-            createdAt: messages.createdAt,
-        })
-        .from(messages)
-        .where(eq(messages.leadId, leadId))
-        .orderBy(asc(messages.createdAt));
-}
-
-/**
- * Busca transportadores para o dropdown.
- */
-export async function getTransportadores(): Promise<TransportadorOption[]> {
-    return db
-        .select({ id: transportadores.id, nome: transportadores.nome })
-        .from(transportadores)
-        .where(isNull(transportadores.deletedAt))
-        .orderBy(asc(transportadores.nome));
-}
-
-/**
- * Busca colunas do Kanban para o dropdown.
- */
-export async function getKanbanColumnsForSelect() {
-    return db
-        .select({ id: kanbanColumns.id, name: kanbanColumns.name })
-        .from(kanbanColumns)
-        .where(isNull(kanbanColumns.deletedAt))
-        .orderBy(asc(kanbanColumns.position));
-}
-
-// =============================================
-// MUTATIONS
-// =============================================
-
-/**
- * Atualiza os dados de um lead.
- */
-export async function updateLead(
-    id: string,
-    data: {
-        nomeEscola?: string;
-        telefone?: string | null;
-        email?: string | null;
-        temperatura?: string;
-        dataEvento?: string | null;
-        destino?: string | null;
-        quantidadeAlunos?: number | null;
-        pacoteEscolhido?: string | null;
-        transportadoraId?: string | null;
-        kanbanColumnId?: string;
-        observacoes?: string | null;
-    }
-) {
+export async function toggleIaAtiva(telefone: string, iaAtiva: boolean) {
     await db
-        .update(leads)
-        .set({ ...data, updatedAt: new Date() })
-        .where(eq(leads.id, id));
+        .update(clientesWhatsapp)
+        .set({ iaAtiva })
+        .where(sql`${clientesWhatsapp.telefone}::text = ${telefone}`);
 
-    revalidatePath("/conversas");
-    revalidatePath("/kanban");
-    return { success: true };
-}
-
-/**
- * Toggle do campo ia_ativa.
- */
-export async function toggleIaAtiva(id: string, iaAtiva: boolean) {
-    await db
-        .update(leads)
-        .set({ iaAtiva, updatedAt: new Date() })
-        .where(eq(leads.id, id));
-
-    revalidatePath("/conversas");
-    revalidatePath("/kanban");
     return { success: true, iaAtiva };
 }
 
 /**
- * Salva uma mensagem e dispara para o n8n.
+ * Atualiza dados do cliente.
  */
-export async function sendMessage(
-    leadId: string,
-    content: string,
-    senderName?: string
-) {
-    const [msg] = await db
-        .insert(messages)
-        .values({
-            leadId,
-            senderType: "equipe",
-            senderName: senderName || "Equipe Alegrando",
-            content,
-        })
-        .returning();
-
-    // Buscar dados do lead para o n8n
-    const [lead] = await db
-        .select({
-            telefone: leads.telefone,
-            nomeEscola: leads.nomeEscola,
-            whatsappChatId: leads.whatsappChatId,
-        })
-        .from(leads)
-        .where(eq(leads.id, leadId))
-        .limit(1);
-
-    // POST para n8n (fire and forget)
-    const n8nUrl = process.env.N8N_WEBHOOK_URL;
-    if (n8nUrl && lead) {
-        try {
-            await fetch(n8nUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    action: "send_message",
-                    leadId,
-                    telefone: lead.telefone,
-                    nomeEscola: lead.nomeEscola,
-                    whatsappChatId: lead.whatsappChatId,
-                    message: content,
-                    senderName: senderName || "Equipe Alegrando",
-                    timestamp: new Date().toISOString(),
-                }),
-            });
-        } catch (err) {
-            console.error("⚠️ Erro ao enviar para n8n:", err);
-        }
+export async function updateCliente(
+    telefone: string,
+    data: {
+        nome?: string | null;
+        status?: string | null;
+        cpf?: string | null;
+        email?: string | null;
+        statusAtendimento?: string | null;
     }
+) {
+    await db
+        .update(clientesWhatsapp)
+        .set(data)
+        .where(sql`${clientesWhatsapp.telefone}::text = ${telefone}`);
 
-    return msg;
-}
-
-/**
- * Busca o top 5 destinos solicitados com contagem de leads.
- */
-export async function getTopDestinos() {
-    const results = await db
-        .select({
-            destino: leads.destino,
-            total: sql<number>`count(${leads.id})`.mapWith(Number),
-        })
-        .from(leads)
-        .where(sql`${leads.destino} IS NOT NULL AND TRIM(${leads.destino}) != ''`)
-        .groupBy(leads.destino)
-        .orderBy(desc(sql<number>`count(${leads.id})`))
-        .limit(5);
-
-    return results;
+    return { success: true };
 }
 
 /**

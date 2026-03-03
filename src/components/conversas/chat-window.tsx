@@ -6,11 +6,11 @@ import { MessageSquare, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ChatWindowProps {
-    leadId: string;
+    telefone: string;
 }
 
-export function ChatWindow({ leadId }: ChatWindowProps) {
-    const { messages, loading } = useLeadMessages(leadId);
+export function ChatWindow({ telefone }: ChatWindowProps) {
+    const { messages, loading } = useLeadMessages(telefone);
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     // Scroll to bottom

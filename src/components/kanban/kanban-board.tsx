@@ -69,6 +69,7 @@ export function KanbanBoard({
         try {
             const color = COLORS[columns.length % COLORS.length];
             const created = await createKanbanColumn(name, color);
+            if (!created) return;
             setColumns((prev) => [...prev, {
                 id: created.id,
                 name: created.name,

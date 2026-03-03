@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-import { getLeadMessages, type LeadMessage } from "@/lib/actions/leads";
+import type { LeadMessage } from "@/lib/actions/leads";
 
-export function useLeadMessages(leadId: string) {
+export function useLeadMessages(telefone: string) {
     const [messages, setMessages] = useState<LeadMessage[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -12,7 +12,9 @@ export function useLeadMessages(leadId: string) {
         async function fetchInitial() {
             try {
                 setLoading(true);
-                const data = await getLeadMessages(leadId);
+                // Busca inicial via server action (ainda usa leadId internamente por enquanto)
+                // TODO: refatorar getLeadMessages para aceitar telefone quando o backend estiver pronto
+                const data = await getLeadMessagesByPhone(telefone);
                 if (isMounted) {
                     setMessages(data);
                 }
@@ -25,20 +27,19 @@ export function useLeadMessages(leadId: string) {
 
         fetchInitial();
 
-        // Inscreve no Supabase Realtime para a tabela messages filtrado pelo leadId
+        // Inscreve no Supabase Realtime para a tabela messages filtrado pelo telefone
         const channel = supabase
-            .channel(`public:messages:lead_${leadId}`)
+            .channel(`public:messages:telefone_${telefone}`)
             .on(
                 "postgres_changes",
                 {
                     event: "INSERT",
                     schema: "public",
                     table: "messages",
-                    filter: `lead_id=eq.${leadId}`,
+                    filter: `telefone=eq.${telefone}`,
                 },
                 (payload) => {
                     const newMsg = payload.new;
-                    // Format payload into LeadMessage structure
                     const formattedMsg: LeadMessage = {
                         id: newMsg.id,
                         senderType: newMsg.sender_type,
@@ -49,7 +50,6 @@ export function useLeadMessages(leadId: string) {
 
                     if (isMounted) {
                         setMessages((prev) => {
-                            // verify uniqueness to avoid double insert
                             if (prev.some(m => m.id === formattedMsg.id)) return prev;
                             const next = [...prev, formattedMsg].sort((a, b) => {
                                 const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -67,7 +67,31 @@ export function useLeadMessages(leadId: string) {
             isMounted = false;
             supabase.removeChannel(channel);
         };
-    }, [leadId]);
+    }, [telefone]);
 
     return { messages, loading };
+}
+
+/**
+ * Busca mensagens diretamente pelo telefone via Supabase client (SELECT only).
+ */
+async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> {
+    const { data, error } = await supabase
+        .from("messages")
+        .select("id, sender_type, sender_name, content, created_at")
+        .eq("telefone", telefone)
+        .order("created_at", { ascending: true });
+
+    if (error) {
+        console.error("Erro ao buscar mensagens por telefone:", error);
+        return [];
+    }
+
+    return (data || []).map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        senderType: row.sender_type as string,
+        senderName: (row.sender_name as string) || null,
+        content: row.content as string,
+        createdAt: row.created_at ? new Date(row.created_at as string) : null,
+    }));
 }
