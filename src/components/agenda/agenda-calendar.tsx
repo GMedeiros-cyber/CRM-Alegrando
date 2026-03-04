@@ -65,6 +65,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     // Events from Google Calendar
     const [allEvents, setAllEvents] = useState<AgendamentoEvent[]>([]);
     const [loadingEvents, setLoadingEvents] = useState(true);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     // Clientes list for the select
     const [clientes, setClientes] = useState<ClienteListItem[]>([]);
@@ -90,11 +91,13 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     async function loadEvents() {
         try {
             setLoadingEvents(true);
+            setErrorMsg(null);
             const events = await getAgendamentos();
             setAllEvents(events);
             onEventsChange?.(events);
         } catch (err) {
             console.error("Erro ao carregar agendamentos:", err);
+            setErrorMsg(String(err));
         } finally {
             setLoadingEvents(false);
         }
@@ -225,6 +228,11 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     return (
         <>
             {/* =================== CALENDAR =================== */}
+            {errorMsg && (
+                <div className="mb-3 px-4 py-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
+                    ❌ Erro Google Calendar: {errorMsg}
+                </div>
+            )}
             <div className="agenda-dark-calendar relative">
                 {loadingEvents && (
                     <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/60 rounded-2xl backdrop-blur-sm">
