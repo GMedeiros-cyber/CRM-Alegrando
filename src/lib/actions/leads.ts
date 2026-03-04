@@ -12,6 +12,7 @@ import { asc, desc, sql, ilike, or } from "drizzle-orm";
 export type ClienteListItem = {
     telefone: string;
     nome: string | null;
+    email: string | null;
     status: string | null;
     statusAtendimento: string | null;
     iaAtiva: boolean;
@@ -52,6 +53,7 @@ export async function listClientes(search?: string): Promise<ClienteListItem[]> 
         .select({
             telefone: clientesWhatsapp.telefone,
             nome: clientesWhatsapp.nome,
+            email: clientesWhatsapp.email,
             status: clientesWhatsapp.status,
             statusAtendimento: clientesWhatsapp.statusAtendimento,
             iaAtiva: clientesWhatsapp.iaAtiva,

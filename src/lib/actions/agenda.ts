@@ -119,6 +119,8 @@ export async function createAgendamento(data: {
     destino?: string;
     quantidadeAlunos?: number;
     status?: string;
+    emailConvidado?: string;
+    nomeConvidado?: string;
 }): Promise<AgendamentoEvent> {
     const calendar = getCalendarClient();
     const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
@@ -140,6 +142,9 @@ export async function createAgendamento(data: {
             summary: data.titulo,
             start,
             end,
+            attendees: data.emailConvidado
+                ? [{ email: data.emailConvidado, displayName: data.nomeConvidado || "" }]
+                : undefined,
             extendedProperties: {
                 private: {
                     leadId: data.leadId || "",
@@ -147,6 +152,7 @@ export async function createAgendamento(data: {
                     destino: data.destino || "",
                     quantidadeAlunos: String(data.quantidadeAlunos || 0),
                     status: data.status || "confirmado",
+                    emailConvidado: data.emailConvidado || "",
                 },
             },
         },

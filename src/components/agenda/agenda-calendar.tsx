@@ -32,10 +32,12 @@ import {
     Save,
     Trash2,
     Loader2,
+    Pencil,
 } from "lucide-react";
 import {
     getAgendamentos,
     createAgendamento,
+    updateAgendamento,
     deleteAgendamento,
 } from "@/lib/actions/agenda";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
@@ -75,7 +77,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     const [modalMode, setModalMode] = useState<"create" | "view">("create");
     const [selectedEvent, setSelectedEvent] = useState<AgendamentoEvent | null>(null);
 
-    // Form state
+    // Form state (create)
     const [form, setForm] = useState({
         titulo: "",
         dataInicio: "",
@@ -83,6 +85,16 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         dataFim: "",
         horaFim: "17:00",
         clienteTelefone: "",
+    });
+
+    // Edit state (inline edit)
+    const [editing, setEditing] = useState(false);
+    const [editForm, setEditForm] = useState({
+        titulo: "",
+        dataInicio: "",
+        horaInicio: "",
+        dataFim: "",
+        horaFim: "",
     });
 
     // =============================================
@@ -112,16 +124,46 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         }
     }
 
+    // Load initial data
     useEffect(() => {
         loadEvents();
         loadClientes();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // 1️⃣ Polling: sincroniza com Google Calendar a cada 10s
+    useEffect(() => {
+        const interval = setInterval(() => {
+            loadEvents();
+        }, 10_000);
+        return () => clearInterval(interval);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // 2️⃣ Inicializa editForm quando evento selecionado
+    useEffect(() => {
+        if (selectedEvent && modalMode === "view") {
+            const startDate = selectedEvent.start.split("T")[0];
+            const startTime = selectedEvent.start.includes("T")
+                ? selectedEvent.start.split("T")[1].substring(0, 5)
+                : "09:00";
+            const endDate = selectedEvent.end?.split("T")[0] || startDate;
+            const endTime = selectedEvent.end?.includes("T")
+                ? selectedEvent.end.split("T")[1].substring(0, 5)
+                : "17:00";
+            setEditForm({
+                titulo: selectedEvent.title,
+                dataInicio: startDate,
+                horaInicio: startTime,
+                dataFim: endDate,
+                horaFim: endTime,
+            });
+            setEditing(false);
+        }
+    }, [selectedEvent, modalMode]);
+
     // =============================================
     // MODAL HANDLERS
     // =============================================
 
-    // Open create modal from header button
     function openCreateModal() {
         const today = new Date().toISOString().split("T")[0];
         setModalMode("create");
@@ -137,7 +179,6 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         setModalOpen(true);
     }
 
-    // Listen for header button event
     useEffect(() => {
         function handler() {
             openCreateModal();
@@ -146,7 +187,6 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         return () => window.removeEventListener("agenda:create", handler);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Click on empty day → open create modal with date
     function handleDateClick(info: DateClickArg) {
         setModalMode("create");
         setSelectedEvent(null);
@@ -161,7 +201,6 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         setModalOpen(true);
     }
 
-    // Click on event → show details
     function handleEventClick(info: EventClickArg) {
         const evt = allEvents.find((e) => e.id === info.event.id);
         if (evt) {
@@ -175,13 +214,13 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     // CRUD HANDLERS
     // =============================================
 
-    // Save new event → Google Calendar
+    // 3️⃣ Save new event → Google Calendar + email convidado
     function handleSaveEvent() {
         if (!form.titulo || !form.dataInicio) return;
 
-        const clienteNome = clientes.find(
+        const cliente = clientes.find(
             (c) => c.telefone === form.clienteTelefone
-        )?.nome || "";
+        );
 
         startTransition(async () => {
             try {
@@ -192,13 +231,36 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                     dataFim: form.dataFim || form.dataInicio,
                     horaFim: form.horaFim,
                     leadId: form.clienteTelefone,
-                    nomeEscola: clienteNome || form.titulo,
+                    nomeEscola: cliente?.nome || form.titulo,
                     status: "confirmado",
+                    emailConvidado: cliente?.email || undefined,
+                    nomeConvidado: cliente?.nome || undefined,
                 });
                 setModalOpen(false);
                 await loadEvents();
             } catch (err) {
                 console.error("Erro ao criar agendamento:", err);
+            }
+        });
+    }
+
+    // 2️⃣ Update event → Google Calendar
+    async function handleUpdateEvent() {
+        if (!selectedEvent) return;
+        startTransition(async () => {
+            try {
+                await updateAgendamento(selectedEvent.extendedProps.googleEventId, {
+                    titulo: editForm.titulo,
+                    dataInicio: editForm.dataInicio,
+                    horaInicio: editForm.horaInicio,
+                    dataFim: editForm.dataFim,
+                    horaFim: editForm.horaFim,
+                });
+                setEditing(false);
+                setModalOpen(false);
+                await loadEvents();
+            } catch (err) {
+                console.error("Erro ao atualizar evento:", err);
             }
         });
     }
@@ -217,7 +279,6 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         });
     }
 
-    // Navigate to conversas
     function goToConversas(telefone: string) {
         setModalOpen(false);
         if (telefone) {
@@ -472,27 +533,99 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
 
                                 {/* Action buttons */}
                                 <div className="flex gap-2 mt-2">
-                                    <button
-                                        onClick={() => goToConversas(selectedEvent.extendedProps.leadId)}
-                                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 transition-colors shadow-lg shadow-brand-500/25"
-                                    >
-                                        💬 Abrir Conversa
-                                    </button>
-                                    <button
-                                        onClick={() =>
-                                            handleDeleteEvent(selectedEvent.extendedProps.googleEventId)
-                                        }
-                                        disabled={isPending}
-                                        className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-500/15 text-red-400 font-medium text-sm hover:bg-red-500/25 border border-red-500/30 transition-colors disabled:opacity-40"
-                                    >
-                                        {isPending ? (
-                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        ) : (
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        )}
-                                        Excluir
-                                    </button>
+                                    {!editing && (
+                                        <>
+                                            <button
+                                                onClick={() => setEditing(true)}
+                                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-600 transition-colors"
+                                            >
+                                                <Pencil className="w-3.5 h-3.5" />
+                                                Editar
+                                            </button>
+
+                                            {selectedEvent.extendedProps.leadId && (
+                                                <button
+                                                    onClick={() => goToConversas(selectedEvent.extendedProps.leadId)}
+                                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 transition-colors shadow-lg shadow-brand-500/25"
+                                                >
+                                                    💬 Abrir Conversa
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() =>
+                                                    handleDeleteEvent(selectedEvent.extendedProps.googleEventId)
+                                                }
+                                                disabled={isPending}
+                                                className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-500/15 text-red-400 font-medium text-sm hover:bg-red-500/25 border border-red-500/30 transition-colors disabled:opacity-40"
+                                            >
+                                                {isPending ? (
+                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                ) : (
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                )}
+                                                Excluir
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
+
+                                {/* Formulário de edição inline */}
+                                {editing && (
+                                    <div className="space-y-3 mt-2 pt-3 border-t border-slate-700">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Título</Label>
+                                            <Input
+                                                value={editForm.titulo}
+                                                onChange={(e) => setEditForm(f => ({ ...f, titulo: e.target.value }))}
+                                                className="bg-slate-900 border-slate-600 text-white rounded-xl"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Início</Label>
+                                                <Input type="date" value={editForm.dataInicio}
+                                                    onChange={(e) => setEditForm(f => ({ ...f, dataInicio: e.target.value }))}
+                                                    className="bg-slate-900 border-slate-600 text-white rounded-xl" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hora Início</Label>
+                                                <Input type="time" value={editForm.horaInicio}
+                                                    onChange={(e) => setEditForm(f => ({ ...f, horaInicio: e.target.value }))}
+                                                    className="bg-slate-900 border-slate-600 text-white rounded-xl" />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Fim</Label>
+                                                <Input type="date" value={editForm.dataFim}
+                                                    onChange={(e) => setEditForm(f => ({ ...f, dataFim: e.target.value }))}
+                                                    className="bg-slate-900 border-slate-600 text-white rounded-xl" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hora Fim</Label>
+                                                <Input type="time" value={editForm.horaFim}
+                                                    onChange={(e) => setEditForm(f => ({ ...f, horaFim: e.target.value }))}
+                                                    className="bg-slate-900 border-slate-600 text-white rounded-xl" />
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={handleUpdateEvent}
+                                                disabled={isPending}
+                                                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 disabled:opacity-40 transition-colors shadow-lg shadow-brand-500/25"
+                                            >
+                                                {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                                Salvar Alterações
+                                            </button>
+                                            <button
+                                                onClick={() => setEditing(false)}
+                                                className="px-4 py-2.5 rounded-xl bg-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-600 transition-colors"
+                                            >
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </>
                     ) : null}
@@ -517,7 +650,6 @@ function formatDateRange(start: string, end: string): string {
         minute: "2-digit",
     };
 
-    // All day event
     if (!start.includes("T")) {
         if (start === end) {
             return s.toLocaleDateString("pt-BR", dateOpts);
@@ -525,7 +657,6 @@ function formatDateRange(start: string, end: string): string {
         return `${s.toLocaleDateString("pt-BR", dateOpts)} — ${e.toLocaleDateString("pt-BR", dateOpts)}`;
     }
 
-    // Timed event
     return `${s.toLocaleDateString("pt-BR", dateOpts)} ${s.toLocaleTimeString("pt-BR", timeOpts)} — ${e.toLocaleTimeString("pt-BR", timeOpts)}`;
 }
 
