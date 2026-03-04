@@ -1,8 +1,23 @@
 "use server";
 
+import { createClient } from "@supabase/supabase-js";
+
 /**
- * Server Action para enviar mensagem via webhook do n8n.
- * Executada no servidor, evitando bloqueio de CORS.
+ * Client Supabase server-side para a Server Action.
+ * Usa as mesmas variáveis NEXT_PUBLIC_* que estão disponíveis no servidor.
+ */
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+/**
+ * Server Action: salva a mensagem no Supabase E dispara o webhook do n8n
+ * em paralelo via Promise.all.
+ *
+ * - O INSERT no Supabase garante que o Realtime detecte instantaneamente
+ *   e o balãozinho apareça na UI sem delay.
+ * - O fetch para o n8n dispara o fluxo de envio via WhatsApp.
  */
 export async function sendMessageToN8n(payload: {
     telefone: string;
@@ -14,14 +29,33 @@ export async function sendMessageToN8n(payload: {
         throw new Error("NEXT_PUBLIC_N8N_WEBHOOK_URL não configurada.");
     }
 
-    const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-    });
+    // Dispara INSERT local + webhook n8n ao mesmo tempo
+    const [insertResult, webhookResponse] = await Promise.all([
+        // 1. Salva no banco → Realtime detecta → balão aparece instantaneamente
+        supabase.from("messages").insert({
+            telefone: payload.telefone,
+            sender_type: "humano",
+            sender_name: payload.sender_name,
+            content: payload.mensagem,
+        }),
 
-    if (!response.ok) {
-        throw new Error(`Erro no webhook n8n: ${response.status} ${response.statusText}`);
+        // 2. Dispara o n8n → envia via WhatsApp
+        fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        }),
+    ]);
+
+    if (insertResult.error) {
+        console.error("❌ Erro ao salvar mensagem no Supabase:", insertResult.error);
+        throw new Error(`Erro ao salvar mensagem: ${insertResult.error.message}`);
+    }
+
+    if (!webhookResponse.ok) {
+        console.error(`⚠️ Webhook n8n retornou ${webhookResponse.status}`);
+        // Não lança erro aqui — a mensagem já foi salva no banco.
+        // O envio via WhatsApp pode ser retentado pelo n8n.
     }
 
     return { success: true };

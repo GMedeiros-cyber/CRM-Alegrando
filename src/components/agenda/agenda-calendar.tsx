@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -31,107 +31,16 @@ import {
     School,
     Save,
     Trash2,
+    Loader2,
 } from "lucide-react";
-
-// =============================================
-// MOCK DATA — será substituído por dados reais
-// =============================================
-const MOCK_LEADS = [
-    { id: "lead-1", nomeEscola: "Colégio Lumiar" },
-    { id: "lead-2", nomeEscola: "Escola XYZ" },
-    { id: "lead-3", nomeEscola: "Instituto ABC" },
-    { id: "lead-4", nomeEscola: "Colégio Santo Agostinho" },
-    { id: "lead-5", nomeEscola: "Escola Maria Clara" },
-];
-
-function getNextWeekday(dayOffset: number): string {
-    const d = new Date();
-    d.setDate(d.getDate() + dayOffset);
-    return d.toISOString().split("T")[0];
-}
-
-const MOCK_EVENTS = [
-    {
-        id: "evt-1",
-        title: "Excursão Sítio — Colégio Lumiar",
-        start: getNextWeekday(2),
-        end: getNextWeekday(3),
-        backgroundColor: "#ef5544",
-        borderColor: "#ef5544",
-        textColor: "#ffffff",
-        extendedProps: {
-            leadId: "lead-1",
-            nomeEscola: "Colégio Lumiar",
-            destino: "Sítio Recanto Verde",
-            quantidadeAlunos: 45,
-            status: "confirmado",
-        },
-    },
-    {
-        id: "evt-2",
-        title: "Visita Técnica — Escola XYZ",
-        start: `${getNextWeekday(4)}T14:00:00`,
-        end: `${getNextWeekday(4)}T16:00:00`,
-        backgroundColor: "#8b5cf6",
-        borderColor: "#8b5cf6",
-        textColor: "#ffffff",
-        extendedProps: {
-            leadId: "lead-2",
-            nomeEscola: "Escola XYZ",
-            destino: "Museu do Amanhã",
-            quantidadeAlunos: 32,
-            status: "confirmado",
-        },
-    },
-    {
-        id: "evt-3",
-        title: "💰 Pagamento Pendente — Instituto ABC",
-        start: getNextWeekday(1),
-        end: getNextWeekday(1),
-        backgroundColor: "#f59e0b",
-        borderColor: "#f59e0b",
-        textColor: "#000000",
-        extendedProps: {
-            leadId: "lead-3",
-            nomeEscola: "Instituto ABC",
-            destino: null,
-            quantidadeAlunos: 60,
-            status: "pendente",
-        },
-    },
-    {
-        id: "evt-4",
-        title: "Excursão Petrópolis — Colégio Agostinho",
-        start: getNextWeekday(6),
-        end: getNextWeekday(7),
-        backgroundColor: "#3b82f6",
-        borderColor: "#3b82f6",
-        textColor: "#ffffff",
-        extendedProps: {
-            leadId: "lead-4",
-            nomeEscola: "Colégio Santo Agostinho",
-            destino: "Petrópolis — Museu Imperial",
-            quantidadeAlunos: 55,
-            status: "confirmado",
-        },
-    },
-    {
-        id: "evt-5",
-        title: "Reunião de Briefing — Escola Maria Clara",
-        start: `${getNextWeekday(3)}T10:00:00`,
-        end: `${getNextWeekday(3)}T11:30:00`,
-        backgroundColor: "#22c55e",
-        borderColor: "#22c55e",
-        textColor: "#ffffff",
-        extendedProps: {
-            leadId: "lead-5",
-            nomeEscola: "Escola Maria Clara",
-            destino: "Parque Nacional da Tijuca",
-            quantidadeAlunos: 28,
-            status: "confirmado",
-        },
-    },
-];
+import {
+    getAgendamentos,
+    createAgendamento,
+    deleteAgendamento,
+} from "@/lib/actions/agenda";
+import type { AgendamentoEvent } from "@/lib/actions/agenda";
+import { listClientes } from "@/lib/actions/leads";
+import type { ClienteListItem } from "@/lib/actions/leads";
 
 // =============================================
 // STATUS STYLES
@@ -145,22 +54,25 @@ const statusStyles: Record<string, string> = {
 // =============================================
 // COMPONENT
 // =============================================
-const EVENT_COLORS = ["#ef5544", "#3b82f6", "#8b5cf6", "#22c55e", "#f59e0b", "#ec4899"];
-
 interface AgendaCalendarProps {
-    onEventsChange?: (events: typeof MOCK_EVENTS) => void;
+    onEventsChange?: (events: AgendamentoEvent[]) => void;
 }
 
 export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     const router = useRouter();
+    const [isPending, startTransition] = useTransition();
 
-    // Events state (starts with mock, user can add more)
-    const [allEvents, setAllEvents] = useState(MOCK_EVENTS);
+    // Events from Google Calendar
+    const [allEvents, setAllEvents] = useState<AgendamentoEvent[]>([]);
+    const [loadingEvents, setLoadingEvents] = useState(true);
+
+    // Clientes list for the select
+    const [clientes, setClientes] = useState<ClienteListItem[]>([]);
 
     // Modal state
     const [modalOpen, setModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<"create" | "view">("create");
-    const [selectedEvent, setSelectedEvent] = useState<(typeof MOCK_EVENTS)[0] | null>(null);
+    const [selectedEvent, setSelectedEvent] = useState<AgendamentoEvent | null>(null);
 
     // Form state
     const [form, setForm] = useState({
@@ -169,8 +81,42 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         horaInicio: "09:00",
         dataFim: "",
         horaFim: "17:00",
-        leadId: "",
+        clienteTelefone: "",
     });
+
+    // =============================================
+    // DATA LOADING
+    // =============================================
+    async function loadEvents() {
+        try {
+            setLoadingEvents(true);
+            const events = await getAgendamentos();
+            setAllEvents(events);
+            onEventsChange?.(events);
+        } catch (err) {
+            console.error("Erro ao carregar agendamentos:", err);
+        } finally {
+            setLoadingEvents(false);
+        }
+    }
+
+    async function loadClientes() {
+        try {
+            const data = await listClientes();
+            setClientes(data);
+        } catch (err) {
+            console.error("Erro ao carregar clientes:", err);
+        }
+    }
+
+    useEffect(() => {
+        loadEvents();
+        loadClientes();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // =============================================
+    // MODAL HANDLERS
+    // =============================================
 
     // Open create modal from header button
     function openCreateModal() {
@@ -183,7 +129,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
             horaInicio: "09:00",
             dataFim: today,
             horaFim: "17:00",
-            leadId: "",
+            clienteTelefone: "",
         });
         setModalOpen(true);
     }
@@ -195,7 +141,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         }
         window.addEventListener("agenda:create", handler);
         return () => window.removeEventListener("agenda:create", handler);
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Click on empty day → open create modal with date
     function handleDateClick(info: DateClickArg) {
@@ -207,7 +153,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
             horaInicio: "09:00",
             dataFim: info.dateStr.split("T")[0],
             horaFim: "17:00",
-            leadId: "",
+            clienteTelefone: "",
         });
         setModalOpen(true);
     }
@@ -222,68 +168,74 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         }
     }
 
-    // Save new event to local state
+    // =============================================
+    // CRUD HANDLERS
+    // =============================================
+
+    // Save new event → Google Calendar
     function handleSaveEvent() {
         if (!form.titulo || !form.dataInicio) return;
 
-        const leadName = MOCK_LEADS.find((l) => l.id === form.leadId)?.nomeEscola || "";
-        const color = EVENT_COLORS[allEvents.length % EVENT_COLORS.length];
-        const hasTime = form.horaInicio !== "00:00";
-        const start = hasTime ? `${form.dataInicio}T${form.horaInicio}:00` : form.dataInicio;
-        const end = hasTime ? `${form.dataFim || form.dataInicio}T${form.horaFim}:00` : (form.dataFim || form.dataInicio);
+        const clienteNome = clientes.find(
+            (c) => c.telefone === form.clienteTelefone
+        )?.nome || "";
 
-        const newEvt: (typeof MOCK_EVENTS)[number] = {
-            id: `evt-user-${Date.now()}`,
-            title: form.titulo,
-            start,
-            end,
-            backgroundColor: color,
-            borderColor: color,
-            textColor: "#ffffff",
-            extendedProps: {
-                leadId: form.leadId || "lead-1",
-                nomeEscola: leadName || form.titulo,
-                destino: null,
-                quantidadeAlunos: 0,
-                status: "confirmado",
-            },
-        };
-
-        setAllEvents((prev) => {
-            const next = [...prev, newEvt];
-            onEventsChange?.(next);
-            return next;
+        startTransition(async () => {
+            try {
+                await createAgendamento({
+                    titulo: form.titulo,
+                    dataInicio: form.dataInicio,
+                    horaInicio: form.horaInicio,
+                    dataFim: form.dataFim || form.dataInicio,
+                    horaFim: form.horaFim,
+                    leadId: form.clienteTelefone,
+                    nomeEscola: clienteNome || form.titulo,
+                    status: "confirmado",
+                });
+                setModalOpen(false);
+                await loadEvents();
+            } catch (err) {
+                console.error("Erro ao criar agendamento:", err);
+            }
         });
-        setModalOpen(false);
     }
 
-    // Delete event
-    function handleDeleteEvent(eventId: string) {
-        setAllEvents((prev) => {
-            const next = prev.filter((e) => e.id !== eventId);
-            onEventsChange?.(next);
-            return next;
+    // Delete event → Google Calendar
+    function handleDeleteEvent(googleEventId: string) {
+        startTransition(async () => {
+            try {
+                await deleteAgendamento(googleEventId);
+                setSelectedEvent(null);
+                setModalOpen(false);
+                await loadEvents();
+            } catch (err) {
+                console.error("Erro ao excluir agendamento:", err);
+            }
         });
-        setSelectedEvent(null);
-        setModalOpen(false);
     }
-
-    // Notify parent on mount
-    useEffect(() => {
-        onEventsChange?.(allEvents);
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
 
     // Navigate to conversas
-    function goToConversas(leadId: string) {
+    function goToConversas(telefone: string) {
         setModalOpen(false);
-        router.push(`/conversas?leadId=${leadId}`);
+        if (telefone) {
+            router.push(`/conversas?telefone=${telefone}`);
+        }
     }
 
     return (
         <>
             {/* =================== CALENDAR =================== */}
-            <div className="agenda-dark-calendar">
+            <div className="agenda-dark-calendar relative">
+                {loadingEvents && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/60 rounded-2xl backdrop-blur-sm">
+                        <div className="flex items-center gap-3 text-slate-300">
+                            <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
+                            <span className="text-sm font-medium">
+                                Carregando Google Calendar...
+                            </span>
+                        </div>
+                    </div>
+                )}
                 <FullCalendar
                     plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                     initialView="dayGridMonth"
@@ -325,7 +277,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                     Novo Agendamento
                                 </DialogTitle>
                                 <DialogDescription className="text-slate-400">
-                                    Crie um novo evento no calendário de excursões.
+                                    Crie um novo evento no Google Calendar.
                                 </DialogDescription>
                             </DialogHeader>
 
@@ -404,25 +356,28 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                     </div>
                                 </div>
 
-                                {/* Lead select */}
+                                {/* Cliente select */}
                                 <div className="space-y-1.5">
                                     <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                                         <School className="w-3 h-3" />
-                                        Vincular a um Lead/Escola
+                                        Vincular a um Cliente
                                     </Label>
                                     <Select
-                                        value={form.leadId}
+                                        value={form.clienteTelefone}
                                         onValueChange={(v) =>
-                                            setForm((f) => ({ ...f, leadId: v }))
+                                            setForm((f) => ({ ...f, clienteTelefone: v }))
                                         }
                                     >
                                         <SelectTrigger className="bg-slate-900 border-slate-600 text-white rounded-xl">
-                                            <SelectValue placeholder="Selecione uma escola..." />
+                                            <SelectValue placeholder="Selecione um cliente..." />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-800 border-slate-700">
-                                            {MOCK_LEADS.map((lead) => (
-                                                <SelectItem key={lead.id} value={lead.id}>
-                                                    {lead.nomeEscola}
+                                            {clientes.map((cliente) => (
+                                                <SelectItem
+                                                    key={cliente.telefone}
+                                                    value={cliente.telefone}
+                                                >
+                                                    {cliente.nome || cliente.telefone}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -432,11 +387,15 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                 {/* Save button */}
                                 <button
                                     onClick={handleSaveEvent}
-                                    disabled={!form.titulo || !form.dataInicio}
+                                    disabled={!form.titulo || !form.dataInicio || isPending}
                                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-lg shadow-brand-500/25 mt-2"
                                 >
-                                    <Save className="w-4 h-4" />
-                                    Salvar Agendamento
+                                    {isPending ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <Save className="w-4 h-4" />
+                                    )}
+                                    {isPending ? "Salvando..." : "Salvar Agendamento"}
                                 </button>
                             </div>
                         </>
@@ -462,7 +421,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                 <div className="grid grid-cols-2 gap-3">
                                     <InfoCard
                                         icon={<School className="w-4 h-4 text-brand-400" />}
-                                        label="Escola"
+                                        label="Escola / Cliente"
                                         value={selectedEvent.extendedProps.nomeEscola}
                                     />
                                     <InfoCard
@@ -512,10 +471,17 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         💬 Abrir Conversa
                                     </button>
                                     <button
-                                        onClick={() => handleDeleteEvent(selectedEvent.id)}
-                                        className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-500/15 text-red-400 font-medium text-sm hover:bg-red-500/25 border border-red-500/30 transition-colors"
+                                        onClick={() =>
+                                            handleDeleteEvent(selectedEvent.extendedProps.googleEventId)
+                                        }
+                                        disabled={isPending}
+                                        className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-500/15 text-red-400 font-medium text-sm hover:bg-red-500/25 border border-red-500/30 transition-colors disabled:opacity-40"
                                     >
-                                        <Trash2 className="w-3.5 h-3.5" />
+                                        {isPending ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        )}
                                         Excluir
                                     </button>
                                 </div>
@@ -524,7 +490,6 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                     ) : null}
                 </DialogContent>
             </Dialog>
-
         </>
     );
 }

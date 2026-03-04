@@ -1,30 +1,13 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { CalendarDays, Plus, MapPin, Users, MessageSquare, ArrowRight } from "lucide-react";
 import { AgendaCalendar } from "@/components/agenda/agenda-calendar";
+import type { AgendamentoEvent } from "@/lib/actions/agenda";
 import Link from "next/link";
 
-type MockEvent = {
-    id: string;
-    title: string;
-    start: string;
-    end: string;
-    backgroundColor: string;
-    borderColor: string;
-    textColor: string;
-    extendedProps: {
-        leadId: string;
-        nomeEscola: string;
-        destino: string | null;
-        quantidadeAlunos: number | null;
-        status: string;
-    };
-};
-
 export default function AgendaPage() {
-    const [events, setEvents] = useState<MockEvent[]>([]);
+    const [events, setEvents] = useState<AgendamentoEvent[]>([]);
 
     // Upcoming events: only future ones, sorted by date
     const upcomingEvents = useMemo(() => {
@@ -161,7 +144,7 @@ export default function AgendaPage() {
 
                                 {/* Link to conversas */}
                                 <Link
-                                    href={`/conversas?leadId=${evt.extendedProps.leadId}`}
+                                    href={`/conversas?telefone=${evt.extendedProps.leadId}`}
                                     className="flex items-center gap-1 px-3 py-2 rounded-lg bg-brand-500/15 text-brand-400 text-xs font-semibold hover:bg-brand-500/25 transition-colors shrink-0"
                                 >
                                     <MessageSquare className="w-3.5 h-3.5" />
