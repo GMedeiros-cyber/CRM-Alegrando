@@ -45,6 +45,7 @@ export function useLeadMessages(telefone: string) {
                         senderType: newMsg.sender_type,
                         senderName: newMsg.sender_name,
                         content: newMsg.content,
+                        mediaType: newMsg.media_type || "text",
                         createdAt: newMsg.created_at ? new Date(newMsg.created_at) : null,
                     };
 
@@ -78,7 +79,7 @@ export function useLeadMessages(telefone: string) {
 async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> {
     const { data, error } = await supabase
         .from("messages")
-        .select("id, sender_type, sender_name, content, created_at")
+        .select("id, sender_type, sender_name, content, media_type, created_at")
         .eq("telefone", telefone)
         .order("created_at", { ascending: true });
 
@@ -92,6 +93,7 @@ async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> 
         senderType: row.sender_type as string,
         senderName: (row.sender_name as string) || null,
         content: row.content as string,
+        mediaType: (row.media_type as "text" | "audio" | "image") || "text",
         createdAt: row.created_at ? new Date(row.created_at as string) : null,
     }));
 }

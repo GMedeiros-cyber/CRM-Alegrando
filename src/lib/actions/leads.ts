@@ -37,6 +37,7 @@ export type LeadMessage = {
     senderType: string;
     senderName: string | null;
     content: string;
+    mediaType: "text" | "audio" | "image" | null;
     createdAt: Date | null;
 };
 
