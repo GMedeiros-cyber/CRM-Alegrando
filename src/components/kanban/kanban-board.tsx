@@ -12,7 +12,11 @@ import {
     useSensors,
     closestCorners,
 } from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
+import {
+    arrayMove,
+    SortableContext,
+    horizontalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { useRouter } from "next/navigation";
 import { KanbanColumn } from "./kanban-column";
 import { KanbanCard } from "./kanban-card";
@@ -20,6 +24,8 @@ import {
     moveLeadInKanban,
     createKanbanColumn,
     confirmPasseioRealizado,
+    reorderKanbanColumns,
+    getLeadsSemColuna,
 } from "@/lib/actions/kanban";
 import type {
     KanbanColumn as KanbanColumnType,
@@ -31,6 +37,8 @@ import {
     CalendarDays,
     AlertTriangle,
     CheckCircle2,
+    Users,
+    Phone,
 } from "lucide-react";
 import {
     Dialog,
@@ -41,6 +49,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 interface KanbanBoardProps {
     initialColumns: KanbanColumnType[];
@@ -65,6 +74,17 @@ export function KanbanBoard({
         return map;
     });
     const [activeCard, setActiveCard] = useState<KanbanLead | null>(null);
+    const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
+
+    // Leads sem coluna (sidebar)
+    const [unallocatedLeads, setUnallocatedLeads] = useState<KanbanLead[]>([]);
+    const [loadingSidebar, setLoadingSidebar] = useState(true);
+
+    useEffect(() => {
+        getLeadsSemColuna()
+            .then(setUnallocatedLeads)
+            .finally(() => setLoadingSidebar(false));
+    }, []);
 
     // Inline add column
     const [addingColumn, setAddingColumn] = useState(false);
@@ -79,7 +99,6 @@ export function KanbanBoard({
     const [confirmDate, setConfirmDate] = useState<string>("");
     const [confirmLoading, setConfirmLoading] = useState(false);
     const [confirmError, setConfirmError] = useState<string | null>(null);
-    // Backup para reverter
     const [preConfirmLeadsMap, setPreConfirmLeadsMap] = useState<Record<string, KanbanLead[]> | null>(null);
 
     useEffect(() => {
@@ -115,6 +134,20 @@ export function KanbanBoard({
         );
     }
 
+    function handleColumnDeleted(colId: string) {
+        setColumns((prev) => prev.filter((c) => c.id !== colId));
+        // Leads dessa coluna voltam para unallocated
+        const deletedLeads = leadsMap[colId] || [];
+        if (deletedLeads.length > 0) {
+            setUnallocatedLeads((prev) => [...deletedLeads, ...prev]);
+        }
+        setLeadsMap((prev) => {
+            const next = { ...prev };
+            delete next[colId];
+            return next;
+        });
+    }
+
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: { distance: 8 },
@@ -131,16 +164,38 @@ export function KanbanBoard({
         [leadsMap]
     );
 
+    const isUnallocatedLead = useCallback(
+        (leadId: string): boolean => {
+            return unallocatedLeads.some((l) => l.id === leadId);
+        },
+        [unallocatedLeads]
+    );
+
     const handleDragStart = useCallback(
         (event: DragStartEvent) => {
-            const leadId = event.active.id as string;
-            const colId = findColumnOfLead(leadId);
+            const id = event.active.id as string;
+
+            // Check if dragging a column
+            if (id.startsWith("col-sortable-")) {
+                setActiveColumnId(id.replace("col-sortable-", ""));
+                return;
+            }
+
+            // Check unallocated leads
+            if (isUnallocatedLead(id)) {
+                const lead = unallocatedLeads.find((l) => l.id === id);
+                if (lead) setActiveCard(lead);
+                return;
+            }
+
+            // Regular lead in column
+            const colId = findColumnOfLead(id);
             if (colId) {
-                const lead = leadsMap[colId].find((l) => l.id === leadId);
+                const lead = leadsMap[colId].find((l) => l.id === id);
                 if (lead) setActiveCard(lead);
             }
         },
-        [findColumnOfLead, leadsMap]
+        [findColumnOfLead, leadsMap, isUnallocatedLead, unallocatedLeads]
     );
 
     const handleDragOver = useCallback(
@@ -149,8 +204,16 @@ export function KanbanBoard({
             if (!over) return;
 
             const activeId = active.id as string;
+
+            // Skip column drags for DragOver
+            if (activeId.startsWith("col-sortable-")) return;
+
             const overId = over.id as string;
-            const activeColId = findColumnOfLead(activeId);
+            // Skip if over a column sortable handle
+            if (overId.startsWith("col-sortable-")) return;
+
+            const fromUnallocated = isUnallocatedLead(activeId);
+            const activeColId = fromUnallocated ? null : findColumnOfLead(activeId);
 
             let overColId: string | null = null;
             if (overId.startsWith("column-")) {
@@ -159,12 +222,30 @@ export function KanbanBoard({
                 overColId = findColumnOfLead(overId);
             }
 
-            if (!activeColId || !overColId || activeColId === overColId) return;
+            if (!overColId) return;
+            if (!fromUnallocated && activeColId === overColId) return;
+            if (!fromUnallocated && !activeColId) return;
 
             setLeadsMap((prev) => {
-                const sourceLeads = [...(prev[activeColId] || [])];
                 const destLeads = [...(prev[overColId!] || [])];
 
+                if (fromUnallocated) {
+                    // Move from unallocated to column
+                    const lead = unallocatedLeads.find((l) => l.id === activeId);
+                    if (!lead) return prev;
+                    if (destLeads.some((l) => l.id === activeId)) return prev; // already there
+
+                    const movedLead = { ...lead, kanbanColumnId: overColId! };
+                    let overIdx = destLeads.findIndex((l) => l.id === overId);
+                    if (overIdx === -1) overIdx = destLeads.length;
+                    destLeads.splice(overIdx, 0, movedLead);
+
+                    setUnallocatedLeads((ul) => ul.filter((l) => l.id !== activeId));
+                    return { ...prev, [overColId!]: destLeads };
+                }
+
+                // Move between columns
+                const sourceLeads = [...(prev[activeColId!] || [])];
                 const activeIdx = sourceLeads.findIndex((l) => l.id === activeId);
                 if (activeIdx === -1) return prev;
 
@@ -175,38 +256,60 @@ export function KanbanBoard({
                 if (overIdx === -1) overIdx = destLeads.length;
                 destLeads.splice(overIdx, 0, movedLead);
 
-                return { ...prev, [activeColId]: sourceLeads, [overColId!]: destLeads };
+                return { ...prev, [activeColId!]: sourceLeads, [overColId!]: destLeads };
             });
         },
-        [findColumnOfLead]
+        [findColumnOfLead, isUnallocatedLead, unallocatedLeads]
     );
 
     const handleDragEnd = useCallback(
         (event: DragEndEvent) => {
             const { active, over } = event;
             setActiveCard(null);
+            setActiveColumnId(null);
             if (!over) return;
 
             const activeId = active.id as string;
             const overId = over.id as string;
+
+            // === Column reorder ===
+            if (activeId.startsWith("col-sortable-") && overId.startsWith("col-sortable-")) {
+                const fromColId = activeId.replace("col-sortable-", "");
+                const toColId = overId.replace("col-sortable-", "");
+                if (fromColId !== toColId) {
+                    setColumns((prev) => {
+                        const oldIdx = prev.findIndex((c) => c.id === fromColId);
+                        const newIdx = prev.findIndex((c) => c.id === toColId);
+                        if (oldIdx === -1 || newIdx === -1) return prev;
+                        const reordered = arrayMove(prev, oldIdx, newIdx);
+                        // Persist
+                        reorderKanbanColumns(reordered.map((c) => c.id)).catch(console.error);
+                        return reordered;
+                    });
+                }
+                return;
+            }
+
+            // === Card movement ===
             const activeColId = findColumnOfLead(activeId);
 
             let overColId: string | null = null;
             if (overId.startsWith("column-")) {
                 overColId = overId.replace("column-", "");
-            } else {
+            } else if (!overId.startsWith("col-sortable-")) {
                 overColId = findColumnOfLead(overId);
             }
 
-            if (!activeColId || !overColId) return;
+            if (!overColId) return;
 
+            // Same column reorder
             if (activeColId === overColId && activeId !== overId) {
                 setLeadsMap((prev) => {
-                    const colLeads = [...(prev[activeColId] || [])];
+                    const colLeads = [...(prev[activeColId!] || [])];
                     const oldIdx = colLeads.findIndex((l) => l.id === activeId);
                     const newIdx = colLeads.findIndex((l) => l.id === overId);
                     if (oldIdx === -1 || newIdx === -1) return prev;
-                    return { ...prev, [activeColId]: arrayMove(colLeads, oldIdx, newIdx) };
+                    return { ...prev, [activeColId!]: arrayMove(colLeads, oldIdx, newIdx) };
                 });
             }
 
@@ -215,10 +318,9 @@ export function KanbanBoard({
             const finalIdx = finalLeads.findIndex((l) => l.id === activeId);
             const lead = finalLeads.find((l) => l.id === activeId);
 
-            // Verificar se é a coluna "Passeio Realizado"
+            // Check "Passeio Realizado"
             const targetCol = columns.find((c) => c.id === finalColId);
             if (targetCol?.slug === "passeio_realizado" && lead && !lead.passeioConfirmado) {
-                // Salvar backup pra reverter se cancelar
                 setPreConfirmLeadsMap({ ...leadsMap });
                 setConfirmLead(lead);
                 setConfirmColId(finalColId);
@@ -226,16 +328,9 @@ export function KanbanBoard({
                 setConfirmDate(new Date().toISOString().split("T")[0]);
                 setConfirmError(null);
                 setConfirmModal(true);
-                return; // Não salvar ainda — esperar confirmação
-            }
-
-            if (targetCol?.slug === "passeio_realizado" && lead?.passeioConfirmado) {
-                // Já confirmado, só mover normalmente
-                moveLeadInKanban(activeId, finalColId, finalIdx >= 0 ? finalIdx : 0).catch(console.error);
                 return;
             }
 
-            // Mover normalmente
             moveLeadInKanban(activeId, finalColId, finalIdx >= 0 ? finalIdx : 0).catch(console.error);
         },
         [findColumnOfLead, leadsMap, columns]
@@ -255,10 +350,8 @@ export function KanbanBoard({
                 return;
             }
 
-            // Mover no banco
             await moveLeadInKanban(confirmLead.id, confirmColId, confirmPosition);
 
-            // Atualizar lead localmente
             setLeadsMap((prev) => {
                 const updated = { ...prev };
                 for (const colId of Object.keys(updated)) {
@@ -282,7 +375,6 @@ export function KanbanBoard({
         }
     }
 
-    // Cancelar confirmação → reverter
     function handleCancelConfirm() {
         if (preConfirmLeadsMap) {
             setLeadsMap(preConfirmLeadsMap);
@@ -291,20 +383,17 @@ export function KanbanBoard({
         setPreConfirmLeadsMap(null);
     }
 
-    // Click → redirect to Conversas
     const handleLeadClick = useCallback(
         (leadId: string) => {
-            // Find lead to get telefone
-            for (const colLeads of Object.values(leadsMap)) {
-                const lead = colLeads.find((l) => l.id === leadId);
-                if (lead) {
-                    router.push(`/conversas`);
-                    return;
-                }
-            }
+            router.push(`/conversas`);
         },
-        [router, leadsMap]
+        [router]
     );
+
+    // Column IDs for sortable context
+    const columnSortableIds = columns.map((c) => `col-sortable-${c.id}`);
+    // Unallocated lead IDs for drag source
+    const unallocatedIds = unallocatedLeads.map((l) => l.id);
 
     return (
         <>
@@ -315,62 +404,108 @@ export function KanbanBoard({
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
             >
-                <div className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-180px)]">
-                    {columns.map((column) => (
-                        <KanbanColumn
-                            key={column.id}
-                            column={column}
-                            leads={leadsMap[column.id] || []}
-                            onLeadClick={handleLeadClick}
-                            onColumnRenamed={handleColumnRenamed}
-                        />
-                    ))}
-
-                    {/* Inline Add Column */}
-                    {addingColumn ? (
-                        <div className="flex flex-col w-[300px] min-w-[300px] rounded-2xl bg-slate-800/50 border-2 border-dashed border-brand-500/50 p-4 shrink-0">
-                            <input
-                                ref={newColRef}
-                                value={newColName}
-                                onChange={(e) => setNewColName(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleAddColumn();
-                                    if (e.key === "Escape") {
-                                        setAddingColumn(false);
-                                        setNewColName("");
-                                    }
-                                }}
-                                placeholder="Nome da coluna..."
-                                className="bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-brand-400 mb-3"
-                            />
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={handleAddColumn}
-                                    className="flex-1 px-3 py-2 rounded-xl bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 transition-colors"
-                                >
-                                    Criar
-                                </button>
-                                <button
-                                    onClick={() => { setAddingColumn(false); setNewColName(""); }}
-                                    className="px-3 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-600 transition-colors"
-                                >
-                                    Cancelar
-                                </button>
+                <div className="flex h-[calc(100vh-180px)]">
+                    {/* === SIDEBAR: Leads sem coluna === */}
+                    <div className="w-[220px] min-w-[220px] flex flex-col bg-slate-800/40 border-2 border-slate-700 rounded-2xl mr-4 shrink-0">
+                        <div className="px-3 py-3 border-b border-slate-700">
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-display text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                    Leads sem coluna
+                                </h3>
+                                <span className="text-[10px] font-medium text-slate-500 bg-slate-700 px-1.5 py-0.5 rounded-full">
+                                    {unallocatedLeads.length}
+                                </span>
                             </div>
                         </div>
-                    ) : (
-                        <button
-                            onClick={() => setAddingColumn(true)}
-                            className="flex flex-col items-center justify-center gap-2 w-[300px] min-w-[300px] min-h-[120px] rounded-2xl border-2 border-dashed border-slate-700 hover:border-brand-500/50 hover:bg-brand-500/5 text-slate-500 hover:text-brand-400 transition-all shrink-0 cursor-pointer"
-                        >
-                            <Plus className="w-6 h-6" />
-                            <span className="text-sm font-medium">Adicionar Coluna</span>
-                        </button>
-                    )}
+
+                        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1.5">
+                            {loadingSidebar ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+                                </div>
+                            ) : unallocatedLeads.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-8 gap-1.5 text-center">
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-500/50" />
+                                    <p className="text-[11px] text-slate-600 leading-tight">
+                                        Todos os leads estão alocados ✓
+                                    </p>
+                                </div>
+                            ) : (
+                                <SortableContext items={unallocatedIds} strategy={verticalListSortingStrategy}>
+                                    {unallocatedLeads.map((lead) => (
+                                        <UnallocatedLeadItem key={lead.id} lead={lead} />
+                                    ))}
+                                </SortableContext>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* === BOARD === */}
+                    <div className="flex gap-4 overflow-x-auto pb-4 flex-1">
+                        <SortableContext items={columnSortableIds} strategy={horizontalListSortingStrategy}>
+                            {columns.map((column) => (
+                                <KanbanColumn
+                                    key={column.id}
+                                    column={column}
+                                    leads={leadsMap[column.id] || []}
+                                    onLeadClick={handleLeadClick}
+                                    onColumnRenamed={handleColumnRenamed}
+                                    onColumnDeleted={handleColumnDeleted}
+                                />
+                            ))}
+                        </SortableContext>
+
+                        {/* Inline Add Column */}
+                        {addingColumn ? (
+                            <div className="flex flex-col w-[300px] min-w-[300px] rounded-2xl bg-slate-800/50 border-2 border-dashed border-brand-500/50 p-4 shrink-0">
+                                <input
+                                    ref={newColRef}
+                                    value={newColName}
+                                    onChange={(e) => setNewColName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") handleAddColumn();
+                                        if (e.key === "Escape") {
+                                            setAddingColumn(false);
+                                            setNewColName("");
+                                        }
+                                    }}
+                                    placeholder="Nome da coluna..."
+                                    className="bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-brand-400 mb-3"
+                                />
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleAddColumn}
+                                        className="flex-1 px-3 py-2 rounded-xl bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 transition-colors"
+                                    >
+                                        Criar
+                                    </button>
+                                    <button
+                                        onClick={() => { setAddingColumn(false); setNewColName(""); }}
+                                        className="px-3 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-600 transition-colors"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => setAddingColumn(true)}
+                                className="flex flex-col items-center justify-center gap-2 w-[300px] min-w-[300px] min-h-[120px] rounded-2xl border-2 border-dashed border-slate-700 hover:border-brand-500/50 hover:bg-brand-500/5 text-slate-500 hover:text-brand-400 transition-all shrink-0 cursor-pointer"
+                            >
+                                <Plus className="w-6 h-6" />
+                                <span className="text-sm font-medium">Adicionar Coluna</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <DragOverlay dropAnimation={null}>
                     {activeCard ? <KanbanCard lead={activeCard} isOverlay /> : null}
+                    {activeColumnId ? (
+                        <div className="w-[300px] h-16 rounded-2xl bg-slate-700/80 border-2 border-brand-400 flex items-center justify-center text-sm font-semibold text-brand-400 shadow-xl">
+                            {columns.find((c) => c.id === activeColumnId)?.name || "Coluna"}
+                        </div>
+                    ) : null}
                 </DragOverlay>
             </DndContext>
 
@@ -441,5 +576,52 @@ export function KanbanBoard({
                 </DialogContent>
             </Dialog>
         </>
+    );
+}
+
+// =============================================
+// Unallocated Lead Item (draggable from sidebar)
+// =============================================
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { verticalListSortingStrategy } from "@dnd-kit/sortable";
+
+function UnallocatedLeadItem({ lead }: { lead: KanbanLead }) {
+    const {
+        setNodeRef,
+        attributes,
+        listeners,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({
+        id: lead.id,
+        data: { type: "lead", lead },
+    });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...attributes}
+            {...listeners}
+            className={cn(
+                "bg-slate-900/60 border border-slate-700/50 rounded-xl px-3 py-2 cursor-grab active:cursor-grabbing hover:border-slate-600 transition-colors",
+                isDragging && "opacity-30"
+            )}
+        >
+            <p className="text-xs font-semibold text-slate-300 truncate">{lead.nomeEscola}</p>
+            {lead.telefone && (
+                <p className="text-[10px] text-slate-600 mt-0.5 flex items-center gap-1">
+                    <Phone className="w-2.5 h-2.5" />
+                    {lead.telefone}
+                </p>
+            )}
+        </div>
     );
 }

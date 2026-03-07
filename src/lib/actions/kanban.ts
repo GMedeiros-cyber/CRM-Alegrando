@@ -17,6 +17,7 @@ export type KanbanColumn = {
 export type KanbanLead = {
     id: string;
     nomeEscola: string;
+    telefone?: string;
     temperatura: string;
     dataEvento: string | null;
     destino: string | null;
@@ -287,6 +288,43 @@ export async function reorderKanbanColumns(columnIds: string[]) {
 
     await Promise.all(updates);
     return { success: true };
+}
+
+// =============================================
+// LEADS SEM COLUNA (sidebar)
+// =============================================
+
+/**
+ * Leads que ainda não foram colocados em nenhuma coluna do Kanban.
+ */
+export async function getLeadsSemColuna(): Promise<KanbanLead[]> {
+    const { data, error } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("id, nome, telefone, status, ia_ativa, created_at, passeio_confirmado, data_passeio")
+        .is("kanban_column_id", null)
+        .order("created_at", { ascending: false });
+
+    if (error) {
+        console.error("Erro ao buscar leads sem coluna:", error);
+        return [];
+    }
+
+    return (data || []).map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        nomeEscola: (row.nome as string) || "Lead sem nome",
+        telefone: String(row.telefone || ""),
+        temperatura: (row.status as string) || "frio",
+        dataEvento: null,
+        destino: null,
+        quantidadeAlunos: null,
+        kanbanColumnId: "",
+        kanbanPosition: 0,
+        iaAtiva: (row.ia_ativa as boolean) ?? true,
+        createdAt: row.created_at ? new Date(row.created_at as string) : null,
+        passeioConfirmado: (row.passeio_confirmado as boolean) ?? false,
+        dataPasseio: row.data_passeio ? String(row.data_passeio) : null,
+        tags: [],
+    }));
 }
 
 // =============================================

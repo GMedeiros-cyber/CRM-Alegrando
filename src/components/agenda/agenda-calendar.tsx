@@ -64,10 +64,14 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
 
+    // Data mínima = hoje
+    const today = new Date().toISOString().split("T")[0];
+
     // Events from Google Calendar
     const [allEvents, setAllEvents] = useState<AgendamentoEvent[]>([]);
     const [loadingEvents, setLoadingEvents] = useState(true);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [dateError, setDateError] = useState<string | null>(null);
 
     // Clientes list for the select
     const [clientes, setClientes] = useState<ClienteListItem[]>([]);
@@ -218,6 +222,13 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     function handleSaveEvent() {
         if (!form.titulo || !form.dataInicio) return;
 
+        // Validar data passada
+        if (form.dataInicio < today) {
+            setDateError("Não é possível criar eventos em datas passadas.");
+            return;
+        }
+        setDateError(null);
+
         const cliente = clientes.find(
             (c) => c.telefone === form.clienteTelefone
         );
@@ -247,6 +258,14 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     // 2️⃣ Update event → Google Calendar
     async function handleUpdateEvent() {
         if (!selectedEvent) return;
+
+        // Validar data passada
+        if (editForm.dataInicio < today) {
+            setDateError("Não é possível criar eventos em datas passadas.");
+            return;
+        }
+        setDateError(null);
+
         startTransition(async () => {
             try {
                 await updateAgendamento(selectedEvent.extendedProps.googleEventId, {
@@ -375,9 +394,11 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         <Input
                                             type="date"
                                             value={form.dataInicio}
-                                            onChange={(e) =>
-                                                setForm((f) => ({ ...f, dataInicio: e.target.value }))
-                                            }
+                                            min={today}
+                                            onChange={(e) => {
+                                                setDateError(null);
+                                                setForm((f) => ({ ...f, dataInicio: e.target.value }));
+                                            }}
                                             className="bg-slate-900 border-slate-600 text-white rounded-xl"
                                         />
                                     </div>
@@ -404,9 +425,11 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         <Input
                                             type="date"
                                             value={form.dataFim}
-                                            onChange={(e) =>
-                                                setForm((f) => ({ ...f, dataFim: e.target.value }))
-                                            }
+                                            min={today}
+                                            onChange={(e) => {
+                                                setDateError(null);
+                                                setForm((f) => ({ ...f, dataFim: e.target.value }));
+                                            }}
                                             className="bg-slate-900 border-slate-600 text-white rounded-xl"
                                         />
                                     </div>
@@ -452,6 +475,13 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         </SelectContent>
                                     </Select>
                                 </div>
+
+                                {/* Erro de data */}
+                                {dateError && (
+                                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
+                                        {dateError}
+                                    </div>
+                                )}
 
                                 {/* Save button */}
                                 <button
@@ -584,7 +614,8 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Início</Label>
                                                 <Input type="date" value={editForm.dataInicio}
-                                                    onChange={(e) => setEditForm(f => ({ ...f, dataInicio: e.target.value }))}
+                                                    min={today}
+                                                    onChange={(e) => { setDateError(null); setEditForm(f => ({ ...f, dataInicio: e.target.value })); }}
                                                     className="bg-slate-900 border-slate-600 text-white rounded-xl" />
                                             </div>
                                             <div className="space-y-1.5">
@@ -598,7 +629,8 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Fim</Label>
                                                 <Input type="date" value={editForm.dataFim}
-                                                    onChange={(e) => setEditForm(f => ({ ...f, dataFim: e.target.value }))}
+                                                    min={today}
+                                                    onChange={(e) => { setDateError(null); setEditForm(f => ({ ...f, dataFim: e.target.value })); }}
                                                     className="bg-slate-900 border-slate-600 text-white rounded-xl" />
                                             </div>
                                             <div className="space-y-1.5">
@@ -608,6 +640,11 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                                     className="bg-slate-900 border-slate-600 text-white rounded-xl" />
                                             </div>
                                         </div>
+                                        {dateError && (
+                                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
+                                                {dateError}
+                                            </div>
+                                        )}
                                         <div className="flex gap-2">
                                             <button
                                                 onClick={handleUpdateEvent}
