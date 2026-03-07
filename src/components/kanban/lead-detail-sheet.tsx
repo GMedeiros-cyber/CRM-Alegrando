@@ -16,6 +16,8 @@ import {
     toggleIaAtiva,
 } from "@/lib/actions/leads";
 import { sendMessageToN8n } from "@/lib/actions/messages";
+import { getPasseiosDoLead } from "@/lib/actions/kanban";
+import type { PasseioRealizado } from "@/lib/actions/kanban";
 import type { ClienteDetail } from "@/lib/actions/leads";
 import { ChatWindow } from "@/components/conversas/chat-window";
 import {
@@ -29,6 +31,9 @@ import {
     Phone,
     User,
     Mail,
+    MapPin,
+    CalendarDays,
+    ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +67,10 @@ export function LeadDetailSheet({
     // Chat
     const [chatMessage, setChatMessage] = useState("");
 
+    // Passeios
+    const [passeios, setPasseios] = useState<PasseioRealizado[]>([]);
+    const [showAllPasseios, setShowAllPasseios] = useState(false);
+
     // Auto-hide toast
     useEffect(() => {
         if (toast) {
@@ -86,6 +95,12 @@ export function LeadDetailSheet({
                     status: clienteData.status || "",
                     statusAtendimento: clienteData.statusAtendimento || "",
                 });
+                // Carregar passeios
+                const tel = parseInt(clienteData.telefone, 10);
+                if (!isNaN(tel)) {
+                    const p = await getPasseiosDoLead(tel);
+                    setPasseios(p);
+                }
             }
         } catch (err) {
             setToast({ type: "error", text: `Erro ao carregar cliente: ${err}` });
@@ -300,6 +315,64 @@ export function LeadDetailSheet({
                                 )}
                                 Salvar Alterações
                             </button>
+
+                            {/* Passeios Realizados */}
+                            <div className="pt-4 border-t border-border/30">
+                                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
+                                    <CalendarDays className="w-3.5 h-3.5" />
+                                    Passeios Realizados
+                                    {passeios.length > 0 && (
+                                        <span className="ml-auto text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium">
+                                            {passeios.length}
+                                        </span>
+                                    )}
+                                </h4>
+                                {passeios.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground/60 italic">
+                                        Nenhum passeio realizado ainda.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {(showAllPasseios ? passeios : passeios.slice(0, 3)).map((p) => {
+                                            const [y, m, d] = p.dataPasseio.split("-");
+                                            const formatted = `${d}/${m}/${y}`;
+                                            const [cy, cm, cd] = p.createdAt.split("T")[0].split("-");
+                                            const createdFormatted = `${cd}/${cm}/${cy}`;
+                                            return (
+                                                <div
+                                                    key={p.id}
+                                                    className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5"
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                                        <span className="text-sm font-semibold text-emerald-800">
+                                                            {formatted}
+                                                        </span>
+                                                    </div>
+                                                    {p.destino && (
+                                                        <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                                                            <MapPin className="w-3 h-3" />
+                                                            {p.destino}
+                                                        </p>
+                                                    )}
+                                                    <p className="text-[10px] text-emerald-500/70 mt-0.5">
+                                                        Confirmado em {createdFormatted}
+                                                    </p>
+                                                </div>
+                                            );
+                                        })}
+                                        {passeios.length > 3 && !showAllPasseios && (
+                                            <button
+                                                onClick={() => setShowAllPasseios(true)}
+                                                className="w-full flex items-center justify-center gap-1 text-xs text-brand-500 hover:text-brand-600 font-medium py-1.5 transition-colors"
+                                            >
+                                                <ChevronDown className="w-3.5 h-3.5" />
+                                                Ver todos ({passeios.length})
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* =================== RIGHT SIDE: CHAT =================== */}

@@ -107,20 +107,21 @@ export async function getTopDestinos(): Promise<{ destino: string; total: number
 }
 
 /**
- * Conta eventos do Google Calendar no mês atual.
+ * Conta eventos do Google Calendar a partir de hoje.
  */
 export async function getEventosDoMes(): Promise<number> {
     try {
         const calendar = getCalendarClient();
         const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
 
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
         const now = new Date();
-        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
         const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
         const response = await calendar.events.list({
             calendarId,
-            timeMin: firstDay.toISOString(),
+            timeMin: startOfToday.toISOString(),
             timeMax: lastDay.toISOString(),
             singleEvents: true,
             maxResults: 250,
@@ -134,7 +135,7 @@ export async function getEventosDoMes(): Promise<number> {
 }
 
 /**
- * Conta passeios confirmados no mês atual (por data_passeio).
+ * Conta passeios confirmados no mês atual via passeios_realizados.
  */
 export async function getTotalPasseiosDoMes(): Promise<number> {
     const now = new Date();
@@ -142,9 +143,8 @@ export async function getTotalPasseiosDoMes(): Promise<number> {
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
 
     const { count, error } = await supabase
-        .from("Clientes _WhatsApp")
+        .from("passeios_realizados")
         .select("*", { count: "exact", head: true })
-        .eq("passeio_confirmado", true)
         .gte("data_passeio", firstDay)
         .lte("data_passeio", lastDay);
 

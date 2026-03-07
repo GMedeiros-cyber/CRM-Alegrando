@@ -16,7 +16,10 @@ import {
     arrayMove,
     SortableContext,
     horizontalListSortingStrategy,
+    useSortable,
+    verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useRouter } from "next/navigation";
 import { KanbanColumn } from "./kanban-column";
 import { KanbanCard } from "./kanban-card";
@@ -37,7 +40,6 @@ import {
     CalendarDays,
     AlertTriangle,
     CheckCircle2,
-    Users,
     Phone,
 } from "lucide-react";
 import {
@@ -80,6 +82,9 @@ export function KanbanBoard({
     const [unallocatedLeads, setUnallocatedLeads] = useState<KanbanLead[]>([]);
     const [loadingSidebar, setLoadingSidebar] = useState(true);
 
+    // Snapshot para reverter se cancelar modal
+    const leadsMapSnapshot = useRef<Record<string, KanbanLead[]> | null>(null);
+
     useEffect(() => {
         getLeadsSemColuna()
             .then(setUnallocatedLeads)
@@ -95,11 +100,9 @@ export function KanbanBoard({
     const [confirmModal, setConfirmModal] = useState(false);
     const [confirmLead, setConfirmLead] = useState<KanbanLead | null>(null);
     const [confirmColId, setConfirmColId] = useState<string>("");
-    const [confirmPosition, setConfirmPosition] = useState<number>(0);
     const [confirmDate, setConfirmDate] = useState<string>("");
     const [confirmLoading, setConfirmLoading] = useState(false);
     const [confirmError, setConfirmError] = useState<string | null>(null);
-    const [preConfirmLeadsMap, setPreConfirmLeadsMap] = useState<Record<string, KanbanLead[]> | null>(null);
 
     useEffect(() => {
         if (addingColumn && newColRef.current) {
@@ -135,12 +138,11 @@ export function KanbanBoard({
     }
 
     function handleColumnDeleted(colId: string) {
-        setColumns((prev) => prev.filter((c) => c.id !== colId));
-        // Leads dessa coluna voltam para unallocated
         const deletedLeads = leadsMap[colId] || [];
         if (deletedLeads.length > 0) {
             setUnallocatedLeads((prev) => [...deletedLeads, ...prev]);
         }
+        setColumns((prev) => prev.filter((c) => c.id !== colId));
         setLeadsMap((prev) => {
             const next = { ...prev };
             delete next[colId];
@@ -171,17 +173,21 @@ export function KanbanBoard({
         [unallocatedLeads]
     );
 
+    // === DRAG START: salvar snapshot ===
     const handleDragStart = useCallback(
         (event: DragStartEvent) => {
             const id = event.active.id as string;
 
-            // Check if dragging a column
+            // Salvar snapshot do leadsMap para reverter se necessário
+            leadsMapSnapshot.current = JSON.parse(JSON.stringify(leadsMap));
+
+            // Dragging a column
             if (id.startsWith("col-sortable-")) {
                 setActiveColumnId(id.replace("col-sortable-", ""));
                 return;
             }
 
-            // Check unallocated leads
+            // Unallocated lead
             if (isUnallocatedLead(id)) {
                 const lead = unallocatedLeads.find((l) => l.id === id);
                 if (lead) setActiveCard(lead);
@@ -204,12 +210,9 @@ export function KanbanBoard({
             if (!over) return;
 
             const activeId = active.id as string;
-
-            // Skip column drags for DragOver
             if (activeId.startsWith("col-sortable-")) return;
 
             const overId = over.id as string;
-            // Skip if over a column sortable handle
             if (overId.startsWith("col-sortable-")) return;
 
             const fromUnallocated = isUnallocatedLead(activeId);
@@ -230,10 +233,9 @@ export function KanbanBoard({
                 const destLeads = [...(prev[overColId!] || [])];
 
                 if (fromUnallocated) {
-                    // Move from unallocated to column
                     const lead = unallocatedLeads.find((l) => l.id === activeId);
                     if (!lead) return prev;
-                    if (destLeads.some((l) => l.id === activeId)) return prev; // already there
+                    if (destLeads.some((l) => l.id === activeId)) return prev;
 
                     const movedLead = { ...lead, kanbanColumnId: overColId! };
                     let overIdx = destLeads.findIndex((l) => l.id === overId);
@@ -244,7 +246,6 @@ export function KanbanBoard({
                     return { ...prev, [overColId!]: destLeads };
                 }
 
-                // Move between columns
                 const sourceLeads = [...(prev[activeColId!] || [])];
                 const activeIdx = sourceLeads.findIndex((l) => l.id === activeId);
                 if (activeIdx === -1) return prev;
@@ -272,20 +273,23 @@ export function KanbanBoard({
             const activeId = active.id as string;
             const overId = over.id as string;
 
-            // === Column reorder ===
+            // === Column reorder (1.1 fix: persistir fora do setState) ===
             if (activeId.startsWith("col-sortable-") && overId.startsWith("col-sortable-")) {
                 const fromColId = activeId.replace("col-sortable-", "");
                 const toColId = overId.replace("col-sortable-", "");
                 if (fromColId !== toColId) {
+                    let newOrder: string[] = [];
                     setColumns((prev) => {
                         const oldIdx = prev.findIndex((c) => c.id === fromColId);
                         const newIdx = prev.findIndex((c) => c.id === toColId);
                         if (oldIdx === -1 || newIdx === -1) return prev;
                         const reordered = arrayMove(prev, oldIdx, newIdx);
-                        // Persist
-                        reorderKanbanColumns(reordered.map((c) => c.id)).catch(console.error);
+                        newOrder = reordered.map((c) => c.id);
                         return reordered;
                     });
+                    setTimeout(() => {
+                        reorderKanbanColumns(newOrder).catch(console.error);
+                    }, 0);
                 }
                 return;
             }
@@ -315,34 +319,34 @@ export function KanbanBoard({
 
             const finalColId = findColumnOfLead(activeId) || overColId;
             const finalLeads = leadsMap[finalColId] || [];
-            const finalIdx = finalLeads.findIndex((l) => l.id === activeId);
             const lead = finalLeads.find((l) => l.id === activeId);
 
-            // Check "Passeio Realizado"
+            // === 1.2: Check "Passeio Realizado" → abrir modal ===
             const targetCol = columns.find((c) => c.id === finalColId);
-            if (targetCol?.slug === "passeio_realizado" && lead && !lead.passeioConfirmado) {
-                setPreConfirmLeadsMap({ ...leadsMap });
+            if (targetCol?.slug === "passeio_realizado" && lead) {
                 setConfirmLead(lead);
                 setConfirmColId(finalColId);
-                setConfirmPosition(finalIdx >= 0 ? finalIdx : 0);
                 setConfirmDate(new Date().toISOString().split("T")[0]);
                 setConfirmError(null);
                 setConfirmModal(true);
-                return;
+                return; // Não persistir ainda — esperar confirmação
             }
 
+            // Mover normalmente
+            const finalIdx = finalLeads.findIndex((l) => l.id === activeId);
             moveLeadInKanban(activeId, finalColId, finalIdx >= 0 ? finalIdx : 0).catch(console.error);
         },
         [findColumnOfLead, leadsMap, columns]
     );
 
-    // Confirmar passeio
+    // === 1.2: Confirmar passeio → lead vai pra sidebar ===
     async function handleConfirmPasseio() {
         if (!confirmLead || !confirmDate) return;
         setConfirmLoading(true);
         setConfirmError(null);
 
         try {
+            // 1. Confirmar passeio (INSERT em passeios_realizados)
             const res = await confirmPasseioRealizado(confirmLead.id, confirmDate);
             if (!res.success) {
                 setConfirmError(res.error || "Erro desconhecido.");
@@ -350,22 +354,29 @@ export function KanbanBoard({
                 return;
             }
 
-            await moveLeadInKanban(confirmLead.id, confirmColId, confirmPosition);
+            // 2. Mover lead para null (sai do Kanban) 
+            await moveLeadInKanban(confirmLead.id, null, 0);
 
+            // 3. Remover lead de todas as colunas do board
             setLeadsMap((prev) => {
                 const updated = { ...prev };
                 for (const colId of Object.keys(updated)) {
-                    updated[colId] = updated[colId].map((l) =>
-                        l.id === confirmLead.id
-                            ? { ...l, passeioConfirmado: true, dataPasseio: confirmDate }
-                            : l
-                    );
+                    updated[colId] = updated[colId].filter((l) => l.id !== confirmLead.id);
                 }
                 return updated;
             });
 
+            // 4. Adicionar lead na sidebar com tag de passeio
+            const updatedLead: KanbanLead = {
+                ...confirmLead,
+                kanbanColumnId: "",
+                ultimoPasseio: { data: confirmDate, destino: confirmLead.destino || null },
+                totalPasseios: (confirmLead.totalPasseios || 0) + 1,
+            };
+            setUnallocatedLeads((prev) => [updatedLead, ...prev]);
+
             setConfirmModal(false);
-            setPreConfirmLeadsMap(null);
+            leadsMapSnapshot.current = null;
             onDataChanged?.();
         } catch (err) {
             console.error("Erro ao confirmar passeio:", err);
@@ -375,16 +386,19 @@ export function KanbanBoard({
         }
     }
 
+    // Cancelar → restaurar snapshot
     function handleCancelConfirm() {
-        if (preConfirmLeadsMap) {
-            setLeadsMap(preConfirmLeadsMap);
+        if (leadsMapSnapshot.current) {
+            setLeadsMap(leadsMapSnapshot.current);
+            // Restaurar unallocated leads (re-fetch seria ideal, mas snapshot é mais rápido)
+            getLeadsSemColuna().then(setUnallocatedLeads);
         }
         setConfirmModal(false);
-        setPreConfirmLeadsMap(null);
+        leadsMapSnapshot.current = null;
     }
 
     const handleLeadClick = useCallback(
-        (leadId: string) => {
+        () => {
             router.push(`/conversas`);
         },
         [router]
@@ -392,7 +406,6 @@ export function KanbanBoard({
 
     // Column IDs for sortable context
     const columnSortableIds = columns.map((c) => `col-sortable-${c.id}`);
-    // Unallocated lead IDs for drag source
     const unallocatedIds = unallocatedLeads.map((l) => l.id);
 
     return (
@@ -518,7 +531,7 @@ export function KanbanBoard({
                             Confirmar Passeio Realizado?
                         </DialogTitle>
                         <DialogDescription className="text-slate-400">
-                            Isso contará para a meta do mês e não poderá ser desfeito.
+                            O lead voltará para &quot;Leads sem coluna&quot; com a tag do passeio registrado.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -580,11 +593,8 @@ export function KanbanBoard({
 }
 
 // =============================================
-// Unallocated Lead Item (draggable from sidebar)
+// Unallocated Lead Item (draggable from sidebar) — com tag de passeio 1.3
 // =============================================
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { verticalListSortingStrategy } from "@dnd-kit/sortable";
 
 function UnallocatedLeadItem({ lead }: { lead: KanbanLead }) {
     const {
@@ -604,6 +614,11 @@ function UnallocatedLeadItem({ lead }: { lead: KanbanLead }) {
         transition,
     };
 
+    function formatDate(dateStr: string) {
+        const [y, m, d] = dateStr.split("-");
+        return `${d}/${m}/${y}`;
+    }
+
     return (
         <div
             ref={setNodeRef}
@@ -621,6 +636,17 @@ function UnallocatedLeadItem({ lead }: { lead: KanbanLead }) {
                     <Phone className="w-2.5 h-2.5" />
                     {lead.telefone}
                 </p>
+            )}
+            {/* Tag de passeio */}
+            {lead.totalPasseios > 0 && lead.ultimoPasseio && (
+                <div className="mt-1.5">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-lg px-1.5 py-0.5">
+                        ✅ {formatDate(lead.ultimoPasseio.data)}
+                        {lead.totalPasseios > 1 && (
+                            <span className="text-emerald-500/60"> · +{lead.totalPasseios - 1} passeio{lead.totalPasseios > 2 ? "s" : ""}</span>
+                        )}
+                    </span>
+                </div>
             )}
         </div>
     );

@@ -28,7 +28,17 @@ export type KanbanLead = {
     createdAt: Date | null;
     passeioConfirmado: boolean;
     dataPasseio: string | null;
+    ultimoPasseio: { data: string; destino: string | null } | null;
+    totalPasseios: number;
     tags: { id: string; name: string; color: string }[];
+};
+
+export type PasseioRealizado = {
+    id: string;
+    telefone: number;
+    dataPasseio: string;
+    destino: string | null;
+    createdAt: string;
 };
 
 export type KanbanData = {
@@ -79,6 +89,8 @@ export async function getKanbanData(): Promise<KanbanData> {
         createdAt: row.created_at ? new Date(row.created_at as string) : null,
         passeioConfirmado: (row.passeio_confirmado as boolean) ?? false,
         dataPasseio: row.data_passeio ? String(row.data_passeio) : null,
+        ultimoPasseio: null,
+        totalPasseios: 0,
         tags: [],
     }));
 
@@ -110,7 +122,7 @@ export async function getKanbanColumns(): Promise<KanbanColumn[]> {
  */
 export async function moveLeadInKanban(
     leadId: string,
-    targetColumnId: string,
+    targetColumnId: string | null,
     newPosition: number
 ) {
     const { error } = await supabase
@@ -214,35 +226,47 @@ export async function deleteKanbanColumn(id: string) {
 }
 
 /**
- * Confirma passeio realizado. Só pode ser feito uma vez.
+ * Confirma passeio realizado.
+ * 1) Busca lead para pegar telefone e destino
+ * 2) INSERT em passeios_realizados
+ * 3) UPDATE data_passeio em Clientes_WhatsApp
  */
 export async function confirmPasseioRealizado(
     leadId: string,
     dataPasseio: string
 ) {
-    // Verificar se já foi confirmado
-    const { data: lead } = await supabase
+    // 1. Buscar lead
+    const { data: lead, error: leadErr } = await supabase
         .from("Clientes _WhatsApp")
-        .select("passeio_confirmado")
+        .select("telefone, destino")
         .eq("id", leadId)
         .single();
 
-    if (lead?.passeio_confirmado) {
-        return { success: false, error: "Este passeio já foi confirmado anteriormente." };
+    if (leadErr || !lead) {
+        console.error("Erro ao buscar lead:", leadErr);
+        return { success: false, error: "Lead não encontrado." };
     }
 
-    const { error } = await supabase
-        .from("Clientes _WhatsApp")
-        .update({
-            passeio_confirmado: true,
+    // 2. INSERT em passeios_realizados
+    const { error: insertErr } = await supabase
+        .from("passeios_realizados")
+        .insert({
+            telefone: lead.telefone,
             data_passeio: dataPasseio,
-        })
+            destino: lead.destino || null,
+        });
+
+    if (insertErr) {
+        console.error("Erro ao inserir passeio:", insertErr);
+        return { success: false, error: insertErr.message };
+    }
+
+    // 3. UPDATE data_passeio no lead
+    await supabase
+        .from("Clientes _WhatsApp")
+        .update({ data_passeio: dataPasseio })
         .eq("id", leadId);
 
-    if (error) {
-        console.error("Erro ao confirmar passeio:", error);
-        return { success: false, error: error.message };
-    }
     return { success: true };
 }
 
@@ -290,12 +314,8 @@ export async function reorderKanbanColumns(columnIds: string[]) {
     return { success: true };
 }
 
-// =============================================
-// LEADS SEM COLUNA (sidebar)
-// =============================================
-
 /**
- * Leads que ainda não foram colocados em nenhuma coluna do Kanban.
+ * Leads sem coluna + dados de passeios realizados.
  */
 export async function getLeadsSemColuna(): Promise<KanbanLead[]> {
     const { data, error } = await supabase
@@ -309,21 +329,70 @@ export async function getLeadsSemColuna(): Promise<KanbanLead[]> {
         return [];
     }
 
+    const leads = data || [];
+    if (leads.length === 0) return [];
+
+    // Buscar telefones para fazer join com passeios_realizados
+    const telefones = leads.map((l: Record<string, unknown>) => l.telefone).filter(Boolean);
+    const { data: passeios } = await supabase
+        .from("passeios_realizados")
+        .select("telefone, data_passeio, destino")
+        .in("telefone", telefones)
+        .order("data_passeio", { ascending: false });
+
+    // Agrupar passeios por telefone
+    const passeiosPorTel: Record<string, { data: string; destino: string | null }[]> = {};
+    for (const p of (passeios || [])) {
+        const tel = String(p.telefone);
+        if (!passeiosPorTel[tel]) passeiosPorTel[tel] = [];
+        passeiosPorTel[tel].push({ data: p.data_passeio, destino: p.destino || null });
+    }
+
+    return leads.map((row: Record<string, unknown>) => {
+        const tel = String(row.telefone || "");
+        const meus = passeiosPorTel[tel] || [];
+        return {
+            id: row.id as string,
+            nomeEscola: (row.nome as string) || "Lead sem nome",
+            telefone: tel,
+            temperatura: (row.status as string) || "frio",
+            dataEvento: null,
+            destino: null,
+            quantidadeAlunos: null,
+            kanbanColumnId: "",
+            kanbanPosition: 0,
+            iaAtiva: (row.ia_ativa as boolean) ?? true,
+            createdAt: row.created_at ? new Date(row.created_at as string) : null,
+            passeioConfirmado: (row.passeio_confirmado as boolean) ?? false,
+            dataPasseio: row.data_passeio ? String(row.data_passeio) : null,
+            ultimoPasseio: meus.length > 0 ? meus[0] : null,
+            totalPasseios: meus.length,
+            tags: [],
+        };
+    });
+}
+
+/**
+ * Busca todos os passeios de um lead pelo telefone.
+ */
+export async function getPasseiosDoLead(telefone: number): Promise<PasseioRealizado[]> {
+    const { data, error } = await supabase
+        .from("passeios_realizados")
+        .select("id, telefone, data_passeio, destino, created_at")
+        .eq("telefone", telefone)
+        .order("data_passeio", { ascending: false });
+
+    if (error) {
+        console.error("Erro ao buscar passeios do lead:", error);
+        return [];
+    }
+
     return (data || []).map((row: Record<string, unknown>) => ({
         id: row.id as string,
-        nomeEscola: (row.nome as string) || "Lead sem nome",
-        telefone: String(row.telefone || ""),
-        temperatura: (row.status as string) || "frio",
-        dataEvento: null,
-        destino: null,
-        quantidadeAlunos: null,
-        kanbanColumnId: "",
-        kanbanPosition: 0,
-        iaAtiva: (row.ia_ativa as boolean) ?? true,
-        createdAt: row.created_at ? new Date(row.created_at as string) : null,
-        passeioConfirmado: (row.passeio_confirmado as boolean) ?? false,
-        dataPasseio: row.data_passeio ? String(row.data_passeio) : null,
-        tags: [],
+        telefone: row.telefone as number,
+        dataPasseio: row.data_passeio as string,
+        destino: (row.destino as string) || null,
+        createdAt: row.created_at as string,
     }));
 }
 
