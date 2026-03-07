@@ -54,6 +54,7 @@ export type KanbanData = {
  * Busca todas as colunas e leads com kanban_column_id.
  */
 export async function getKanbanData(): Promise<KanbanData> {
+    // 1. Buscar colunas e leads separadamente
     const [columnsRes, leadsRes] = await Promise.all([
         supabase
             .from("kanban_columns")
@@ -61,7 +62,7 @@ export async function getKanbanData(): Promise<KanbanData> {
             .order("position", { ascending: true }),
         supabase
             .from("Clientes _WhatsApp")
-            .select("id, nome, telefone, destino, status, status_atendimento, ia_ativa, created_at, kanban_column_id, kanban_position, passeio_confirmado, data_passeio")
+            .select("*")
             .not("kanban_column_id", "is", null)
             .order("kanban_position", { ascending: true }),
     ]);
@@ -76,24 +77,46 @@ export async function getKanbanData(): Promise<KanbanData> {
     }
 
     const columns = columnsRes.data.map(mapColumn);
-    const leads: KanbanLead[] = (leadsRes.data || []).map((row: Record<string, unknown>) => ({
-        id: row.id as string,
-        nomeEscola: (row.nome as string) || "Lead sem nome",
-        telefone: String(row.telefone || ""),
-        temperatura: (row.status as string) || "frio",
-        dataEvento: null,
-        destino: (row.destino as string) || null,
-        quantidadeAlunos: null,
-        kanbanColumnId: row.kanban_column_id as string,
-        kanbanPosition: (row.kanban_position as number) || 0,
-        iaAtiva: (row.ia_ativa as boolean) ?? true,
-        createdAt: row.created_at ? new Date(row.created_at as string) : null,
-        passeioConfirmado: (row.passeio_confirmado as boolean) ?? false,
-        dataPasseio: row.data_passeio ? String(row.data_passeio) : null,
-        ultimoPasseio: null,
-        totalPasseios: 0,
-        tags: [],
-    }));
+    const rawLeads = leadsRes.data || [];
+
+    // 2. Buscar passeios para os leads do board
+    const telefones = rawLeads.map((l: Record<string, unknown>) => l.telefone).filter(Boolean);
+    const { data: passeios } = telefones.length > 0
+        ? await supabase
+            .from("passeios_realizados")
+            .select("*")
+            .in("telefone", telefones)
+            .order("created_at", { ascending: false })
+        : { data: [] };
+
+    // 3. Montar leads com passeios
+    const leads: KanbanLead[] = rawLeads.map((row: Record<string, unknown>) => {
+        const tel = row.telefone;
+        const passeiosDoLead = (passeios || []).filter((p: Record<string, unknown>) => p.telefone === tel);
+        const ultimoPasseio = passeiosDoLead[0] || null;
+
+        return {
+            id: row.id as string,
+            nomeEscola: (row.nome as string) || "Lead sem nome",
+            telefone: String(row.telefone || ""),
+            temperatura: (row.status as string) || "frio",
+            dataEvento: null,
+            destino: (row.destino as string) || null,
+            quantidadeAlunos: null,
+            kanbanColumnId: row.kanban_column_id as string,
+            kanbanPosition: (row.kanban_position as number) || 0,
+            iaAtiva: (row.ia_ativa as boolean) ?? true,
+            createdAt: row.created_at ? new Date(row.created_at as string) : null,
+            passeioConfirmado: passeiosDoLead.length > 0,
+            dataPasseio: row.data_passeio ? String(row.data_passeio) : null,
+            ultimoPasseio: ultimoPasseio ? {
+                data: ultimoPasseio.data_passeio as string,
+                destino: (ultimoPasseio.destino as string) || null,
+            } : null,
+            totalPasseios: passeiosDoLead.length,
+            tags: [],
+        };
+    });
 
     return { columns, leads };
 }
@@ -308,55 +331,56 @@ export async function reorderKanbanColumns(columnIds: string[]) {
  * Leads sem coluna + dados de passeios realizados.
  */
 export async function getLeadsSemColuna(): Promise<KanbanLead[]> {
-    const { data, error } = await supabase
+    // 1. Buscar leads sem coluna
+    const { data: leads, error } = await supabase
         .from("Clientes _WhatsApp")
-        .select("id, nome, telefone, status, ia_ativa, created_at, passeio_confirmado, data_passeio")
+        .select("*")
         .is("kanban_column_id", null)
         .order("created_at", { ascending: false });
 
-    if (error) {
+    if (error || !leads) {
         console.error("Erro ao buscar leads sem coluna:", error);
         return [];
     }
-
-    const leads = data || [];
     if (leads.length === 0) return [];
 
-    // Buscar telefones para fazer join com passeios_realizados
+    // 2. Para cada lead, buscar passeios
     const telefones = leads.map((l: Record<string, unknown>) => l.telefone).filter(Boolean);
+
     const { data: passeios } = await supabase
         .from("passeios_realizados")
-        .select("telefone, data_passeio, destino")
+        .select("*")
         .in("telefone", telefones)
-        .order("data_passeio", { ascending: false });
+        .order("created_at", { ascending: false });
 
-    // Agrupar passeios por telefone
-    const passeiosPorTel: Record<string, { data: string; destino: string | null }[]> = {};
-    for (const p of (passeios || [])) {
-        const tel = String(p.telefone);
-        if (!passeiosPorTel[tel]) passeiosPorTel[tel] = [];
-        passeiosPorTel[tel].push({ data: p.data_passeio, destino: p.destino || null });
-    }
+    // 3. Montar o objeto KanbanLead com ultimo passeio
+    return leads.map((lead: Record<string, unknown>) => {
+        const passeiosDoLead = (passeios || []).filter(
+            (p: Record<string, unknown>) => p.telefone === lead.telefone
+        );
+        const ultimoPasseio = passeiosDoLead[0] || null;
 
-    return leads.map((row: Record<string, unknown>) => {
-        const tel = String(row.telefone || "");
-        const meus = passeiosPorTel[tel] || [];
         return {
-            id: row.id as string,
-            nomeEscola: (row.nome as string) || "Lead sem nome",
-            telefone: tel,
-            temperatura: (row.status as string) || "frio",
+            id: lead.id as string,
+            telefone: String(lead.telefone || ""),
+            nomeEscola: (lead.nome as string) || "Sem nome",
+            temperatura: (lead.status as string) || "frio",
             dataEvento: null,
             destino: null,
             quantidadeAlunos: null,
             kanbanColumnId: "",
             kanbanPosition: 0,
-            iaAtiva: (row.ia_ativa as boolean) ?? true,
-            createdAt: row.created_at ? new Date(row.created_at as string) : null,
-            passeioConfirmado: (row.passeio_confirmado as boolean) ?? false,
-            dataPasseio: row.data_passeio ? String(row.data_passeio) : null,
-            ultimoPasseio: meus.length > 0 ? meus[0] : null,
-            totalPasseios: meus.length,
+            iaAtiva: (lead.ia_ativa as boolean) ?? true,
+            createdAt: lead.created_at ? new Date(lead.created_at as string) : null,
+            passeioConfirmado: passeiosDoLead.length > 0,
+            dataPasseio: lead.data_passeio ? String(lead.data_passeio) : null,
+            ultimoPasseio: ultimoPasseio
+                ? {
+                    data: ultimoPasseio.data_passeio as string,
+                    destino: (ultimoPasseio.destino as string) || null,
+                }
+                : null,
+            totalPasseios: passeiosDoLead.length,
             tags: [],
         };
     });
