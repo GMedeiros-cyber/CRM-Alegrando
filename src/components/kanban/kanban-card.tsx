@@ -238,6 +238,13 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                    {/* Badge Passeio Confirmado */}
+                    {lead.passeioConfirmado && (
+                        <div className="flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400">
+                            ✓ Confirmado
+                        </div>
+                    )}
+
                     {/* Checklist toggle button */}
                     <button
                         onClick={(e) => {

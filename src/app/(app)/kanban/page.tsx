@@ -5,27 +5,15 @@ import { KanbanBoard } from "@/components/kanban/kanban-board";
 import {
     getKanbanData,
     seedDefaultColumns,
-    createDemoLead,
 } from "@/lib/actions/kanban";
 import type { KanbanColumn, KanbanLead } from "@/lib/actions/kanban";
 import {
     Kanban,
-    Sparkles,
-    Plus,
     Loader2,
     RefreshCw,
     CheckCircle2,
     AlertCircle,
 } from "lucide-react";
-
-const DEMO_SCHOOLS = [
-    { name: "Colégio Santo Agostinho", temp: "quente" },
-    { name: "Escola Maria Clara", temp: "morno" },
-    { name: "Instituto Lumiar", temp: "frio" },
-    { name: "Colégio Pedro II", temp: "quente" },
-    { name: "Escola Nova Geração", temp: "morno" },
-    { name: "Colégio Bandeirantes", temp: "frio" },
-];
 
 export default function KanbanPage() {
     const [columns, setColumns] = useState<KanbanColumn[]>([]);
@@ -41,6 +29,20 @@ export default function KanbanPage() {
         try {
             setLoading(true);
             const data = await getKanbanData();
+
+            // Auto-seed se não há colunas
+            if (data.columns.length === 0) {
+                const seedResult = await seedDefaultColumns();
+                if (seedResult.seeded) {
+                    // Recarregar após seed
+                    const newData = await getKanbanData();
+                    setColumns(newData.columns);
+                    setLeads(newData.leads);
+                    setMessage({ type: "success", text: "Colunas padrão criadas automaticamente!" });
+                    return;
+                }
+            }
+
             setColumns(data.columns);
             setLeads(data.leads);
         } catch (err) {
@@ -53,40 +55,6 @@ export default function KanbanPage() {
     useEffect(() => {
         loadData();
     }, []);
-
-    function handleSeed() {
-        startTransition(async () => {
-            try {
-                const result = await seedDefaultColumns();
-                setMessage({ type: "success", text: result.message });
-                await loadData();
-            } catch (err) {
-                setMessage({ type: "error", text: `Erro no seed: ${err}` });
-            }
-        });
-    }
-
-    function handleAddDemo() {
-        startTransition(async () => {
-            try {
-                if (columns.length === 0) {
-                    setMessage({ type: "error", text: "Crie as colunas primeiro (Seed)." });
-                    return;
-                }
-                const school =
-                    DEMO_SCHOOLS[Math.floor(Math.random() * DEMO_SCHOOLS.length)];
-                const randomCol = columns[Math.floor(Math.random() * columns.length)];
-                await createDemoLead(school.name, randomCol.id, school.temp);
-                setMessage({
-                    type: "success",
-                    text: `Lead "${school.name}" criado em "${randomCol.name}"!`,
-                });
-                await loadData();
-            } catch (err) {
-                setMessage({ type: "error", text: `Erro ao criar lead: ${err}` });
-            }
-        });
-    }
 
     return (
         <div className="space-y-4">
@@ -110,24 +78,6 @@ export default function KanbanPage() {
                     >
                         <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
                         <span className="hidden sm:inline">Atualizar</span>
-                    </button>
-
-                    <button
-                        onClick={handleSeed}
-                        disabled={isPending}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-500 text-white text-sm font-medium hover:bg-violet-600 disabled:opacity-50 transition-colors shadow-sm"
-                    >
-                        {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                        <span className="hidden sm:inline">Seed Colunas</span>
-                    </button>
-
-                    <button
-                        onClick={handleAddDemo}
-                        disabled={isPending}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-sm shadow-brand-500/20"
-                    >
-                        {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                        <span className="hidden sm:inline">Lead Demo</span>
                     </button>
                 </div>
             </div>
@@ -170,13 +120,17 @@ export default function KanbanPage() {
                             Kanban vazio
                         </p>
                         <p className="text-sm text-slate-400 mt-1 max-w-sm">
-                            Clique em <strong>&quot;Seed Colunas&quot;</strong> para criar as colunas
-                            padrão (Novo Lead, Qualificação, Proposta Enviada, Agendado, Concluído).
+                            Adicione leads ao board arrastando da lista de conversas, ou aguarde
+                            novos leads entrarem automaticamente.
                         </p>
                     </div>
                 </div>
             ) : (
-                <KanbanBoard initialColumns={columns} initialLeads={leads} />
+                <KanbanBoard
+                    initialColumns={columns}
+                    initialLeads={leads}
+                    onDataChanged={loadData}
+                />
             )}
         </div>
     );

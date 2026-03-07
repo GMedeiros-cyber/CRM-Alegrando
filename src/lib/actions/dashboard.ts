@@ -132,3 +132,25 @@ export async function getEventosDoMes(): Promise<number> {
         return 0;
     }
 }
+
+/**
+ * Conta passeios confirmados no mês atual (por data_passeio).
+ */
+export async function getTotalPasseiosDoMes(): Promise<number> {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+
+    const { count, error } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("*", { count: "exact", head: true })
+        .eq("passeio_confirmado", true)
+        .gte("data_passeio", firstDay)
+        .lte("data_passeio", lastDay);
+
+    if (error) {
+        console.error("Erro ao contar passeios do mês:", error);
+        return 0;
+    }
+    return count || 0;
+}

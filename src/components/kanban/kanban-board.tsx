@@ -16,12 +16,31 @@ import { arrayMove } from "@dnd-kit/sortable";
 import { useRouter } from "next/navigation";
 import { KanbanColumn } from "./kanban-column";
 import { KanbanCard } from "./kanban-card";
-import { moveLeadInKanban, createKanbanColumn } from "@/lib/actions/kanban";
+import {
+    moveLeadInKanban,
+    createKanbanColumn,
+    confirmPasseioRealizado,
+} from "@/lib/actions/kanban";
 import type {
     KanbanColumn as KanbanColumnType,
     KanbanLead,
 } from "@/lib/actions/kanban";
-import { Plus } from "lucide-react";
+import {
+    Plus,
+    Loader2,
+    CalendarDays,
+    AlertTriangle,
+    CheckCircle2,
+} from "lucide-react";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface KanbanBoardProps {
     initialColumns: KanbanColumnType[];
@@ -52,6 +71,17 @@ export function KanbanBoard({
     const [newColName, setNewColName] = useState("");
     const newColRef = useRef<HTMLInputElement>(null);
 
+    // Modal de confirmação "Passeio Realizado"
+    const [confirmModal, setConfirmModal] = useState(false);
+    const [confirmLead, setConfirmLead] = useState<KanbanLead | null>(null);
+    const [confirmColId, setConfirmColId] = useState<string>("");
+    const [confirmPosition, setConfirmPosition] = useState<number>(0);
+    const [confirmDate, setConfirmDate] = useState<string>("");
+    const [confirmLoading, setConfirmLoading] = useState(false);
+    const [confirmError, setConfirmError] = useState<string | null>(null);
+    // Backup para reverter
+    const [preConfirmLeadsMap, setPreConfirmLeadsMap] = useState<Record<string, KanbanLead[]> | null>(null);
+
     useEffect(() => {
         if (addingColumn && newColRef.current) {
             newColRef.current.focus();
@@ -70,12 +100,7 @@ export function KanbanBoard({
             const color = COLORS[columns.length % COLORS.length];
             const created = await createKanbanColumn(name, color);
             if (!created) return;
-            setColumns((prev) => [...prev, {
-                id: created.id,
-                name: created.name,
-                position: created.position,
-                color: created.color,
-            }]);
+            setColumns((prev) => [...prev, created]);
             setLeadsMap((prev) => ({ ...prev, [created.id]: [] }));
             setNewColName("");
             setAddingColumn(false);
@@ -84,7 +109,6 @@ export function KanbanBoard({
         }
     }
 
-    // Column renamed callback
     function handleColumnRenamed(colId: string, newName: string) {
         setColumns((prev) =>
             prev.map((c) => (c.id === colId ? { ...c, name: newName } : c))
@@ -189,87 +213,233 @@ export function KanbanBoard({
             const finalColId = findColumnOfLead(activeId) || overColId;
             const finalLeads = leadsMap[finalColId] || [];
             const finalIdx = finalLeads.findIndex((l) => l.id === activeId);
+            const lead = finalLeads.find((l) => l.id === activeId);
 
-            moveLeadInKanban(activeId, finalColId, finalIdx >= 0 ? finalIdx : 0).catch(
-                console.error
-            );
+            // Verificar se é a coluna "Passeio Realizado"
+            const targetCol = columns.find((c) => c.id === finalColId);
+            if (targetCol?.slug === "passeio_realizado" && lead && !lead.passeioConfirmado) {
+                // Salvar backup pra reverter se cancelar
+                setPreConfirmLeadsMap({ ...leadsMap });
+                setConfirmLead(lead);
+                setConfirmColId(finalColId);
+                setConfirmPosition(finalIdx >= 0 ? finalIdx : 0);
+                setConfirmDate(new Date().toISOString().split("T")[0]);
+                setConfirmError(null);
+                setConfirmModal(true);
+                return; // Não salvar ainda — esperar confirmação
+            }
+
+            if (targetCol?.slug === "passeio_realizado" && lead?.passeioConfirmado) {
+                // Já confirmado, só mover normalmente
+                moveLeadInKanban(activeId, finalColId, finalIdx >= 0 ? finalIdx : 0).catch(console.error);
+                return;
+            }
+
+            // Mover normalmente
+            moveLeadInKanban(activeId, finalColId, finalIdx >= 0 ? finalIdx : 0).catch(console.error);
         },
-        [findColumnOfLead, leadsMap]
+        [findColumnOfLead, leadsMap, columns]
     );
+
+    // Confirmar passeio
+    async function handleConfirmPasseio() {
+        if (!confirmLead || !confirmDate) return;
+        setConfirmLoading(true);
+        setConfirmError(null);
+
+        try {
+            const res = await confirmPasseioRealizado(confirmLead.id, confirmDate);
+            if (!res.success) {
+                setConfirmError(res.error || "Erro desconhecido.");
+                setConfirmLoading(false);
+                return;
+            }
+
+            // Mover no banco
+            await moveLeadInKanban(confirmLead.id, confirmColId, confirmPosition);
+
+            // Atualizar lead localmente
+            setLeadsMap((prev) => {
+                const updated = { ...prev };
+                for (const colId of Object.keys(updated)) {
+                    updated[colId] = updated[colId].map((l) =>
+                        l.id === confirmLead.id
+                            ? { ...l, passeioConfirmado: true, dataPasseio: confirmDate }
+                            : l
+                    );
+                }
+                return updated;
+            });
+
+            setConfirmModal(false);
+            setPreConfirmLeadsMap(null);
+            onDataChanged?.();
+        } catch (err) {
+            console.error("Erro ao confirmar passeio:", err);
+            setConfirmError("Erro ao confirmar. Tente novamente.");
+        } finally {
+            setConfirmLoading(false);
+        }
+    }
+
+    // Cancelar confirmação → reverter
+    function handleCancelConfirm() {
+        if (preConfirmLeadsMap) {
+            setLeadsMap(preConfirmLeadsMap);
+        }
+        setConfirmModal(false);
+        setPreConfirmLeadsMap(null);
+    }
 
     // Click → redirect to Conversas
     const handleLeadClick = useCallback(
         (leadId: string) => {
-            router.push(`/conversas?leadId=${leadId}`);
+            // Find lead to get telefone
+            for (const colLeads of Object.values(leadsMap)) {
+                const lead = colLeads.find((l) => l.id === leadId);
+                if (lead) {
+                    router.push(`/conversas`);
+                    return;
+                }
+            }
         },
-        [router]
+        [router, leadsMap]
     );
 
     return (
-        <DndContext
-            sensors={sensors}
-            collisionDetection={closestCorners}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragEnd={handleDragEnd}
-        >
-            <div className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-180px)]">
-                {columns.map((column) => (
-                    <KanbanColumn
-                        key={column.id}
-                        column={column}
-                        leads={leadsMap[column.id] || []}
-                        onLeadClick={handleLeadClick}
-                        onColumnRenamed={handleColumnRenamed}
-                    />
-                ))}
-
-                {/* Inline Add Column */}
-                {addingColumn ? (
-                    <div className="flex flex-col w-[300px] min-w-[300px] rounded-2xl bg-slate-800/50 border-2 border-dashed border-brand-500/50 p-4 shrink-0">
-                        <input
-                            ref={newColRef}
-                            value={newColName}
-                            onChange={(e) => setNewColName(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") handleAddColumn();
-                                if (e.key === "Escape") {
-                                    setAddingColumn(false);
-                                    setNewColName("");
-                                }
-                            }}
-                            placeholder="Nome da coluna..."
-                            className="bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-brand-400 mb-3"
+        <>
+            <DndContext
+                sensors={sensors}
+                collisionDetection={closestCorners}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+            >
+                <div className="flex gap-4 overflow-x-auto pb-4 h-[calc(100vh-180px)]">
+                    {columns.map((column) => (
+                        <KanbanColumn
+                            key={column.id}
+                            column={column}
+                            leads={leadsMap[column.id] || []}
+                            onLeadClick={handleLeadClick}
+                            onColumnRenamed={handleColumnRenamed}
                         />
+                    ))}
+
+                    {/* Inline Add Column */}
+                    {addingColumn ? (
+                        <div className="flex flex-col w-[300px] min-w-[300px] rounded-2xl bg-slate-800/50 border-2 border-dashed border-brand-500/50 p-4 shrink-0">
+                            <input
+                                ref={newColRef}
+                                value={newColName}
+                                onChange={(e) => setNewColName(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleAddColumn();
+                                    if (e.key === "Escape") {
+                                        setAddingColumn(false);
+                                        setNewColName("");
+                                    }
+                                }}
+                                placeholder="Nome da coluna..."
+                                className="bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-brand-400 mb-3"
+                            />
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleAddColumn}
+                                    className="flex-1 px-3 py-2 rounded-xl bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 transition-colors"
+                                >
+                                    Criar
+                                </button>
+                                <button
+                                    onClick={() => { setAddingColumn(false); setNewColName(""); }}
+                                    className="px-3 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-600 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => setAddingColumn(true)}
+                            className="flex flex-col items-center justify-center gap-2 w-[300px] min-w-[300px] min-h-[120px] rounded-2xl border-2 border-dashed border-slate-700 hover:border-brand-500/50 hover:bg-brand-500/5 text-slate-500 hover:text-brand-400 transition-all shrink-0 cursor-pointer"
+                        >
+                            <Plus className="w-6 h-6" />
+                            <span className="text-sm font-medium">Adicionar Coluna</span>
+                        </button>
+                    )}
+                </div>
+
+                <DragOverlay dropAnimation={null}>
+                    {activeCard ? <KanbanCard lead={activeCard} isOverlay /> : null}
+                </DragOverlay>
+            </DndContext>
+
+            {/* Modal de Confirmação — Passeio Realizado */}
+            <Dialog open={confirmModal} onOpenChange={(open) => { if (!open) handleCancelConfirm(); }}>
+                <DialogContent className="bg-slate-800 border-2 border-slate-700 text-white max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="font-display text-lg text-white flex items-center gap-2">
+                            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                            Confirmar Passeio Realizado?
+                        </DialogTitle>
+                        <DialogDescription className="text-slate-400">
+                            Isso contará para a meta do mês e não poderá ser desfeito.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 mt-4">
+                        {confirmLead && (
+                            <div className="bg-slate-900/60 rounded-xl p-3 border border-slate-700/50">
+                                <p className="text-sm font-semibold text-white">{confirmLead.nomeEscola}</p>
+                                {confirmLead.destino && (
+                                    <p className="text-xs text-slate-400 mt-1">📍 {confirmLead.destino}</p>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                <CalendarDays className="w-3 h-3" />
+                                Data do Passeio (obrigatório)
+                            </Label>
+                            <Input
+                                type="date"
+                                value={confirmDate}
+                                onChange={(e) => setConfirmDate(e.target.value)}
+                                className="bg-slate-900 border-slate-600 text-white rounded-xl"
+                            />
+                        </div>
+
+                        {confirmError && (
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
+                                <AlertTriangle className="w-4 h-4 shrink-0" />
+                                {confirmError}
+                            </div>
+                        )}
+
                         <div className="flex gap-2">
                             <button
-                                onClick={handleAddColumn}
-                                className="flex-1 px-3 py-2 rounded-xl bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 transition-colors"
+                                onClick={handleConfirmPasseio}
+                                disabled={!confirmDate || confirmLoading}
+                                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 text-white font-medium text-sm hover:bg-emerald-600 disabled:opacity-40 transition-colors shadow-lg shadow-emerald-500/25"
                             >
-                                Criar
+                                {confirmLoading ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <CheckCircle2 className="w-4 h-4" />
+                                )}
+                                {confirmLoading ? "Confirmando..." : "Confirmar"}
                             </button>
                             <button
-                                onClick={() => { setAddingColumn(false); setNewColName(""); }}
-                                className="px-3 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-600 transition-colors"
+                                onClick={handleCancelConfirm}
+                                className="px-4 py-2.5 rounded-xl bg-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-600 transition-colors"
                             >
                                 Cancelar
                             </button>
                         </div>
                     </div>
-                ) : (
-                    <button
-                        onClick={() => setAddingColumn(true)}
-                        className="flex flex-col items-center justify-center gap-2 w-[300px] min-w-[300px] min-h-[120px] rounded-2xl border-2 border-dashed border-slate-700 hover:border-brand-500/50 hover:bg-brand-500/5 text-slate-500 hover:text-brand-400 transition-all shrink-0 cursor-pointer"
-                    >
-                        <Plus className="w-6 h-6" />
-                        <span className="text-sm font-medium">Adicionar Coluna</span>
-                    </button>
-                )}
-            </div>
-
-            <DragOverlay dropAnimation={null}>
-                {activeCard ? <KanbanCard lead={activeCard} isOverlay /> : null}
-            </DragOverlay>
-        </DndContext>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }

@@ -16,7 +16,7 @@ import {
     LeadsPorMesChart,
     TopDestinosChart,
 } from "@/components/dashboard/charts";
-import { getTotalLeads, getEventosDoMes } from "@/lib/actions/dashboard";
+import { getTotalLeads, getEventosDoMes, getTotalPasseiosDoMes } from "@/lib/actions/dashboard";
 import { getAgendamentos } from "@/lib/actions/agenda";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
 
@@ -25,14 +25,15 @@ import type { AgendamentoEvent } from "@/lib/actions/agenda";
 // =============================================
 function MetaPasseiosCard() {
     const [meta, setMeta] = useState<number>(30);
-    const [atual] = useState<number>(0); // mock por enquanto
+    const [atual, setAtual] = useState<number>(0);
     const [editing, setEditing] = useState(false);
     const [inputValue, setInputValue] = useState("");
 
-    // Load meta from localStorage
+    // Load meta from localStorage + passeios reais
     useEffect(() => {
         const saved = localStorage.getItem("alegrando_meta_passeios");
         if (saved) setMeta(parseInt(saved));
+        getTotalPasseiosDoMes().then(setAtual);
     }, []);
 
     function handleSave() {
