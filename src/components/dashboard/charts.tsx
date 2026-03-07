@@ -8,47 +8,14 @@ import {
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
-    PieChart,
-    Pie,
-    Cell,
-    Area,
-    AreaChart,
 } from "recharts";
 import { useState, useEffect } from "react";
-// import { getTopDestinos } from "@/lib/actions/leads"; // Comentado para mocks
-
-// =========================================
-// Mock data
-// =========================================
-
-const leadsPorMes = [
-    { mes: "Set", leads: 28 },
-    { mes: "Out", leads: 34 },
-    { mes: "Nov", leads: 42 },
-    { mes: "Dez", leads: 38 },
-    { mes: "Jan", leads: 51 },
-    { mes: "Fev", leads: 47 },
-];
-
-const leadsPorTemperatura = [
-    { name: "Frio", value: 35, color: "#3b82f6" },
-    { name: "Morno", value: 42, color: "#f59e0b" },
-    { name: "Quente", value: 23, color: "#ef4444" },
-];
-
-const conversoesSemana = [
-    { dia: "Seg", convertidos: 3, novos: 7 },
-    { dia: "Ter", convertidos: 5, novos: 4 },
-    { dia: "Qua", convertidos: 2, novos: 8 },
-    { dia: "Qui", convertidos: 6, novos: 5 },
-    { dia: "Sex", convertidos: 4, novos: 6 },
-    { dia: "Sáb", convertidos: 1, novos: 2 },
-];
+import { getLeadsPorMes, getTopDestinos } from "@/lib/actions/dashboard";
+import { Loader2 } from "lucide-react";
 
 // =========================================
 // Custom Tooltip (Dark)
 // =========================================
-
 const CustomTooltipContent = ({
     active,
     payload,
@@ -71,7 +38,19 @@ const CustomTooltipContent = ({
     );
 };
 
+// =========================================
+// Leads por Mês — dados reais
+// =========================================
 export function LeadsPorMesChart() {
+    const [data, setData] = useState<{ mes: string; leads: number }[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        getLeadsPorMes()
+            .then((res) => setData(res))
+            .finally(() => setLoading(false));
+    }, []);
+
     return (
         <div className="bento-card-static p-6 bento-enter" style={{ animationDelay: "200ms" }}>
             <div className="mb-6">
@@ -82,134 +61,60 @@ export function LeadsPorMesChart() {
                     Evolução dos últimos 6 meses
                 </p>
             </div>
-            <div className="h-[260px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={leadsPorMes} barCategoryGap="20%">
-                        <CartesianGrid
-                            strokeDasharray="3 3"
-                            vertical={false}
-                            stroke="#334155"
-                        />
-                        <XAxis
-                            dataKey="mes"
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 12, fill: "#94a3b8" }}
-                        />
-                        <YAxis
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 12, fill: "#94a3b8" }}
-                        />
-                        <Tooltip content={<CustomTooltipContent />} cursor={false} />
-                        <Bar
-                            dataKey="leads"
-                            fill="#ef5544"
-                            radius={[8, 8, 0, 0]}
-                            name="Leads"
-                        />
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-    );
-}
-
-export function TemperaturaChart() {
-    return (
-        <div className="bento-card-static p-6 bento-enter" style={{ animationDelay: "300ms" }}>
-            <div className="mb-6">
-                <h3 className="font-display text-lg font-semibold text-white">
-                    Leads por Temperatura
-                </h3>
-                <p className="text-sm text-slate-400 mt-0.5">
-                    Distribuição atual do pipeline
-                </p>
-            </div>
-            <div className="h-[200px] flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie
-                            data={leadsPorTemperatura}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={55}
-                            outerRadius={80}
-                            paddingAngle={4}
-                            dataKey="value"
-                            strokeWidth={0}
-                        >
-                            {leadsPorTemperatura.map((entry, index) => (
-                                <Cell key={index} fill={entry.color} />
-                            ))}
-                        </Pie>
-                        <Tooltip
-                            content={({ active, payload }) => {
-                                if (!active || !payload?.[0]) return null;
-                                const data = payload[0].payload as {
-                                    name: string;
-                                    value: number;
-                                    color: string;
-                                };
-                                return (
-                                    <div className="bg-slate-800 rounded-xl shadow-lg border-2 border-slate-600 px-4 py-3">
-                                        <p
-                                            className="text-sm font-semibold"
-                                            style={{ color: data.color }}
-                                        >
-                                            {data.name}: {data.value}
-                                        </p>
-                                    </div>
-                                );
-                            }}
-                        />
-                    </PieChart>
-                </ResponsiveContainer>
-            </div>
-            {/* Legend */}
-            <div className="flex items-center justify-center gap-6 mt-2">
-                {leadsPorTemperatura.map((item) => (
-                    <div key={item.name} className="flex items-center gap-2">
-                        <div
-                            className="w-2.5 h-2.5 rounded-full"
-                            style={{ backgroundColor: item.color }}
-                        />
-                        <span className="text-xs text-slate-400 font-medium">
-                            {item.name}{" "}
-                            <span className="text-white font-semibold">{item.value}</span>
-                        </span>
-                    </div>
-                ))}
-            </div>
+            {loading ? (
+                <div className="h-[260px] flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
+                </div>
+            ) : data.length > 0 ? (
+                <div className="h-[260px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data} barCategoryGap="20%">
+                            <CartesianGrid
+                                strokeDasharray="3 3"
+                                vertical={false}
+                                stroke="#334155"
+                            />
+                            <XAxis
+                                dataKey="mes"
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 12, fill: "#94a3b8" }}
+                            />
+                            <YAxis
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fontSize: 12, fill: "#94a3b8" }}
+                            />
+                            <Tooltip content={<CustomTooltipContent />} cursor={false} />
+                            <Bar
+                                dataKey="leads"
+                                fill="#ef5544"
+                                radius={[8, 8, 0, 0]}
+                                name="Leads"
+                            />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            ) : (
+                <div className="h-[260px] flex items-center justify-center">
+                    <p className="text-sm text-slate-400">Nenhum lead registrado nos últimos 6 meses.</p>
+                </div>
+            )}
         </div>
     );
 }
 
 // =========================================
-// Top Destinos (dados reais do banco)
+// Top Destinos — dados reais
 // =========================================
-
-const mockDestinos = [
-    { destino: "Parque Nacional da Tijuca", total: 45 },
-    { destino: "Museu do Amanhã", total: 32 },
-    { destino: "Petrópolis", total: 28 },
-    { destino: "Paraty", total: 15 },
-    { destino: "Cristo Redentor", total: 10 },
-];
-
 export function TopDestinosChart() {
     const [data, setData] = useState<{ destino: string; total: number }[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // FIXME: Mocks temporários para visualização
-        setData(mockDestinos);
-        setLoading(false);
-        /* 
         getTopDestinos()
-            .then(res => setData(res as { destino: string; total: number }[]))
+            .then((res) => setData(res))
             .finally(() => setLoading(false));
-        */
     }, []);
 
     return (
@@ -219,21 +124,18 @@ export function TopDestinosChart() {
                     Top Destinos & Passeios
                 </h3>
                 <p className="text-sm text-slate-400 mt-0.5">
-                    Destinos mais requisitados pelos leads
+                    Destinos mais requisitados este mês
                 </p>
             </div>
             {loading ? (
                 <div className="h-[220px] flex items-center justify-center">
-                    <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                    <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
                 </div>
             ) : data.length > 0 ? (
                 <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data} layout="vertical" barCategoryGap="25%">
-                            <XAxis
-                                type="number"
-                                hide
-                            />
+                            <XAxis type="number" hide />
                             <YAxis
                                 type="category"
                                 dataKey="destino"
@@ -242,16 +144,16 @@ export function TopDestinosChart() {
                                 tick={{ fontSize: 13, fill: "#e2e8f0" }}
                                 width={140}
                             />
-                            <Tooltip content={<CustomTooltipContent />} cursor={{ fill: 'transparent' }} />
-                            <Bar dataKey="total" name="Leads" radius={[0, 4, 4, 0]} fill="#fb923c">
-                            </Bar>
+                            <Tooltip content={<CustomTooltipContent />} cursor={{ fill: "transparent" }} />
+                            <Bar dataKey="total" name="Menções" radius={[0, 4, 4, 0]} fill="#fb923c" />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
             ) : (
-                <div className="h-[220px] flex items-center justify-center">
+                <div className="h-[220px] flex flex-col items-center justify-center gap-2">
+                    <span className="text-3xl">📍</span>
                     <p className="text-sm text-slate-400">
-                        Nenhum destino registrado ainda.
+                        Nenhuma menção registrada este mês.
                     </p>
                 </div>
             )}
