@@ -37,7 +37,6 @@ import type {
 import {
     Plus,
     Loader2,
-    CalendarDays,
     AlertTriangle,
     CheckCircle2,
     Phone,
@@ -49,8 +48,6 @@ import {
     DialogTitle,
     DialogDescription,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 interface KanbanBoardProps {
@@ -84,6 +81,7 @@ export function KanbanBoard({
 
     // Snapshot para reverter se cancelar modal
     const leadsMapSnapshot = useRef<Record<string, KanbanLead[]> | null>(null);
+    const unallocatedSnapshot = useRef<KanbanLead[] | null>(null);
 
     useEffect(() => {
         getLeadsSemColuna()
@@ -99,8 +97,6 @@ export function KanbanBoard({
     // Modal de confirmação "Passeio Realizado"
     const [confirmModal, setConfirmModal] = useState(false);
     const [confirmLead, setConfirmLead] = useState<KanbanLead | null>(null);
-    const [confirmColId, setConfirmColId] = useState<string>("");
-    const [confirmDate, setConfirmDate] = useState<string>("");
     const [confirmLoading, setConfirmLoading] = useState(false);
     const [confirmError, setConfirmError] = useState<string | null>(null);
 
@@ -178,23 +174,21 @@ export function KanbanBoard({
         (event: DragStartEvent) => {
             const id = event.active.id as string;
 
-            // Salvar snapshot do leadsMap para reverter se necessário
+            // Salvar snapshot
             leadsMapSnapshot.current = JSON.parse(JSON.stringify(leadsMap));
+            unallocatedSnapshot.current = [...unallocatedLeads];
 
-            // Dragging a column
             if (id.startsWith("col-sortable-")) {
                 setActiveColumnId(id.replace("col-sortable-", ""));
                 return;
             }
 
-            // Unallocated lead
             if (isUnallocatedLead(id)) {
                 const lead = unallocatedLeads.find((l) => l.id === id);
                 if (lead) setActiveCard(lead);
                 return;
             }
 
-            // Regular lead in column
             const colId = findColumnOfLead(id);
             if (colId) {
                 const lead = leadsMap[colId].find((l) => l.id === id);
@@ -273,7 +267,7 @@ export function KanbanBoard({
             const activeId = active.id as string;
             const overId = over.id as string;
 
-            // === Column reorder (1.1 fix: persistir fora do setState) ===
+            // === Column reorder ===
             if (activeId.startsWith("col-sortable-") && overId.startsWith("col-sortable-")) {
                 const fromColId = activeId.replace("col-sortable-", "");
                 const toColId = overId.replace("col-sortable-", "");
@@ -321,15 +315,13 @@ export function KanbanBoard({
             const finalLeads = leadsMap[finalColId] || [];
             const lead = finalLeads.find((l) => l.id === activeId);
 
-            // === 1.2: Check "Passeio Realizado" → abrir modal ===
+            // === "Passeio Realizado" → abrir modal ===
             const targetCol = columns.find((c) => c.id === finalColId);
             if (targetCol?.slug === "passeio_realizado" && lead) {
                 setConfirmLead(lead);
-                setConfirmColId(finalColId);
-                setConfirmDate(new Date().toISOString().split("T")[0]);
                 setConfirmError(null);
                 setConfirmModal(true);
-                return; // Não persistir ainda — esperar confirmação
+                return;
             }
 
             // Mover normalmente
@@ -339,45 +331,51 @@ export function KanbanBoard({
         [findColumnOfLead, leadsMap, columns]
     );
 
-    // === 1.2: Confirmar passeio → lead vai pra sidebar ===
+    // === Confirmar passeio → lead fica 5s na coluna, depois vai pra sidebar ===
     async function handleConfirmPasseio() {
-        if (!confirmLead || !confirmDate) return;
+        if (!confirmLead) return;
         setConfirmLoading(true);
         setConfirmError(null);
 
         try {
-            // 1. Confirmar passeio (INSERT em passeios_realizados)
-            const res = await confirmPasseioRealizado(confirmLead.id, confirmDate);
+            // 1. Confirmar (INSERT em passeios_realizados — data = now)
+            const res = await confirmPasseioRealizado(confirmLead.telefone, confirmLead.destino);
             if (!res.success) {
                 setConfirmError(res.error || "Erro desconhecido.");
                 setConfirmLoading(false);
                 return;
             }
 
-            // 2. Mover lead para null (sai do Kanban) 
-            await moveLeadInKanban(confirmLead.id, null, 0);
-
-            // 3. Remover lead de todas as colunas do board
-            setLeadsMap((prev) => {
-                const updated = { ...prev };
-                for (const colId of Object.keys(updated)) {
-                    updated[colId] = updated[colId].filter((l) => l.id !== confirmLead.id);
-                }
-                return updated;
-            });
-
-            // 4. Adicionar lead na sidebar com tag de passeio
-            const updatedLead: KanbanLead = {
-                ...confirmLead,
-                kanbanColumnId: "",
-                ultimoPasseio: { data: confirmDate, destino: confirmLead.destino || null },
-                totalPasseios: (confirmLead.totalPasseios || 0) + 1,
-            };
-            setUnallocatedLeads((prev) => [updatedLead, ...prev]);
-
             setConfirmModal(false);
             leadsMapSnapshot.current = null;
-            onDataChanged?.();
+            unallocatedSnapshot.current = null;
+
+            const leadId = confirmLead.id;
+            const dataPasseio = res.dataPasseio || new Date().toISOString().split("T")[0];
+
+            // 2. Após 5 segundos, mover para null e sidebar
+            setTimeout(async () => {
+                await moveLeadInKanban(leadId, null, 0);
+
+                // Remover do board
+                setLeadsMap((prev) => {
+                    const updated = { ...prev };
+                    for (const colId of Object.keys(updated)) {
+                        updated[colId] = updated[colId].filter((l) => l.id !== leadId);
+                    }
+                    return updated;
+                });
+
+                // Adicionar na sidebar com tag
+                const updatedLead: KanbanLead = {
+                    ...confirmLead,
+                    kanbanColumnId: "",
+                    ultimoPasseio: { data: dataPasseio, destino: confirmLead.destino || null },
+                    totalPasseios: (confirmLead.totalPasseios || 0) + 1,
+                };
+                setUnallocatedLeads((prev) => [updatedLead, ...prev]);
+                onDataChanged?.();
+            }, 5000);
         } catch (err) {
             console.error("Erro ao confirmar passeio:", err);
             setConfirmError("Erro ao confirmar. Tente novamente.");
@@ -390,11 +388,13 @@ export function KanbanBoard({
     function handleCancelConfirm() {
         if (leadsMapSnapshot.current) {
             setLeadsMap(leadsMapSnapshot.current);
-            // Restaurar unallocated leads (re-fetch seria ideal, mas snapshot é mais rápido)
-            getLeadsSemColuna().then(setUnallocatedLeads);
+        }
+        if (unallocatedSnapshot.current) {
+            setUnallocatedLeads(unallocatedSnapshot.current);
         }
         setConfirmModal(false);
         leadsMapSnapshot.current = null;
+        unallocatedSnapshot.current = null;
     }
 
     const handleLeadClick = useCallback(
@@ -404,7 +404,6 @@ export function KanbanBoard({
         [router]
     );
 
-    // Column IDs for sortable context
     const columnSortableIds = columns.map((c) => `col-sortable-${c.id}`);
     const unallocatedIds = unallocatedLeads.map((l) => l.id);
 
@@ -522,7 +521,7 @@ export function KanbanBoard({
                 </DragOverlay>
             </DndContext>
 
-            {/* Modal de Confirmação — Passeio Realizado */}
+            {/* Modal simplificado — Passeio Realizado (sem campo de data) */}
             <Dialog open={confirmModal} onOpenChange={(open) => { if (!open) handleCancelConfirm(); }}>
                 <DialogContent className="bg-slate-800 border-2 border-slate-700 text-white max-w-md">
                     <DialogHeader>
@@ -542,21 +541,11 @@ export function KanbanBoard({
                                 {confirmLead.destino && (
                                     <p className="text-xs text-slate-400 mt-1">📍 {confirmLead.destino}</p>
                                 )}
+                                {confirmLead.telefone && (
+                                    <p className="text-xs text-slate-500 mt-0.5">📱 {confirmLead.telefone}</p>
+                                )}
                             </div>
                         )}
-
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                                <CalendarDays className="w-3 h-3" />
-                                Data do Passeio (obrigatório)
-                            </Label>
-                            <Input
-                                type="date"
-                                value={confirmDate}
-                                onChange={(e) => setConfirmDate(e.target.value)}
-                                className="bg-slate-900 border-slate-600 text-white rounded-xl"
-                            />
-                        </div>
 
                         {confirmError && (
                             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
@@ -568,7 +557,7 @@ export function KanbanBoard({
                         <div className="flex gap-2">
                             <button
                                 onClick={handleConfirmPasseio}
-                                disabled={!confirmDate || confirmLoading}
+                                disabled={confirmLoading}
                                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 text-white font-medium text-sm hover:bg-emerald-600 disabled:opacity-40 transition-colors shadow-lg shadow-emerald-500/25"
                             >
                                 {confirmLoading ? (
@@ -593,7 +582,7 @@ export function KanbanBoard({
 }
 
 // =============================================
-// Unallocated Lead Item (draggable from sidebar) — com tag de passeio 1.3
+// Unallocated Lead Item (draggable) — com tag de passeio
 // =============================================
 
 function UnallocatedLeadItem({ lead }: { lead: KanbanLead }) {

@@ -17,7 +17,7 @@ export type KanbanColumn = {
 export type KanbanLead = {
     id: string;
     nomeEscola: string;
-    telefone?: string;
+    telefone: string;
     temperatura: string;
     dataEvento: string | null;
     destino: string | null;
@@ -61,7 +61,7 @@ export async function getKanbanData(): Promise<KanbanData> {
             .order("position", { ascending: true }),
         supabase
             .from("Clientes _WhatsApp")
-            .select("id, nome, status, status_atendimento, ia_ativa, created_at, kanban_column_id, kanban_position, passeio_confirmado, data_passeio")
+            .select("id, nome, telefone, destino, status, status_atendimento, ia_ativa, created_at, kanban_column_id, kanban_position, passeio_confirmado, data_passeio")
             .not("kanban_column_id", "is", null)
             .order("kanban_position", { ascending: true }),
     ]);
@@ -79,9 +79,10 @@ export async function getKanbanData(): Promise<KanbanData> {
     const leads: KanbanLead[] = (leadsRes.data || []).map((row: Record<string, unknown>) => ({
         id: row.id as string,
         nomeEscola: (row.nome as string) || "Lead sem nome",
+        telefone: String(row.telefone || ""),
         temperatura: (row.status as string) || "frio",
         dataEvento: null,
-        destino: null,
+        destino: (row.destino as string) || null,
         quantidadeAlunos: null,
         kanbanColumnId: row.kanban_column_id as string,
         kanbanPosition: (row.kanban_position as number) || 0,
@@ -226,34 +227,23 @@ export async function deleteKanbanColumn(id: string) {
 }
 
 /**
- * Confirma passeio realizado.
- * 1) Busca lead para pegar telefone e destino
- * 2) INSERT em passeios_realizados
- * 3) UPDATE data_passeio em Clientes_WhatsApp
+ * Confirma passeio realizado por telefone.
+ * Data = agora. Recebe telefone diretamente.
  */
 export async function confirmPasseioRealizado(
-    leadId: string,
-    dataPasseio: string
+    telefone: string,
+    destino?: string | null
 ) {
-    // 1. Buscar lead
-    const { data: lead, error: leadErr } = await supabase
-        .from("Clientes _WhatsApp")
-        .select("telefone, destino")
-        .eq("id", leadId)
-        .single();
+    const now = new Date();
+    const dataPasseio = now.toISOString().split("T")[0];
 
-    if (leadErr || !lead) {
-        console.error("Erro ao buscar lead:", leadErr);
-        return { success: false, error: "Lead não encontrado." };
-    }
-
-    // 2. INSERT em passeios_realizados
+    // 1. INSERT em passeios_realizados
     const { error: insertErr } = await supabase
         .from("passeios_realizados")
         .insert({
-            telefone: lead.telefone,
+            telefone: Number(telefone),
             data_passeio: dataPasseio,
-            destino: lead.destino || null,
+            destino: destino || null,
         });
 
     if (insertErr) {
@@ -261,13 +251,13 @@ export async function confirmPasseioRealizado(
         return { success: false, error: insertErr.message };
     }
 
-    // 3. UPDATE data_passeio no lead
+    // 2. UPDATE data_passeio no lead
     await supabase
         .from("Clientes _WhatsApp")
         .update({ data_passeio: dataPasseio })
-        .eq("id", leadId);
+        .eq("telefone", Number(telefone));
 
-    return { success: true };
+    return { success: true, dataPasseio };
 }
 
 /**

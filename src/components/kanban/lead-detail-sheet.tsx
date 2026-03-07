@@ -11,13 +11,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
     getClienteByTelefone,
     updateCliente,
     toggleIaAtiva,
 } from "@/lib/actions/leads";
 import { sendMessageToN8n } from "@/lib/actions/messages";
-import { getPasseiosDoLead } from "@/lib/actions/kanban";
-import type { PasseioRealizado } from "@/lib/actions/kanban";
+import { getPasseiosDoLead, getKanbanColumns } from "@/lib/actions/kanban";
+import type { PasseioRealizado, KanbanColumn } from "@/lib/actions/kanban";
 import type { ClienteDetail } from "@/lib/actions/leads";
 import { ChatWindow } from "@/components/conversas/chat-window";
 import {
@@ -71,6 +78,9 @@ export function LeadDetailSheet({
     const [passeios, setPasseios] = useState<PasseioRealizado[]>([]);
     const [showAllPasseios, setShowAllPasseios] = useState(false);
 
+    // Kanban columns (para dropdown atendimento)
+    const [kanbanColumns, setKanbanColumns] = useState<KanbanColumn[]>([]);
+
     // Auto-hide toast
     useEffect(() => {
         if (toast) {
@@ -101,6 +111,9 @@ export function LeadDetailSheet({
                     const p = await getPasseiosDoLead(tel);
                     setPasseios(p);
                 }
+                // Carregar colunas kanban para dropdown
+                const cols = await getKanbanColumns();
+                setKanbanColumns(cols);
             }
         } catch (err) {
             setToast({ type: "error", text: `Erro ao carregar cliente: ${err}` });
@@ -291,14 +304,34 @@ export function LeadDetailSheet({
                                     <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                                         🔄 Atendimento
                                     </Label>
-                                    <Input
-                                        value={form.statusAtendimento}
-                                        onChange={(e) =>
-                                            setForm((f) => ({ ...f, statusAtendimento: e.target.value }))
-                                        }
-                                        placeholder="Ex: Ativo"
-                                        className="rounded-xl"
-                                    />
+                                    {kanbanColumns.length > 0 ? (
+                                        <Select
+                                            value={form.statusAtendimento}
+                                            onValueChange={(v) =>
+                                                setForm((f) => ({ ...f, statusAtendimento: v }))
+                                            }
+                                        >
+                                            <SelectTrigger className="rounded-xl">
+                                                <SelectValue placeholder="Selecione..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {kanbanColumns.map((col) => (
+                                                    <SelectItem key={col.id} value={col.name}>
+                                                        {col.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <Input
+                                            value={form.statusAtendimento}
+                                            onChange={(e) =>
+                                                setForm((f) => ({ ...f, statusAtendimento: e.target.value }))
+                                            }
+                                            placeholder="Ex: Ativo"
+                                            className="rounded-xl"
+                                        />
+                                    )}
                                 </div>
                             </div>
 
