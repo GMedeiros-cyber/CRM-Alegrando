@@ -35,6 +35,9 @@ export const clientesWhatsapp = pgTable("Clientes _WhatsApp", {
     cpf: text("cpf"),
     email: text("email"),
     statusAtendimento: text("status_atendimento"),
+    linkedin: text("linkedin"),
+    facebook: text("facebook"),
+    instagram: text("instagram"),
     iaAtiva: boolean("ia_ativa").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });

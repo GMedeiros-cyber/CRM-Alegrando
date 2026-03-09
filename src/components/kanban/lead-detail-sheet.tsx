@@ -78,6 +78,9 @@ export function LeadDetailSheet({
         cpf: "",
         status: "",
         statusAtendimento: "",
+        linkedin: "",
+        facebook: "",
+        instagram: "",
     });
 
     // Chat
@@ -115,6 +118,9 @@ export function LeadDetailSheet({
                     cpf: clienteData.cpf || "",
                     status: clienteData.status || "",
                     statusAtendimento: clienteData.statusAtendimento || "",
+                    linkedin: clienteData.linkedin || "",
+                    facebook: clienteData.facebook || "",
+                    instagram: clienteData.instagram || "",
                 });
                 // Carregar tasks
                 const tel = parseInt(clienteData.telefone, 10);
@@ -148,6 +154,9 @@ export function LeadDetailSheet({
                     cpf: form.cpf || null,
                     status: form.status || null,
                     statusAtendimento: form.statusAtendimento || null,
+                    linkedin: form.linkedin || null,
+                    facebook: form.facebook || null,
+                    instagram: form.instagram || null,
                 });
                 setToast({ type: "success", text: "Cliente atualizado!" });
                 onSaved?.();
@@ -379,6 +388,33 @@ export function LeadDetailSheet({
                                             className="rounded-xl"
                                         />
                                     )}
+                                </div>
+                            </div>
+
+                            {/* Redes Sociais */}
+                            <div className="pt-3 border-t border-border/30">
+                                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                    Redes Sociais
+                                </h4>
+                                <div className="space-y-2">
+                                    <Input
+                                        placeholder="LinkedIn"
+                                        value={form.linkedin}
+                                        onChange={(e) => setForm((f) => ({ ...f, linkedin: e.target.value }))}
+                                        className="rounded-xl h-9"
+                                    />
+                                    <Input
+                                        placeholder="Facebook"
+                                        value={form.facebook}
+                                        onChange={(e) => setForm((f) => ({ ...f, facebook: e.target.value }))}
+                                        className="rounded-xl h-9"
+                                    />
+                                    <Input
+                                        placeholder="Instagram"
+                                        value={form.instagram}
+                                        onChange={(e) => setForm((f) => ({ ...f, instagram: e.target.value }))}
+                                        className="rounded-xl h-9"
+                                    />
                                 </div>
                             </div>
 

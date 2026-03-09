@@ -27,6 +27,9 @@ export type ClienteDetail = {
     cpf: string | null;
     email: string | null;
     statusAtendimento: string | null;
+    linkedin: string | null;
+    facebook: string | null;
+    instagram: string | null;
     iaAtiva: boolean;
     createdAt: Date | null;
 };
@@ -99,6 +102,9 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         cpf: cliente.cpf,
         email: cliente.email,
         statusAtendimento: cliente.statusAtendimento,
+        linkedin: cliente.linkedin,
+        facebook: cliente.facebook,
+        instagram: cliente.instagram,
         iaAtiva: cliente.iaAtiva,
         createdAt: cliente.createdAt,
     };
@@ -127,6 +133,9 @@ export async function updateCliente(
         cpf?: string | null;
         email?: string | null;
         statusAtendimento?: string | null;
+        linkedin?: string | null;
+        facebook?: string | null;
+        instagram?: string | null;
     }
 ) {
     await db

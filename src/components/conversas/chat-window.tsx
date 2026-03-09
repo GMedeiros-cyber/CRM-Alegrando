@@ -119,7 +119,7 @@ export function ChatWindow({ telefone }: ChatWindowProps) {
                                             : "text-green-300"
                                     )}
                                 >
-                                    {msg.senderType === "ia" ? "🤖 IA" : msg.senderName || "Equipe"}
+                                    {msg.senderType === "ia" ? "🤖 IA" : "Alegrando"}
                                 </p>
                             )}
 
