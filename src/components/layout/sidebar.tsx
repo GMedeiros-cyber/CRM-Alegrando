@@ -10,7 +10,6 @@ import {
     Kanban,
     MessageSquare,
     CalendarDays,
-    Truck,
     ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,7 +20,6 @@ const navigation = [
     { name: "Conversas", href: "/conversas", icon: MessageSquare },
     { name: "Agenda", href: "/agenda", icon: CalendarDays },
     { name: "Tarefas", href: "/tarefas", icon: ClipboardCheck },
-    { name: "Transportadores", href: "/transportadores", icon: Truck },
 ];
 
 export function Sidebar() {

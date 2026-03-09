@@ -23,8 +23,14 @@ import {
     toggleIaAtiva,
 } from "@/lib/actions/leads";
 import { sendMessageToN8n } from "@/lib/actions/messages";
-import { getPasseiosDoLead, getKanbanColumns } from "@/lib/actions/kanban";
-import type { PasseioRealizado, KanbanColumn } from "@/lib/actions/kanban";
+import {
+    getKanbanColumns,
+    getLeadTasks,
+    addLeadTask,
+    toggleLeadTask,
+    deleteLeadTask,
+} from "@/lib/actions/kanban";
+import type { KanbanColumn } from "@/lib/actions/kanban";
 import type { ClienteDetail } from "@/lib/actions/leads";
 import { ChatWindow } from "@/components/conversas/chat-window";
 import {
@@ -38,11 +44,14 @@ import {
     Phone,
     User,
     Mail,
-    MapPin,
-    CalendarDays,
-    ChevronDown,
+    Trash2,
+    Plus,
+    CheckSquare,
+    ListTodo,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type TaskItem = { id: string; text: string; done: boolean };
 
 interface LeadDetailSheetProps {
     telefone: string | null;
@@ -74,12 +83,14 @@ export function LeadDetailSheet({
     // Chat
     const [chatMessage, setChatMessage] = useState("");
 
-    // Passeios
-    const [passeios, setPasseios] = useState<PasseioRealizado[]>([]);
-    const [showAllPasseios, setShowAllPasseios] = useState(false);
+
 
     // Kanban columns (para dropdown atendimento)
     const [kanbanColumns, setKanbanColumns] = useState<KanbanColumn[]>([]);
+
+    // Tasks
+    const [tasks, setTasks] = useState<TaskItem[]>([]);
+    const [newTaskText, setNewTaskText] = useState("");
 
     // Auto-hide toast
     useEffect(() => {
@@ -105,11 +116,11 @@ export function LeadDetailSheet({
                     status: clienteData.status || "",
                     statusAtendimento: clienteData.statusAtendimento || "",
                 });
-                // Carregar passeios
+                // Carregar tasks
                 const tel = parseInt(clienteData.telefone, 10);
                 if (!isNaN(tel)) {
-                    const p = await getPasseiosDoLead(tel);
-                    setPasseios(p);
+                    const t = await getLeadTasks(tel);
+                    setTasks(t);
                 }
                 // Carregar colunas kanban para dropdown
                 const cols = await getKanbanColumns();
@@ -182,6 +193,42 @@ export function LeadDetailSheet({
             }
         });
     }
+
+    // ========= Tasks handlers =========
+    async function handleAddTask() {
+        const text = newTaskText.trim();
+        if (!text || !telefone) return;
+        const tempId = `temp-${Date.now()}`;
+        // Otimista
+        setTasks((prev) => [...prev, { id: tempId, text, done: false }]);
+        setNewTaskText("");
+        // Persistir
+        const result = await addLeadTask(Number(telefone), text);
+        if (result) {
+            setTasks((prev) => prev.map((t) => t.id === tempId ? result : t));
+        }
+    }
+
+    async function handleToggleTask(id: string) {
+        const task = tasks.find((t) => t.id === id);
+        if (!task) return;
+        // Otimista
+        setTasks((prev) => prev.map((t) => t.id === id ? { ...t, done: !t.done } : t));
+        // Persistir
+        await toggleLeadTask(id, !task.done);
+    }
+
+    async function handleDeleteTask(id: string) {
+        // Otimista
+        setTasks((prev) => prev.filter((t) => t.id !== id));
+        // Persistir
+        await deleteLeadTask(id);
+    }
+
+    const pendingTasks = tasks.filter((t) => !t.done);
+    const doneTasks = tasks.filter((t) => t.done);
+    const sortedTasks = [...pendingTasks, ...doneTasks];
+    const allTasksDone = tasks.length > 0 && pendingTasks.length === 0;
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
@@ -349,61 +396,94 @@ export function LeadDetailSheet({
                                 Salvar Alterações
                             </button>
 
-                            {/* Passeios Realizados */}
+
+                            {/* =================== TAREFAS =================== */}
                             <div className="pt-4 border-t border-border/30">
                                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
-                                    <CalendarDays className="w-3.5 h-3.5" />
-                                    Passeios Realizados
-                                    {passeios.length > 0 && (
-                                        <span className="ml-auto text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium">
-                                            {passeios.length}
+                                    <ListTodo className="w-3.5 h-3.5" />
+                                    Tarefas
+                                    {tasks.length > 0 && (
+                                        <span className="ml-auto text-[10px] bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-full font-medium">
+                                            {pendingTasks.length}
                                         </span>
                                     )}
                                 </h4>
-                                {passeios.length === 0 ? (
-                                    <p className="text-xs text-muted-foreground/60 italic">
-                                        Nenhum passeio realizado ainda.
-                                    </p>
-                                ) : (
-                                    <div className="space-y-2">
-                                        {(showAllPasseios ? passeios : passeios.slice(0, 3)).map((p) => {
-                                            const [y, m, d] = p.dataPasseio.split("-");
-                                            const formatted = `${d}/${m}/${y}`;
-                                            const [cy, cm, cd] = p.createdAt.split("T")[0].split("-");
-                                            const createdFormatted = `${cd}/${cm}/${cy}`;
-                                            return (
-                                                <div
-                                                    key={p.id}
-                                                    className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5"
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                                        <span className="text-sm font-semibold text-emerald-800">
-                                                            {formatted}
-                                                        </span>
-                                                    </div>
-                                                    {p.destino && (
-                                                        <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
-                                                            <MapPin className="w-3 h-3" />
-                                                            {p.destino}
-                                                        </p>
-                                                    )}
-                                                    <p className="text-[10px] text-emerald-500/70 mt-0.5">
-                                                        Confirmado em {createdFormatted}
-                                                    </p>
-                                                </div>
-                                            );
-                                        })}
-                                        {passeios.length > 3 && !showAllPasseios && (
-                                            <button
-                                                onClick={() => setShowAllPasseios(true)}
-                                                className="w-full flex items-center justify-center gap-1 text-xs text-brand-500 hover:text-brand-600 font-medium py-1.5 transition-colors"
-                                            >
-                                                <ChevronDown className="w-3.5 h-3.5" />
-                                                Ver todos ({passeios.length})
-                                            </button>
-                                        )}
+
+                                {/* Badge todas concluídas */}
+                                {allTasksDone && (
+                                    <div className="flex items-center gap-1.5 mb-3 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200">
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                        <span className="text-xs font-semibold text-emerald-700">Todas concluídas ✓</span>
                                     </div>
+                                )}
+
+                                {/* Lista de tasks */}
+                                <div className="space-y-1.5">
+                                    {sortedTasks.map((task) => (
+                                        <div
+                                            key={task.id}
+                                            className="group/task flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-muted/30 transition-colors"
+                                        >
+                                            <button
+                                                onClick={() => handleToggleTask(task.id)}
+                                                className={cn(
+                                                    "w-4.5 h-4.5 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                                                    task.done
+                                                        ? "bg-brand-500 border-brand-500"
+                                                        : "border-muted-foreground/40 hover:border-brand-400"
+                                                )}
+                                            >
+                                                {task.done && (
+                                                    <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none">
+                                                        <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                                    </svg>
+                                                )}
+                                            </button>
+                                            <span
+                                                className={cn(
+                                                    "text-sm flex-1 min-w-0",
+                                                    task.done
+                                                        ? "text-muted-foreground/50 line-through"
+                                                        : "text-foreground"
+                                                )}
+                                            >
+                                                {task.text}
+                                            </span>
+                                            <button
+                                                onClick={() => handleDeleteTask(task.id)}
+                                                className="opacity-0 group-hover/task:opacity-100 text-red-400 hover:text-red-500 transition-opacity shrink-0"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Adicionar nova task */}
+                                <div className="flex items-center gap-2 mt-2">
+                                    <Input
+                                        value={newTaskText}
+                                        onChange={(e) => setNewTaskText(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") handleAddTask();
+                                        }}
+                                        placeholder="+ Nova tarefa..."
+                                        className="rounded-xl flex-1 text-sm"
+                                    />
+                                    {newTaskText.trim() && (
+                                        <button
+                                            onClick={handleAddTask}
+                                            className="p-2 rounded-xl bg-brand-500 text-white hover:bg-brand-600 transition-colors shrink-0"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {tasks.length === 0 && (
+                                    <p className="text-xs text-muted-foreground/60 italic mt-2">
+                                        Nenhuma tarefa criada ainda.
+                                    </p>
                                 )}
                             </div>
                         </div>

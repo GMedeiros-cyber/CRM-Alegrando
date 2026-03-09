@@ -21,6 +21,16 @@ import {
     toggleIaAtiva,
 } from "@/lib/actions/leads";
 import { sendMessageToN8n } from "@/lib/actions/messages";
+import {
+    getKanbanColumns,
+    getLeadTasks,
+    addLeadTask,
+    toggleLeadTask,
+    deleteLeadTask,
+} from "@/lib/actions/kanban";
+import type { KanbanColumn } from "@/lib/actions/kanban";
+import { getAgendamentos, deleteAgendamento } from "@/lib/actions/agenda";
+import type { AgendamentoEvent } from "@/lib/actions/agenda";
 import type {
     ClienteListItem,
     ClienteDetail,
@@ -38,8 +48,16 @@ import {
     Mail,
     CheckCircle2,
     AlertCircle,
+    ListTodo,
+    Trash2,
+    Plus,
+    CalendarDays,
+    Clock,
+    ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type TaskItem = { id: string; text: string; done: boolean };
 
 // =============================================
 // STATUS STYLES
@@ -79,11 +97,21 @@ export function ConversasLayout() {
         email: "",
         cpf: "",
         status: "",
-        statusAtendimento: "",
     });
 
     // Chat
     const [chatMessage, setChatMessage] = useState("");
+
+    // Tasks
+    const [tasks, setTasks] = useState<TaskItem[]>([]);
+    const [newTaskText, setNewTaskText] = useState("");
+
+    // Kanban columns (para dropdown status)
+    const [kanbanColumns, setKanbanColumns] = useState<KanbanColumn[]>([]);
+
+    // Agendamentos
+    const [agendamentos, setAgendamentos] = useState<AgendamentoEvent[]>([]);
+    const [loadingAgendamentos, setLoadingAgendamentos] = useState(false);
 
     // Auto-hide toast
     useEffect(() => {
@@ -107,11 +135,14 @@ export function ConversasLayout() {
 
     useEffect(() => {
         loadList();
+        getKanbanColumns().then(setKanbanColumns);
     }, [loadList]);
 
     // Load selected cliente
     const loadCliente = useCallback(async (telefone: string) => {
         setLoadingCliente(true);
+        setTasks([]);
+        setAgendamentos([]);
         try {
             const clienteData = await getClienteByTelefone(telefone);
 
@@ -122,8 +153,28 @@ export function ConversasLayout() {
                     email: clienteData.email || "",
                     cpf: clienteData.cpf || "",
                     status: clienteData.status || "",
-                    statusAtendimento: clienteData.statusAtendimento || "",
                 });
+                // Carregar tasks
+                const tel = parseInt(clienteData.telefone, 10);
+                if (!isNaN(tel)) {
+                    const t = await getLeadTasks(tel);
+                    setTasks(t);
+                }
+                // Carregar agendamentos vinculados ao cliente pelo nome
+                if (clienteData.nome) {
+                    setLoadingAgendamentos(true);
+                    try {
+                        const todos = await getAgendamentos();
+                        const filtrados = todos.filter(
+                            (ev) =>
+                                ev.extendedProps.nomeEscola?.toLowerCase().trim() ===
+                                clienteData.nome!.toLowerCase().trim()
+                        );
+                        setAgendamentos(filtrados);
+                    } finally {
+                        setLoadingAgendamentos(false);
+                    }
+                }
             }
         } catch (err) {
             setToast({ type: "error", text: `Erro ao carregar cliente: ${err}` });
@@ -151,7 +202,6 @@ export function ConversasLayout() {
                     email: form.email || null,
                     cpf: form.cpf || null,
                     status: form.status || null,
-                    statusAtendimento: form.statusAtendimento || null,
                 });
                 setToast({ type: "success", text: "Cliente atualizado!" });
                 loadList();
@@ -196,6 +246,42 @@ export function ConversasLayout() {
                 setToast({ type: "error", text: `Erro ao enviar via n8n: ${err}` });
             }
         });
+    }
+
+    // ========= Tasks handlers =========
+    async function handleAddTask() {
+        const text = newTaskText.trim();
+        if (!text || !selectedTelefone) return;
+        const tempId = `temp-${Date.now()}`;
+        setTasks((prev) => [...prev, { id: tempId, text, done: false }]);
+        setNewTaskText("");
+        const result = await addLeadTask(Number(selectedTelefone), text);
+        if (result) {
+            setTasks((prev) => prev.map((t) => t.id === tempId ? result : t));
+        }
+    }
+
+    async function handleToggleTask(id: string) {
+        const task = tasks.find((t) => t.id === id);
+        if (!task) return;
+        setTasks((prev) => prev.map((t) => t.id === id ? { ...t, done: !t.done } : t));
+        await toggleLeadTask(id, !task.done);
+    }
+
+    async function handleDeleteTask(id: string) {
+        setTasks((prev) => prev.filter((t) => t.id !== id));
+        await deleteLeadTask(id);
+    }
+
+    const pendingTasks = tasks.filter((t) => !t.done);
+    const doneTasks = tasks.filter((t) => t.done);
+    const sortedTasks = [...pendingTasks, ...doneTasks];
+    const allTasksDone = tasks.length > 0 && pendingTasks.length === 0;
+
+    // ========= Agendamentos handler =========
+    async function handleDeleteAgendamento(googleEventId: string) {
+        setAgendamentos((prev) => prev.filter((a) => a.extendedProps.googleEventId !== googleEventId));
+        await deleteAgendamento(googleEventId);
     }
 
     // =============================================
@@ -468,8 +554,29 @@ export function ConversasLayout() {
                                 </FieldGroup>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2">
-                                <FieldGroup label="📋 Status">
+                            <FieldGroup label="📋 Status">
+                                {kanbanColumns.length > 0 ? (
+                                    <Select
+                                        value={form.status}
+                                        onValueChange={(v) =>
+                                            setForm((f) => ({ ...f, status: v }))
+                                        }
+                                    >
+                                        <SelectTrigger className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white">
+                                            <SelectValue placeholder="Selecione..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {kanbanColumns.map((col) => (
+                                                <SelectItem key={col.id} value={col.name}>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: col.color || "#6366f1" }} />
+                                                        {col.name}
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                ) : (
                                     <Input
                                         value={form.status}
                                         onChange={(e) =>
@@ -478,18 +585,8 @@ export function ConversasLayout() {
                                         placeholder="Ex: Lead, Cliente"
                                         className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
                                     />
-                                </FieldGroup>
-                                <FieldGroup label="🔄 Atendimento">
-                                    <Input
-                                        value={form.statusAtendimento}
-                                        onChange={(e) =>
-                                            setForm((f) => ({ ...f, statusAtendimento: e.target.value }))
-                                        }
-                                        placeholder="Ex: Ativo"
-                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
-                                    />
-                                </FieldGroup>
-                            </div>
+                                )}
+                            </FieldGroup>
                         </div>
 
                         {/* Save */}
@@ -505,6 +602,171 @@ export function ConversasLayout() {
                             )}
                             Salvar
                         </button>
+
+                        {/* Agendamentos */}
+                        <div className="pt-4 border-t border-slate-700">
+                            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1.5 mb-3">
+                                <CalendarDays className="w-3.5 h-3.5" />
+                                Agendamentos
+                                {agendamentos.length > 0 && (
+                                    <span className="ml-auto text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full font-medium">
+                                        {agendamentos.length}
+                                    </span>
+                                )}
+                            </h4>
+
+                            {loadingAgendamentos ? (
+                                <div className="flex justify-center py-3">
+                                    <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+                                </div>
+                            ) : agendamentos.length === 0 ? (
+                                <p className="text-xs text-slate-600 italic">Nenhum agendamento vinculado.</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {agendamentos.map((ag) => {
+                                        const start = new Date(ag.start);
+                                        const end = new Date(ag.end);
+                                        const dateStr = start.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+                                        const timeStr = `${start.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} \u2014 ${end.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+
+                                        return (
+                                            <div
+                                                key={ag.id}
+                                                className="group/ag rounded-xl border border-slate-700 bg-slate-800/60 p-3 hover:border-slate-600 transition-colors"
+                                            >
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs font-semibold text-white truncate">{ag.title}</p>
+                                                        <div className="flex items-center gap-1 mt-1 text-[11px] text-slate-400">
+                                                            <CalendarDays className="w-3 h-3 shrink-0" />
+                                                            <span>{dateStr}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                                                            <Clock className="w-3 h-3 shrink-0" />
+                                                            <span>{timeStr}</span>
+                                                        </div>
+                                                        {ag.extendedProps.status && (
+                                                            <span className="inline-block mt-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium capitalize">
+                                                                {ag.extendedProps.status}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex flex-col gap-1 shrink-0">
+                                                        <a
+                                                            href="/agenda"
+                                                            className="p-1.5 rounded-lg bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600 transition-colors"
+                                                            title="Ver na Agenda"
+                                                        >
+                                                            <ExternalLink className="w-3 h-3" />
+                                                        </a>
+                                                        <button
+                                                            onClick={() => handleDeleteAgendamento(ag.extendedProps.googleEventId)}
+                                                            className="p-1.5 rounded-lg bg-slate-700 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                                            title="Excluir agendamento"
+                                                        >
+                                                            <Trash2 className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Tarefas */}
+                        <div className="pt-4 border-t border-slate-700">
+                            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1.5 mb-3">
+                                <ListTodo className="w-3.5 h-3.5" />
+                                Tarefas
+                                {pendingTasks.length > 0 && (
+                                    <span className="ml-auto text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full font-medium">
+                                        {pendingTasks.length} pendentes
+                                    </span>
+                                )}
+                                {allTasksDone && (
+                                    <span className="ml-auto text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-medium">
+                                        ✓ Todas concluídas
+                                    </span>
+                                )}
+                            </h4>
+
+                            {/* Barra de progresso */}
+                            {tasks.length > 0 && (
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-brand-500 rounded-full transition-all duration-300"
+                                            style={{ width: `${(doneTasks.length / tasks.length) * 100}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-[10px] text-slate-500 shrink-0">
+                                        {doneTasks.length}/{tasks.length}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Lista */}
+                            <div className="space-y-1.5">
+                                {sortedTasks.map((task) => (
+                                    <div key={task.id} className="group/task flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-800/60 transition-colors">
+                                        <button
+                                            onClick={() => handleToggleTask(task.id)}
+                                            className={cn(
+                                                "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                                                task.done
+                                                    ? "bg-brand-500 border-brand-500"
+                                                    : "border-slate-600 hover:border-slate-400"
+                                            )}
+                                        >
+                                            {task.done && (
+                                                <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none">
+                                                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                                </svg>
+                                            )}
+                                        </button>
+                                        <span className={cn(
+                                            "text-xs flex-1 min-w-0",
+                                            task.done ? "text-slate-600 line-through" : "text-slate-300"
+                                        )}>
+                                            {task.text}
+                                        </span>
+                                        <button
+                                            onClick={() => handleDeleteTask(task.id)}
+                                            className="opacity-0 group-hover/task:opacity-100 text-red-400 hover:text-red-300 transition-opacity shrink-0"
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Input nova task */}
+                            <div className="flex items-center gap-1.5 mt-2">
+                                <input
+                                    value={newTaskText}
+                                    onChange={(e) => setNewTaskText(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleAddTask(); }}
+                                    placeholder="+ Adicionar tarefa..."
+                                    className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none focus:ring-1 focus:ring-brand-400 focus:border-brand-400"
+                                />
+                                {newTaskText.trim() && (
+                                    <button
+                                        onClick={handleAddTask}
+                                        className="p-1.5 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors shrink-0"
+                                    >
+                                        <Plus className="w-3 h-3" />
+                                    </button>
+                                )}
+                            </div>
+
+                            {tasks.length === 0 && (
+                                <p className="text-xs text-slate-600 italic mt-2">
+                                    Nenhuma tarefa criada ainda.
+                                </p>
+                            )}
+                        </div>
                     </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-center px-6">

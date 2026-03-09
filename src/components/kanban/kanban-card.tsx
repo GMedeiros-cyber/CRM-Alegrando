@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { KanbanLead } from "@/lib/actions/kanban";
+import { addLeadTask, toggleLeadTask, deleteLeadTask } from "@/lib/actions/kanban";
 import { CalendarDays, Users, Bot, UserRound, Plus, Trash2, CheckSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -39,34 +40,48 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
         transition,
     };
 
-    // Checklist state (local per-card)
-    const [checkItems, setCheckItems] = useState<CheckItem[]>([]);
+    // Checklist state — inicializado com tasks do servidor
+    const [checkItems, setCheckItems] = useState<CheckItem[]>(lead.tasks || []);
     const [newItemText, setNewItemText] = useState("");
     const [showChecklist, setShowChecklist] = useState(false);
 
-    function addCheckItem() {
+    async function addCheckItem() {
         const text = newItemText.trim();
         if (!text) return;
-        setCheckItems((prev) => [
-            ...prev,
-            { id: `chk-${Date.now()}`, text, done: false },
-        ]);
+        const tempId = `temp-${Date.now()}`;
+        setCheckItems((prev) => [...prev, { id: tempId, text, done: false }]);
         setNewItemText("");
+        const result = await addLeadTask(Number(lead.telefone), text);
+        if (result) {
+            setCheckItems((prev) =>
+                prev.map((item) => item.id === tempId ? result : item)
+            );
+        }
     }
 
-    function toggleCheckItem(id: string) {
+    async function toggleCheckItem(id: string) {
+        const item = checkItems.find((i) => i.id === id);
+        if (!item) return;
         setCheckItems((prev) =>
-            prev.map((item) =>
-                item.id === id ? { ...item, done: !item.done } : item
-            )
+            prev.map((i) => i.id === id ? { ...i, done: !i.done } : i)
         );
+        await toggleLeadTask(id, !item.done);
     }
 
-    function removeCheckItem(id: string) {
+    async function removeCheckItem(id: string) {
         setCheckItems((prev) => prev.filter((item) => item.id !== id));
+        await deleteLeadTask(id);
     }
 
     const doneCount = checkItems.filter((i) => i.done).length;
+    const pendingCount = checkItems.filter((i) => !i.done).length;
+    const allDone = checkItems.length > 0 && pendingCount === 0;
+
+    // Ordenar: pendentes primeiro, concluídas depois
+    const sortedItems = [...checkItems].sort((a, b) => {
+        if (a.done === b.done) return 0;
+        return a.done ? 1 : -1;
+    });
 
     return (
         <div
@@ -120,7 +135,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                 </div>
             </div>
 
-            {/* Checklist section — always visible when toggled or has items */}
+            {/* Checklist section */}
             {(showChecklist || checkItems.length > 0) && (
                 <div className="mt-2.5 pt-2 border-t border-slate-700 space-y-1.5">
                     {/* Progress bar */}
@@ -141,8 +156,8 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                         </div>
                     )}
 
-                    {/* Items */}
-                    {checkItems.map((item) => (
+                    {/* Items — sorted: pending first, done last */}
+                    {sortedItems.map((item) => (
                         <div
                             key={item.id}
                             className="flex items-center gap-2 group/check"
@@ -169,7 +184,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                                 className={cn(
                                     "text-xs flex-1 min-w-0 truncate",
                                     item.done
-                                        ? "text-slate-600 line-through"
+                                        ? "text-slate-600 line-through opacity-50"
                                         : "text-slate-300"
                                 )}
                             >
@@ -187,7 +202,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                         </div>
                     ))}
 
-                    {/* Add item input — always shown when checklist is open */}
+                    {/* Add item input */}
                     <div className="flex items-center gap-1.5">
                         <input
                             value={newItemText}
@@ -238,13 +253,6 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                    {/* Badge Passeio Confirmado */}
-                    {lead.passeioConfirmado && (
-                        <div className="flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400">
-                            ✓ Confirmado
-                        </div>
-                    )}
-
                     {/* Checklist toggle button */}
                     <button
                         onClick={(e) => {
@@ -261,7 +269,11 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                     >
                         <CheckSquare className="w-2.5 h-2.5" />
                         {checkItems.length > 0 ? (
-                            <span>{doneCount}/{checkItems.length}</span>
+                            allDone ? (
+                                <span className="text-emerald-400">✓</span>
+                            ) : (
+                                <span>{pendingCount}</span>
+                            )
                         ) : (
                             <span>Tasks</span>
                         )}

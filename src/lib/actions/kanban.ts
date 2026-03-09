@@ -26,19 +26,8 @@ export type KanbanLead = {
     kanbanPosition: number;
     iaAtiva: boolean;
     createdAt: Date | null;
-    passeioConfirmado: boolean;
-    dataPasseio: string | null;
-    ultimoPasseio: { data: string; destino: string | null } | null;
-    totalPasseios: number;
+    tasks: { id: string; text: string; done: boolean }[];
     tags: { id: string; name: string; color: string }[];
-};
-
-export type PasseioRealizado = {
-    id: string;
-    telefone: number;
-    dataPasseio: string;
-    destino: string | null;
-    createdAt: string;
 };
 
 export type KanbanData = {
@@ -54,7 +43,6 @@ export type KanbanData = {
  * Busca todas as colunas e leads com kanban_column_id.
  */
 export async function getKanbanData(): Promise<KanbanData> {
-    // 1. Buscar colunas e leads separadamente
     const [columnsRes, leadsRes] = await Promise.all([
         supabase
             .from("kanban_columns")
@@ -79,22 +67,19 @@ export async function getKanbanData(): Promise<KanbanData> {
     const columns = columnsRes.data.map(mapColumn);
     const rawLeads = leadsRes.data || [];
 
-    // 2. Buscar passeios para os leads do board
+    // Buscar tasks dos leads
     const telefones = rawLeads.map((l: Record<string, unknown>) => l.telefone).filter(Boolean);
-    const { data: passeios } = telefones.length > 0
+    const tasksRes = telefones.length > 0
         ? await supabase
-            .from("passeios_realizados")
+            .from("lead_tasks")
             .select("*")
             .in("telefone", telefones)
-            .order("created_at", { ascending: false })
+            .order("created_at", { ascending: true })
         : { data: [] };
+    const allTasks = tasksRes.data;
 
-    // 3. Montar leads com passeios
     const leads: KanbanLead[] = rawLeads.map((row: Record<string, unknown>) => {
         const tel = row.telefone;
-        const passeiosDoLead = (passeios || []).filter((p: Record<string, unknown>) => p.telefone === tel);
-        const ultimoPasseio = passeiosDoLead[0] || null;
-
         return {
             id: row.id as string,
             nomeEscola: (row.nome as string) || "Lead sem nome",
@@ -107,13 +92,11 @@ export async function getKanbanData(): Promise<KanbanData> {
             kanbanPosition: (row.kanban_position as number) || 0,
             iaAtiva: (row.ia_ativa as boolean) ?? true,
             createdAt: row.created_at ? new Date(row.created_at as string) : null,
-            passeioConfirmado: passeiosDoLead.length > 0,
-            dataPasseio: row.data_passeio ? String(row.data_passeio) : null,
-            ultimoPasseio: ultimoPasseio ? {
-                data: ultimoPasseio.data_passeio as string,
-                destino: (ultimoPasseio.destino as string) || null,
-            } : null,
-            totalPasseios: passeiosDoLead.length,
+            tasks: (allTasks || []).filter((t: Record<string, unknown>) => t.telefone === tel).map((t: Record<string, unknown>) => ({
+                id: t.id as string,
+                text: t.text as string,
+                done: t.done as boolean,
+            })),
             tags: [],
         };
     });
@@ -171,7 +154,6 @@ export async function createKanbanColumn(
     name: string,
     color?: string
 ): Promise<KanbanColumn | null> {
-    // Pegar a maior position atual
     const { data: existing } = await supabase
         .from("kanban_columns")
         .select("position")
@@ -216,7 +198,7 @@ export async function renameKanbanColumn(id: string, name: string) {
 }
 
 /**
- * Deleta uma coluna (não protegida). Move leads para null antes.
+ * Deleta uma coluna (não protegida). Move leads para novo_lead antes.
  */
 export async function deleteKanbanColumn(id: string) {
     // Verificar se é protegida (tem slug)
@@ -230,10 +212,20 @@ export async function deleteKanbanColumn(id: string) {
         return { success: false, error: "Coluna protegida não pode ser deletada." };
     }
 
-    // Mover leads da coluna para null
+    // Buscar ID da coluna novo_lead
+    const { data: novoLeadCol } = await supabase
+        .from("kanban_columns")
+        .select("id")
+        .eq("slug", "novo_lead")
+        .single();
+
+    // Mover leads para novo_lead
     await supabase
         .from("Clientes _WhatsApp")
-        .update({ kanban_column_id: null, kanban_position: 0 })
+        .update({
+            kanban_column_id: novoLeadCol?.id || null,
+            kanban_position: 0,
+        })
         .eq("kanban_column_id", id);
 
     // Deletar coluna
@@ -247,40 +239,6 @@ export async function deleteKanbanColumn(id: string) {
         return { success: false, error: error.message };
     }
     return { success: true };
-}
-
-/**
- * Confirma passeio realizado por telefone.
- * Data = agora. Recebe telefone diretamente.
- */
-export async function confirmPasseioRealizado(
-    telefone: string,
-    destino?: string | null
-) {
-    const now = new Date();
-    const dataPasseio = now.toISOString().split("T")[0];
-
-    // 1. INSERT em passeios_realizados
-    const { error: insertErr } = await supabase
-        .from("passeios_realizados")
-        .insert({
-            telefone: Number(telefone),
-            data_passeio: dataPasseio,
-            destino: destino || null,
-        });
-
-    if (insertErr) {
-        console.error("Erro ao inserir passeio:", insertErr);
-        return { success: false, error: insertErr.message };
-    }
-
-    // 2. UPDATE data_passeio no lead
-    await supabase
-        .from("Clientes _WhatsApp")
-        .update({ data_passeio: dataPasseio })
-        .eq("telefone", Number(telefone));
-
-    return { success: true, dataPasseio };
 }
 
 /**
@@ -327,87 +285,72 @@ export async function reorderKanbanColumns(columnIds: string[]) {
     return { success: true };
 }
 
-/**
- * Leads sem coluna + dados de passeios realizados.
- */
-export async function getLeadsSemColuna(): Promise<KanbanLead[]> {
-    // 1. Buscar leads sem coluna
-    const { data: leads, error } = await supabase
-        .from("Clientes _WhatsApp")
-        .select("*")
-        .is("kanban_column_id", null)
-        .order("created_at", { ascending: false });
+// =============================================
+// LEAD TASKS CRUD
+// =============================================
 
-    if (error || !leads) {
-        console.error("Erro ao buscar leads sem coluna:", error);
-        return [];
-    }
-    if (leads.length === 0) return [];
-
-    // 2. Para cada lead, buscar passeios
-    const telefones = leads.map((l: Record<string, unknown>) => l.telefone).filter(Boolean);
-
-    const { data: passeios } = await supabase
-        .from("passeios_realizados")
-        .select("*")
-        .in("telefone", telefones)
-        .order("created_at", { ascending: false });
-
-    // 3. Montar o objeto KanbanLead com ultimo passeio
-    return leads.map((lead: Record<string, unknown>) => {
-        const passeiosDoLead = (passeios || []).filter(
-            (p: Record<string, unknown>) => p.telefone === lead.telefone
-        );
-        const ultimoPasseio = passeiosDoLead[0] || null;
-
-        return {
-            id: lead.id as string,
-            telefone: String(lead.telefone || ""),
-            nomeEscola: (lead.nome as string) || "Sem nome",
-            temperatura: (lead.status as string) || "frio",
-            dataEvento: null,
-            destino: null,
-            quantidadeAlunos: null,
-            kanbanColumnId: "",
-            kanbanPosition: 0,
-            iaAtiva: (lead.ia_ativa as boolean) ?? true,
-            createdAt: lead.created_at ? new Date(lead.created_at as string) : null,
-            passeioConfirmado: passeiosDoLead.length > 0,
-            dataPasseio: lead.data_passeio ? String(lead.data_passeio) : null,
-            ultimoPasseio: ultimoPasseio
-                ? {
-                    data: ultimoPasseio.data_passeio as string,
-                    destino: (ultimoPasseio.destino as string) || null,
-                }
-                : null,
-            totalPasseios: passeiosDoLead.length,
-            tags: [],
-        };
-    });
-}
-
-/**
- * Busca todos os passeios de um lead pelo telefone.
- */
-export async function getPasseiosDoLead(telefone: number): Promise<PasseioRealizado[]> {
+export async function getLeadTasks(telefone: number) {
     const { data, error } = await supabase
-        .from("passeios_realizados")
-        .select("id, telefone, data_passeio, destino, created_at")
+        .from("lead_tasks")
+        .select("*")
         .eq("telefone", telefone)
-        .order("data_passeio", { ascending: false });
+        .order("created_at", { ascending: true });
 
     if (error) {
-        console.error("Erro ao buscar passeios do lead:", error);
+        console.error("Erro ao buscar tasks:", error);
         return [];
     }
 
-    return (data || []).map((row: Record<string, unknown>) => ({
-        id: row.id as string,
-        telefone: row.telefone as number,
-        dataPasseio: row.data_passeio as string,
-        destino: (row.destino as string) || null,
-        createdAt: row.created_at as string,
+    return (data || []).map((t: Record<string, unknown>) => ({
+        id: t.id as string,
+        text: t.text as string,
+        done: t.done as boolean,
     }));
+}
+
+export async function addLeadTask(telefone: number, text: string) {
+    const { data, error } = await supabase
+        .from("lead_tasks")
+        .insert({ telefone, text })
+        .select("*")
+        .single();
+
+    if (error) {
+        console.error("Erro ao adicionar task:", error);
+        return null;
+    }
+
+    return {
+        id: data.id as string,
+        text: data.text as string,
+        done: data.done as boolean,
+    };
+}
+
+export async function toggleLeadTask(id: string, done: boolean) {
+    const { error } = await supabase
+        .from("lead_tasks")
+        .update({ done })
+        .eq("id", id);
+
+    if (error) {
+        console.error("Erro ao toggle task:", error);
+        return { success: false };
+    }
+    return { success: true };
+}
+
+export async function deleteLeadTask(id: string) {
+    const { error } = await supabase
+        .from("lead_tasks")
+        .delete()
+        .eq("id", id);
+
+    if (error) {
+        console.error("Erro ao deletar task:", error);
+        return { success: false };
+    }
+    return { success: true };
 }
 
 // =============================================
