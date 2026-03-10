@@ -97,6 +97,9 @@ export function ConversasLayout() {
         email: "",
         cpf: "",
         status: "",
+        linkedin: "",
+        facebook: "",
+        instagram: "",
     });
 
     // Chat
@@ -153,6 +156,9 @@ export function ConversasLayout() {
                     email: clienteData.email || "",
                     cpf: clienteData.cpf || "",
                     status: clienteData.status || "",
+                    linkedin: clienteData.linkedin || "",
+                    facebook: clienteData.facebook || "",
+                    instagram: clienteData.instagram || "",
                 });
                 // Carregar tasks
                 const tel = parseInt(clienteData.telefone, 10);
@@ -202,6 +208,9 @@ export function ConversasLayout() {
                     email: form.email || null,
                     cpf: form.cpf || null,
                     status: form.status || null,
+                    linkedin: form.linkedin || null,
+                    facebook: form.facebook || null,
+                    instagram: form.instagram || null,
                 });
                 setToast({ type: "success", text: "Cliente atualizado!" });
                 loadList();
@@ -587,6 +596,33 @@ export function ConversasLayout() {
                                     />
                                 )}
                             </FieldGroup>
+
+                            {/* Redes Sociais */}
+                            <div className="pt-2">
+                                <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                                    Redes Sociais
+                                </h4>
+                                <div className="space-y-2">
+                                    <Input
+                                        value={form.linkedin}
+                                        onChange={(e) => setForm((f) => ({ ...f, linkedin: e.target.value }))}
+                                        placeholder="LinkedIn"
+                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                                    />
+                                    <Input
+                                        value={form.facebook}
+                                        onChange={(e) => setForm((f) => ({ ...f, facebook: e.target.value }))}
+                                        placeholder="Facebook"
+                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                                    />
+                                    <Input
+                                        value={form.instagram}
+                                        onChange={(e) => setForm((f) => ({ ...f, instagram: e.target.value }))}
+                                        placeholder="Instagram"
+                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                                    />
+                                </div>
+                            </div>
                         </div>
 
                         {/* Save */}
