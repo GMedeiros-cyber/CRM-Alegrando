@@ -48,6 +48,7 @@ import {
     Plus,
     CheckSquare,
     ListTodo,
+    ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -144,8 +145,28 @@ export function LeadDetailSheet({
     }, [open, telefone, loadCliente]);
 
     // Handlers
+    const formatUrl = (val: string | null) => {
+        if (!val) return null;
+        let url = val.trim();
+        if (!url) return null;
+        if (!url.startsWith('http')) return `https://${url}`;
+        return url;
+    };
+
     function handleSave() {
         if (!telefone) return;
+
+        const linkedin = formatUrl(form.linkedin);
+        const facebook = formatUrl(form.facebook);
+        const instagram = formatUrl(form.instagram);
+
+        setForm(f => ({
+            ...f,
+            linkedin: linkedin || "",
+            facebook: facebook || "",
+            instagram: instagram || ""
+        }));
+
         startTransition(async () => {
             try {
                 await updateCliente(telefone, {
@@ -154,9 +175,9 @@ export function LeadDetailSheet({
                     cpf: form.cpf || null,
                     status: form.status || null,
                     statusAtendimento: form.statusAtendimento || null,
-                    linkedin: form.linkedin || null,
-                    facebook: form.facebook || null,
-                    instagram: form.instagram || null,
+                    linkedin,
+                    facebook,
+                    instagram,
                 });
                 setToast({ type: "success", text: "Cliente atualizado!" });
                 onSaved?.();
@@ -397,24 +418,60 @@ export function LeadDetailSheet({
                                     Redes Sociais
                                 </h4>
                                 <div className="space-y-2">
-                                    <Input
-                                        placeholder="LinkedIn"
-                                        value={form.linkedin}
-                                        onChange={(e) => setForm((f) => ({ ...f, linkedin: e.target.value }))}
-                                        className="rounded-xl h-9"
-                                    />
-                                    <Input
-                                        placeholder="Facebook"
-                                        value={form.facebook}
-                                        onChange={(e) => setForm((f) => ({ ...f, facebook: e.target.value }))}
-                                        className="rounded-xl h-9"
-                                    />
-                                    <Input
-                                        placeholder="Instagram"
-                                        value={form.instagram}
-                                        onChange={(e) => setForm((f) => ({ ...f, instagram: e.target.value }))}
-                                        className="rounded-xl h-9"
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            placeholder="https://linkedin.com/in/..."
+                                            value={form.linkedin}
+                                            onChange={(e) => setForm((f) => ({ ...f, linkedin: e.target.value }))}
+                                            className="rounded-xl h-9 pr-9"
+                                        />
+                                        {form.linkedin && (
+                                            <a
+                                                href={form.linkedin.startsWith('http') ? form.linkedin : `https://${form.linkedin}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-brand-500 transition-colors"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                            </a>
+                                        )}
+                                    </div>
+                                    <div className="relative">
+                                        <Input
+                                            placeholder="https://facebook.com/..."
+                                            value={form.facebook}
+                                            onChange={(e) => setForm((f) => ({ ...f, facebook: e.target.value }))}
+                                            className="rounded-xl h-9 pr-9"
+                                        />
+                                        {form.facebook && (
+                                            <a
+                                                href={form.facebook.startsWith('http') ? form.facebook : `https://${form.facebook}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-brand-500 transition-colors"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                            </a>
+                                        )}
+                                    </div>
+                                    <div className="relative">
+                                        <Input
+                                            placeholder="https://instagram.com/..."
+                                            value={form.instagram}
+                                            onChange={(e) => setForm((f) => ({ ...f, instagram: e.target.value }))}
+                                            className="rounded-xl h-9 pr-9"
+                                        />
+                                        {form.instagram && (
+                                            <a
+                                                href={form.instagram.startsWith('http') ? form.instagram : `https://${form.instagram}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-brand-500 transition-colors"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                            </a>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 

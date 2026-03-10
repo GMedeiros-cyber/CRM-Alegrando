@@ -56,6 +56,8 @@ export function KanbanBoard({
     const [activeCard, setActiveCard] = useState<KanbanLead | null>(null);
     const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
 
+    const pendingColumnOrder = useRef<string[]>([]);
+
     // Inline add column
     const [addingColumn, setAddingColumn] = useState(false);
     const [newColName, setNewColName] = useState("");
@@ -69,16 +71,13 @@ export function KanbanBoard({
 
     const COLORS = ["#8b5cf6", "#3b82f6", "#f59e0b", "#22c55e", "#ef5544", "#ec4899"];
 
-    // Ordenação visual fixa: novo_lead → livres → passeio_realizado
+    // Ordenação visual fixa: passeio_realizado no final
     const sortedColumns = useMemo(() => {
-        const novoLead = columns.find((c) => c.slug === "novo_lead");
         const passeioRealizado = columns.find((c) => c.slug === "passeio_realizado");
-        const free = columns
-            .filter((c) => !c.slug)
-            .sort((a, b) => a.position - b.position);
+        const outros = columns.filter((c) => c.slug !== "passeio_realizado");
+
         return [
-            ...(novoLead ? [novoLead] : []),
-            ...free,
+            ...outros,
             ...(passeioRealizado ? [passeioRealizado] : []),
         ];
     }, [columns]);
@@ -152,9 +151,9 @@ export function KanbanBoard({
 
             if (id.startsWith("col-sortable-")) {
                 const colId = id.replace("col-sortable-", "");
-                // Não permitir drag de colunas protegidas
+                // Não permitir drag da coluna de passeios realizados
                 const col = columns.find((c) => c.id === colId);
-                if (col?.slug) return;
+                if (col?.slug === "passeio_realizado") return;
                 setActiveColumnId(colId);
                 return;
             }
@@ -221,26 +220,31 @@ export function KanbanBoard({
             const activeId = active.id as string;
             const overId = over.id as string;
 
-            // === Column reorder (somente colunas livres) ===
+            // === Column reorder ===
             if (activeId.startsWith("col-sortable-") && overId.startsWith("col-sortable-")) {
                 const fromColId = activeId.replace("col-sortable-", "");
                 const toColId = overId.replace("col-sortable-", "");
                 const fromCol = columns.find((c) => c.id === fromColId);
                 const toCol = columns.find((c) => c.id === toColId);
-                // Bloquear reordenação de/para colunas protegidas
-                if (fromCol?.slug || toCol?.slug) return;
+
+                // Bloquear reordenação de/para passeio_realizado
+                if (fromCol?.slug === "passeio_realizado" || toCol?.slug === "passeio_realizado") return;
+
                 if (fromColId !== toColId) {
-                    let newOrder: string[] = [];
                     setColumns((prev) => {
                         const oldIdx = prev.findIndex((c) => c.id === fromColId);
                         const newIdx = prev.findIndex((c) => c.id === toColId);
                         if (oldIdx === -1 || newIdx === -1) return prev;
                         const reordered = arrayMove(prev, oldIdx, newIdx);
-                        newOrder = reordered.map((c) => c.id);
+                        pendingColumnOrder.current = reordered.map((c) => c.id);
                         return reordered;
                     });
+
                     setTimeout(() => {
-                        reorderKanbanColumns(newOrder).catch(console.error);
+                        if (pendingColumnOrder.current.length > 0) {
+                            reorderKanbanColumns(pendingColumnOrder.current).catch(console.error);
+                            pendingColumnOrder.current = [];
+                        }
                     }, 0);
                 }
                 return;

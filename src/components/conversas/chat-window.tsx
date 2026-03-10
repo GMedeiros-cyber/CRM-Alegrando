@@ -87,7 +87,7 @@ export function ChatWindow({ telefone }: ChatWindowProps) {
     }
 
     return (
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 bg-[#0b1120]">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-3 bg-[#0b1120]">
             {messages.map((msg) => {
                 const isClient = msg.senderType === "cliente" || msg.senderType === "lead";
                 const isSelf = msg.senderType === "ia" || msg.senderType === "humano";

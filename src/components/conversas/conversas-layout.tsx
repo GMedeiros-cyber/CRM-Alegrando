@@ -199,8 +199,28 @@ export function ConversasLayout() {
         router.replace(`/conversas?telefone=${telefone}`, { scroll: false });
     }
 
+    const formatUrl = (val: string | null) => {
+        if (!val) return null;
+        let url = val.trim();
+        if (!url) return null;
+        if (!url.startsWith('http')) return `https://${url}`;
+        return url;
+    };
+
     function handleSave() {
         if (!selectedTelefone) return;
+
+        const linkedin = formatUrl(form.linkedin);
+        const facebook = formatUrl(form.facebook);
+        const instagram = formatUrl(form.instagram);
+
+        setForm(f => ({
+            ...f,
+            linkedin: linkedin || "",
+            facebook: facebook || "",
+            instagram: instagram || ""
+        }));
+
         startTransition(async () => {
             try {
                 await updateCliente(selectedTelefone, {
@@ -208,9 +228,9 @@ export function ConversasLayout() {
                     email: form.email || null,
                     cpf: form.cpf || null,
                     status: form.status || null,
-                    linkedin: form.linkedin || null,
-                    facebook: form.facebook || null,
-                    instagram: form.instagram || null,
+                    linkedin,
+                    facebook,
+                    instagram,
                 });
                 setToast({ type: "success", text: "Cliente atualizado!" });
                 loadList();
@@ -380,7 +400,7 @@ export function ConversasLayout() {
             </div>
 
             {/* =================== CENTER: CHAT =================== */}
-            <div className="flex-1 flex flex-col min-w-0 bg-[#0f172a]">
+            <div className="flex-1 flex flex-col min-w-0 bg-[#0f172a] overflow-x-hidden">
                 {!selectedTelefone ? (
                     // Empty state
                     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
@@ -603,24 +623,60 @@ export function ConversasLayout() {
                                     Redes Sociais
                                 </h4>
                                 <div className="space-y-2">
-                                    <Input
-                                        value={form.linkedin}
-                                        onChange={(e) => setForm((f) => ({ ...f, linkedin: e.target.value }))}
-                                        placeholder="LinkedIn"
-                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
-                                    />
-                                    <Input
-                                        value={form.facebook}
-                                        onChange={(e) => setForm((f) => ({ ...f, facebook: e.target.value }))}
-                                        placeholder="Facebook"
-                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
-                                    />
-                                    <Input
-                                        value={form.instagram}
-                                        onChange={(e) => setForm((f) => ({ ...f, instagram: e.target.value }))}
-                                        placeholder="Instagram"
-                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            value={form.linkedin}
+                                            onChange={(e) => setForm((f) => ({ ...f, linkedin: e.target.value }))}
+                                            placeholder="https://linkedin.com/in/..."
+                                            className="rounded-lg h-8 pr-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                                        />
+                                        {form.linkedin && (
+                                            <a
+                                                href={form.linkedin.startsWith('http') ? form.linkedin : `https://${form.linkedin}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-400"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                            </a>
+                                        )}
+                                    </div>
+                                    <div className="relative">
+                                        <Input
+                                            value={form.facebook}
+                                            onChange={(e) => setForm((f) => ({ ...f, facebook: e.target.value }))}
+                                            placeholder="https://facebook.com/..."
+                                            className="rounded-lg h-8 pr-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                                        />
+                                        {form.facebook && (
+                                            <a
+                                                href={form.facebook.startsWith('http') ? form.facebook : `https://${form.facebook}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-400"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                            </a>
+                                        )}
+                                    </div>
+                                    <div className="relative">
+                                        <Input
+                                            value={form.instagram}
+                                            onChange={(e) => setForm((f) => ({ ...f, instagram: e.target.value }))}
+                                            placeholder="https://instagram.com/..."
+                                            className="rounded-lg h-8 pr-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                                        />
+                                        {form.instagram && (
+                                            <a
+                                                href={form.instagram.startsWith('http') ? form.instagram : `https://${form.instagram}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-400"
+                                            >
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                            </a>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
