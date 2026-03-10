@@ -7,6 +7,7 @@ import {
     jsonb,
     bigint,
     numeric,
+    integer,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -79,3 +80,41 @@ export const documents = pgTable("documents", {
     categoria: text("categoria"),
     destaque: boolean("destaque"),
 });
+
+// =============================================
+// TASKS (Trello-like Kanban)
+// =============================================
+export const taskLists = pgTable("task_lists", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const taskCards = pgTable("task_cards", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    listId: uuid("list_id").notNull().references(() => taskLists.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    position: integer("position").notNull().default(0),
+    assignedUserId: uuid("assigned_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+// =============================================
+// TASK RELATIONS
+// =============================================
+export const taskListsRelations = relations(taskLists, ({ many }) => ({
+    cards: many(taskCards),
+}));
+
+export const taskCardsRelations = relations(taskCards, ({ one }) => ({
+    list: one(taskLists, {
+        fields: [taskCards.listId],
+        references: [taskLists.id],
+    }),
+    assignedUser: one(users, {
+        fields: [taskCards.assignedUserId],
+        references: [users.id],
+    }),
+}));

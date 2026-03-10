@@ -1,12 +1,23 @@
 import { Sidebar } from "@/components/layout/sidebar";
+import { currentUser } from "@clerk/nextjs/server";
+import { syncClerkUser } from "@/lib/actions/users";
 
 export const dynamic = "force-dynamic";
 
-export default function AppLayout({
+export default async function AppLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+    const clerkUser = await currentUser();
+    if (clerkUser) {
+        await syncClerkUser({
+            clerkId: clerkUser.id,
+            name: `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || clerkUser.username || "Usuário",
+            email: clerkUser.emailAddresses[0]?.emailAddress || "",
+            avatarUrl: clerkUser.imageUrl || null,
+        });
+    }
     return (
         <div className="min-h-screen bg-slate-900 text-slate-200">
             <Sidebar />
