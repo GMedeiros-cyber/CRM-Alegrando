@@ -3,7 +3,17 @@
 import { useState, useRef, useEffect } from "react";
 import { Plus, X, MoreHorizontal, User as UserIcon, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getUsers, assignTaskCard } from "@/lib/actions/tasks";
+import { 
+    getUsers, 
+    assignTaskCard, 
+    deleteTaskList, 
+    reorderTaskLists,
+    getTaskBoard,
+    createTaskList,
+    createTaskCard,
+    updateTaskList,
+    deleteTaskCard
+} from "@/lib/actions/tasks";
 
 // =============================================
 // Types
@@ -33,67 +43,6 @@ export interface UserDTO {
     name: string;
     avatarUrl: string | null;
 }
-
-// =============================================
-// Mock Data — Trello-style
-// =============================================
-
-const INITIAL_LISTS: TaskList[] = [
-    {
-        id: "list-1",
-        name: "Redação do Contrato",
-        position: 0,
-        cards: [
-            { id: "c1", title: "Revisar termos de um contrato próprio. O foco é que o cliente entenda o uso da ferramenta.", position: 0 },
-            { id: "c2", title: "Incluir cláusula definindo que é licenciamento de software, ele paga para usar enquanto o contrato estiver ativo.", position: 1 },
-            { id: "c3", title: "Criar regra de suspensão do serviço caso o pagamento atrase mais de 5 dias.", position: 2 },
-            { id: "c4", title: "Adicionar proteção para nós caso o WhatsApp ou a OpenAI fique fora do ar.", position: 3 },
-        ],
-    },
-    {
-        id: "list-2",
-        name: "Planejamento Comercial",
-        position: 1,
-        cards: [
-            { id: "c5", title: "Transformar nossos termos técnicos em benefícios para o dia a dia do advogado.", position: 0 },
-            { id: "c6", title: "Listar os 9 escritórios de colegas que você conhece e que seriam os ideais para começar.", position: 1 },
-            { id: "c7", title: "Escrever a mensagem de abordagem inicial focando na troca de experiência.", position: 2 },
-        ],
-    },
-    {
-        id: "list-3",
-        name: "Estrutura do Financeiro",
-        position: 2,
-        cards: [
-            { id: "c8", title: "Definir ou abrir a conta bancária da empresa no Asaas.", position: 0 },
-            { id: "c9", title: "Configurar o link de pagamento automático para a mensalidade.", position: 1 },
-            { id: "c10", title: "Escrever a regra de reembolso do valor de entrada caso o cliente desista logo no início.", position: 2 },
-        ],
-    },
-    {
-        id: "list-4",
-        name: "Formulário de Início",
-        position: 3,
-        cards: [
-            { id: "c11", title: "Criar um formulário online para o cliente preencher com os acessos do Google, Asaas e WhatsApp.", position: 0 },
-            { id: "c12", title: "Colocar um texto no final do formulário onde ele autoriza nossa equipe a acessar essas contas.", position: 1 },
-        ],
-    },
-    {
-        id: "list-5",
-        name: "Em andamento",
-        position: 4,
-        cards: [],
-    },
-    {
-        id: "list-6",
-        name: "Concluído",
-        position: 5,
-        cards: [
-            { id: "c13", title: "Criou conta no Trello", position: 0 },
-        ],
-    },
-];
 
 // =============================================
 // Card Component
@@ -195,19 +144,29 @@ function AddCardForm({
 
 function TrelloList({
     list,
+    totalLists,
     onAddCard,
     onRenameList,
     onCardClick,
+    onDeleteList,
+    onMoveList
 }: {
     list: TaskList;
+    totalLists: number;
     onAddCard: (listId: string, title: string) => void;
     onRenameList: (listId: string, name: string) => void;
     onCardClick: (card: TaskCard, listId: string, listName: string) => void;
+    onDeleteList: (listId: string) => void;
+    onMoveList: (listId: string, newIndex: number) => void;
 }) {
     const [addingCard, setAddingCard] = useState(false);
     const [editingName, setEditingName] = useState(false);
     const [name, setName] = useState(list.name);
     const nameRef = useRef<HTMLInputElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const [showMenu, setShowMenu] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [showMoveSubmenu, setShowMoveSubmenu] = useState(false);
 
     useEffect(() => {
         if (editingName && nameRef.current) {
@@ -215,6 +174,33 @@ function TrelloList({
             nameRef.current.select();
         }
     }, [editingName]);
+
+    // Close menu when clicking outside
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+                setShowMenu(false);
+                setShowDeleteConfirm(false);
+                setShowMoveSubmenu(false);
+            }
+        }
+        function handleEscape(e: KeyboardEvent) {
+            if (e.key === "Escape") {
+                setShowMenu(false);
+                setShowDeleteConfirm(false);
+                setShowMoveSubmenu(false);
+            }
+        }
+        
+        if (showMenu) {
+            document.addEventListener("mousedown", handleClickOutside);
+            document.addEventListener("keydown", handleEscape);
+        }
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+            document.removeEventListener("keydown", handleEscape);
+        };
+    }, [showMenu]);
 
     function handleSaveName() {
         const trimmed = name.trim();
@@ -225,11 +211,17 @@ function TrelloList({
         }
         setEditingName(false);
     }
+    
+    function resetMenu() {
+        setShowMenu(false);
+        setShowDeleteConfirm(false);
+        setShowMoveSubmenu(false);
+    }
 
     return (
         <div className="flex flex-col w-[280px] min-w-[280px] max-h-full rounded-xl bg-slate-800 shrink-0">
             {/* Header */}
-            <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+            <div className="flex items-center gap-2 px-3 pt-3 pb-2 relative">
                 {editingName ? (
                     <input
                         ref={nameRef}
@@ -253,9 +245,106 @@ function TrelloList({
                         {name}
                     </h3>
                 )}
-                <button className="p-1 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors">
-                    <MoreHorizontal className="w-4 h-4" />
-                </button>
+                
+                <div ref={menuRef}>
+                    <button 
+                        onClick={() => {
+                            if (showMenu) {
+                                resetMenu();
+                            } else {
+                                setShowMenu(true);
+                            }
+                        }}
+                        className="p-1 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors"
+                    >
+                        <MoreHorizontal className="w-4 h-4" />
+                    </button>
+                    
+                    {/* Popover Menu */}
+                    {showMenu && (
+                        <div className="absolute top-10 right-2 w-64 bg-slate-700 rounded-lg shadow-xl border border-slate-600 z-50 overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100">
+                            {showDeleteConfirm ? (
+                                <div className="p-3">
+                                    <p className="text-slate-200 font-medium mb-3">Excluir lista e todos os cartões?</p>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => {
+                                                onDeleteList(list.id);
+                                                resetMenu();
+                                            }}
+                                            className="flex-1 px-2 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-semibold"
+                                        >
+                                            Confirmar
+                                        </button>
+                                        <button 
+                                            onClick={() => setShowDeleteConfirm(false)}
+                                            className="flex-1 px-2 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 rounded text-xs font-semibold"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : showMoveSubmenu ? (
+                                <div className="p-2">
+                                    <div className="flex items-center gap-2 mb-2 px-2">
+                                        <button 
+                                            onClick={() => setShowMoveSubmenu(false)}
+                                            className="text-slate-400 hover:text-white"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                        <p className="text-slate-200 font-semibold text-xs border-b border-slate-600 flex-1 pb-1">Mover Lista</p>
+                                    </div>
+                                    <div className="max-h-48 overflow-y-auto">
+                                        {Array.from({ length: totalLists }).map((_, i) => (
+                                            <button
+                                                key={i}
+                                                disabled={i === list.position}
+                                                onClick={() => {
+                                                    onMoveList(list.id, i);
+                                                    resetMenu();
+                                                }}
+                                                className={cn(
+                                                    "w-full text-left px-3 py-1.5 rounded block",
+                                                    i === list.position 
+                                                        ? "text-brand-400 bg-brand-500/10 font-bold" 
+                                                        : "text-slate-300 hover:bg-slate-600"
+                                                )}
+                                            >
+                                                Posição {i + 1} {i === list.position && "(Atual)"}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="p-1.5 space-y-0.5">
+                                    <button 
+                                        onClick={() => {
+                                            resetMenu();
+                                            setAddingCard(true);
+                                        }}
+                                        className="w-full text-left px-2 py-1.5 hover:bg-slate-600 text-slate-200 rounded"
+                                    >
+                                        Adicionar cartão
+                                    </button>
+                                    <button 
+                                        onClick={() => setShowMoveSubmenu(true)}
+                                        className="w-full text-left px-2 py-1.5 hover:bg-slate-600 text-slate-200 rounded flex items-center justify-between"
+                                    >
+                                        <span>Mover lista</span>
+                                    </button>
+                                    <div className="h-px bg-slate-600 my-1 mx-2" />
+                                    <button 
+                                        onClick={() => setShowDeleteConfirm(true)}
+                                        className="w-full text-left px-2 py-1.5 hover:bg-red-500/20 text-red-400 rounded"
+                                    >
+                                        Excluir lista
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Cards */}
@@ -271,7 +360,6 @@ function TrelloList({
                     <AddCardForm
                         onAdd={(title) => {
                             onAddCard(list.id, title);
-                            // Keep the form open for adding more
                         }}
                         onCancel={() => setAddingCard(false)}
                     />
@@ -347,121 +435,73 @@ function AddListForm({
 }
 
 // =============================================
-// Card Modal Component
+// Card Modal Component (Simplified)
 // =============================================
 
 function CardModal({
     card,
-    listName,
-    listId,
     users,
     onClose,
-    onUpdateCard,
     onAssignUser,
     onDeleteCard,
 }: {
     card: TaskCard;
-    listName: string;
-    listId: string;
     users: UserDTO[];
     onClose: () => void;
-    onUpdateCard: (cardId: string, updates: Partial<TaskCard>) => void;
     onAssignUser: (cardId: string, userId: string | null) => void;
     onDeleteCard: (cardId: string) => void;
 }) {
-    const [title, setTitle] = useState(card.title);
-    const [description, setDescription] = useState(card.description || "");
     const [isSaving, setIsSaving] = useState(false);
-
-    // Save changes when unmounting / closing
-    useEffect(() => {
-        return () => {
-            if (title !== card.title || description !== (card.description || "")) {
-                onUpdateCard(card.id, { title, description });
-            }
-        };
-    }, [title, description, card, onUpdateCard]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm bento-enter">
-            <div className="bg-slate-800 rounded-xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-                {/* Header */}
-                <div className="px-6 py-4 border-b border-slate-700 flex items-start justify-between">
-                    <div className="flex-1 mr-4">
-                        <input
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            className="bg-transparent text-xl font-bold tracking-tight text-white w-full border-none outline-none focus:ring-0 placeholder:text-slate-500"
-                            placeholder="Título do Cartão"
-                        />
-                        <p className="text-sm text-slate-400 mt-1 pl-1">
-                            na lista <span className="underline decoration-slate-600 underline-offset-2">{listName}</span>
-                        </p>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 -mr-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full transition-colors shrink-0"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+            <div className="bg-slate-800 rounded-xl w-full max-w-[320px] shadow-2xl flex flex-col overflow-hidden relative">
+                {/* Close Button top-right absolute */}
+                <button
+                    onClick={onClose}
+                    className="absolute top-3 right-3 p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors z-10"
+                >
+                    <X className="w-4 h-4" />
+                </button>
 
                 {/* Body */}
-                <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col md:flex-row gap-8">
-                    {/* Main Content */}
-                    <div className="flex-1 space-y-6">
-                        <div>
-                            <h3 className="text-sm font-semibold text-slate-300 mb-2">Descrição</h3>
-                            <textarea
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                placeholder="Adicione uma descrição mais detalhada..."
-                                className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400 min-h-[120px] resize-y"
-                            />
-                        </div>
+                <div className="px-5 py-6 space-y-6 pt-10">
+                    <div>
+                        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Atribuído a</h3>
+                        <select
+                            value={card.assignedUser?.id || ""}
+                            onChange={async (e) => {
+                                const value = e.target.value;
+                                const userId = value || null;
+                                setIsSaving(true);
+                                await onAssignUser(card.id, userId);
+                                setIsSaving(false);
+                            }}
+                            disabled={isSaving}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-brand-400 appearance-none cursor-pointer disabled:opacity-50"
+                        >
+                            <option value="">Sem atribuição</option>
+                            {users.map(user => (
+                                <option key={user.id} value={user.id}>
+                                    {user.name}
+                                </option>
+                            ))}
+                        </select>
                     </div>
 
-                    {/* Sidebar */}
-                    <div className="w-full md:w-[220px] shrink-0 space-y-6">
-                        <div>
-                            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Atribuído a</h3>
-                            <div className="space-y-2">
-                                <select
-                                    value={card.assignedUser?.id || ""}
-                                    onChange={async (e) => {
-                                        const value = e.target.value;
-                                        const userId = value || null;
-                                        setIsSaving(true);
-                                        await onAssignUser(card.id, userId);
-                                        setIsSaving(false);
-                                    }}
-                                    disabled={isSaving}
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-brand-400 appearance-none cursor-pointer disabled:opacity-50"
-                                >
-                                    <option value="">Sem atribuição</option>
-                                    {users.map(user => (
-                                        <option key={user.id} value={user.id}>
-                                            {user.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div>
-                            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Ações</h3>
-                            <button
-                                onClick={() => {
-                                    if(confirm("Tem certeza que deseja excluir este cartão de forma permanente?")) {
-                                        onDeleteCard(card.id);
-                                    }
-                                }}
-                                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 rounded-lg transition-colors text-left"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                                Excluir cartão
-                            </button>
-                        </div>
+                    <div>
+                        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Ações</h3>
+                        <button
+                            onClick={() => {
+                                if(confirm("Tem certeza que deseja excluir este cartão de forma permanente?")) {
+                                    onDeleteCard(card.id);
+                                }
+                            }}
+                            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 rounded-lg transition-colors text-left"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Excluir cartão
+                        </button>
                     </div>
                 </div>
             </div>
@@ -474,7 +514,7 @@ function CardModal({
 // =============================================
 
 export default function TarefasPage() {
-    const [lists, setLists] = useState<TaskList[]>(INITIAL_LISTS);
+    const [lists, setLists] = useState<TaskList[]>([]); // ✅ Empty initial state (No mock IDs)
     const [addingList, setAddingList] = useState(false);
     
     const [users, setUsers] = useState<UserDTO[]>([]);
@@ -484,63 +524,67 @@ export default function TarefasPage() {
         getUsers()
             .then(data => setUsers(data))
             .catch(err => console.error("Failed to load users:", err));
+            
+        // ✅ Fetch initial real data
+        getTaskBoard()
+            .then(data => setLists(data as any))
+            .catch(err => console.error("Failed to load task board:", err));
     }, []);
 
-    function handleAddCard(listId: string, title: string) {
-        setLists((prev) =>
-            prev.map((list) => {
-                if (list.id !== listId) return list;
-                const newCard: TaskCard = {
-                    id: `c-${Date.now()}`,
-                    title,
-                    position: list.cards.length,
-                };
-                return { ...list, cards: [...list.cards, newCard] };
-            })
-        );
+    async function handleAddCard(listId: string, title: string) {
+        try {
+            const list = lists.find(l => l.id === listId);
+            const position = list ? list.cards.length : 0;
+            const newCard = await createTaskCard(listId, title, position);
+            
+            setLists((prev) =>
+                prev.map((l) => {
+                    if (l.id !== listId) return l;
+                    return { ...l, cards: [...l.cards, { ...newCard, assignedUser: null } as any] };
+                })
+            );
+        } catch (error) {
+            console.error("Failed to create card", error);
+        }
     }
 
-    function handleAddList(name: string) {
-        const newList: TaskList = {
-            id: `list-${Date.now()}`,
-            name,
-            position: lists.length,
-            cards: [],
-        };
-        setLists((prev) => [...prev, newList]);
-        setAddingList(false);
+    async function handleAddList(name: string) {
+        try {
+            const newList = await createTaskList(name, lists.length);
+            setLists((prev) => [...prev, { ...newList, cards: [] } as any]);
+            setAddingList(false);
+        } catch (error) {
+            console.error("Failed to create list", error);
+        }
     }
 
-    function handleRenameList(listId: string, newName: string) {
+    async function handleRenameList(listId: string, newName: string) {
         setLists((prev) =>
             prev.map((list) =>
                 list.id === listId ? { ...list, name: newName } : list
             )
         );
+        updateTaskList(listId, newName).catch(console.error);
     }
 
     function handleCardClick(card: TaskCard, listId: string, listName: string) {
         setSelectedCardInfo({ card, listId, listName });
     }
 
-    function handleUpdateCard(cardId: string, updates: Partial<TaskCard>) {
+    async function handleAssignUser(cardId: string, userId: string | null) {
+        const user = users.find(u => u.id === userId) || null;
+        
+        // Optimistic UI update
         setLists((prev) => prev.map(list => ({
             ...list,
-            cards: list.cards.map(c => c.id === cardId ? { ...c, ...updates } : c)
+            cards: list.cards.map(c => c.id === cardId ? { ...c, assignedUser: user } : c)
         })));
         
         if (selectedCardInfo && selectedCardInfo.card.id === cardId) {
-            setSelectedCardInfo(prev => prev ? { ...prev, card: { ...prev.card, ...updates } } : null);
+            setSelectedCardInfo(prev => prev ? { ...prev, card: { ...prev.card, assignedUser: user } } : null);
         }
-    }
-
-    async function handleAssignUser(cardId: string, userId: string | null) {
-        const user = users.find(u => u.id === userId) || null;
-        handleUpdateCard(cardId, { assignedUser: user });
+        
         try {
-            // Note: Since we use mock data IDs like 'c1', 'c2', assigning here might 
-            // result in a server error unless the card actually exists in the DB.
-            // Using a try-catch to allow the UI to function robustly.
             await assignTaskCard(cardId, userId);
         } catch (err) {
             console.error("Failed to assign user:", err);
@@ -553,6 +597,45 @@ export default function TarefasPage() {
             cards: list.cards.filter(c => c.id !== cardId)
         })));
         setSelectedCardInfo(null);
+        
+        deleteTaskCard(cardId).catch(console.error);
+    }
+    
+    async function handleDeleteList(listId: string) {
+        setLists(prev => {
+            const newLists = prev.filter(l => l.id !== listId);
+            return newLists.map((l, idx) => ({ ...l, position: idx }));
+        });
+        
+        try {
+            await deleteTaskList(listId);
+        } catch (error) {
+            console.error("Failed to delete list:", error);
+        }
+    }
+    
+    // ✅ Bug 1 Fixed: execute async server action OUTSIDE state update callback
+    async function handleMoveList(listId: string, newIndex: number) {
+        const oldIndex = lists.findIndex(l => l.id === listId);
+        if (oldIndex === -1 || oldIndex === newIndex) return;
+        
+        // Cópia para não mutar estado prev
+        const newLists = [...lists];
+        const [movedList] = newLists.splice(oldIndex, 1);
+        newLists.splice(newIndex, 0, movedList);
+        
+        const normalized = newLists.map((l, idx) => ({ ...l, position: idx }));
+        
+        // Atualiza a view
+        setLists(normalized);
+        
+        // Então chama o backend
+        try {
+            const orderedIds = normalized.map(l => l.id);
+            reorderTaskLists(orderedIds).catch(console.error);
+        } catch (error) {
+            console.error("Failed to move list:", error);
+        }
     }
 
     return (
@@ -577,9 +660,12 @@ export default function TarefasPage() {
                         <TrelloList
                             key={list.id}
                             list={list}
+                            totalLists={lists.length}
                             onAddCard={handleAddCard}
                             onRenameList={handleRenameList}
                             onCardClick={handleCardClick}
+                            onDeleteList={handleDeleteList}
+                            onMoveList={handleMoveList}
                         />
                     ))}
 
@@ -604,11 +690,8 @@ export default function TarefasPage() {
             {selectedCardInfo && (
                 <CardModal
                     card={selectedCardInfo.card}
-                    listId={selectedCardInfo.listId}
-                    listName={selectedCardInfo.listName}
                     users={users}
                     onClose={() => setSelectedCardInfo(null)}
-                    onUpdateCard={handleUpdateCard}
                     onAssignUser={handleAssignUser}
                     onDeleteCard={handleDeleteCard}
                 />
@@ -616,4 +699,5 @@ export default function TarefasPage() {
         </div>
     );
 }
+
 
