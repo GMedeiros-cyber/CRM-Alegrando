@@ -25,6 +25,28 @@ export const users = pgTable("users", {
 });
 
 // =============================================
+// KANBAN (Listas e Cartões)
+// =============================================
+export const taskLists = pgTable("task_lists", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const taskCards = pgTable("task_cards", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    listId: uuid("list_id").notNull().references(() => taskLists.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    position: integer("position").notNull().default(0),
+    assignedUserId: uuid("assigned_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+// =============================================
 // CLIENTES WHATSAPP (fonte da verdade principal)
 // O nome real da tabela no banco é "Clientes _WhatsApp"
 // =============================================
@@ -69,41 +91,6 @@ export const messagesRelations = relations(messages, ({ one }) => ({
     }),
 }));
 
-// =============================================
-// DOCUMENTS (Tabela gerenciada pelo n8n - READ ONLY)
-// =============================================
-export const documents = pgTable("documents", {
-    id: bigint("id", { mode: "number" }).primaryKey(),
-    content: text("content"),
-    metadata: jsonb("metadata"),
-    tipoPasseio: text("tipo_passeio"),
-    categoria: text("categoria"),
-    destaque: boolean("destaque"),
-});
-
-// =============================================
-// TASKS (Trello-like Kanban)
-// =============================================
-export const taskLists = pgTable("task_lists", {
-    id: uuid("id").primaryKey().defaultRandom(),
-    name: text("name").notNull(),
-    position: integer("position").notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
-
-export const taskCards = pgTable("task_cards", {
-    id: uuid("id").primaryKey().defaultRandom(),
-    listId: uuid("list_id").notNull().references(() => taskLists.id, { onDelete: "cascade" }),
-    title: text("title").notNull(),
-    description: text("description"),
-    position: integer("position").notNull().default(0),
-    assignedUserId: uuid("assigned_user_id").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
-
-// =============================================
-// TASK RELATIONS
-// =============================================
 export const taskListsRelations = relations(taskLists, ({ many }) => ({
     cards: many(taskCards),
 }));
@@ -118,3 +105,19 @@ export const taskCardsRelations = relations(taskCards, ({ one }) => ({
         references: [users.id],
     }),
 }));
+
+export const usersRelations = relations(users, ({ many }) => ({
+    assignedCards: many(taskCards),
+}));
+
+// =============================================
+// DOCUMENTS (Tabela gerenciada pelo n8n - READ ONLY)
+// =============================================
+export const documents = pgTable("documents", {
+    id: bigint("id", { mode: "number" }).primaryKey(),
+    content: text("content"),
+    metadata: jsonb("metadata"),
+    tipoPasseio: text("tipo_passeio"),
+    categoria: text("categoria"),
+    destaque: boolean("destaque"),
+});

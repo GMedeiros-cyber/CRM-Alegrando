@@ -194,6 +194,7 @@ export function ConversasLayout() {
     }, [selectedTelefone, loadCliente]);
 
     // Handlers
+
     function selectCliente(telefone: string) {
         setSelectedTelefone(telefone);
         router.replace(`/conversas?telefone=${telefone}`, { scroll: false });

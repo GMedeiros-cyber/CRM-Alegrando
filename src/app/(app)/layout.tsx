@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { currentUser } from "@clerk/nextjs/server";
-import { syncClerkUser } from "@/lib/actions/users";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -11,13 +12,24 @@ export default async function AppLayout({
 }) {
     const clerkUser = await currentUser();
     if (clerkUser) {
-        await syncClerkUser({
-            clerkId: clerkUser.id,
-            name: `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || clerkUser.username || "Usuário",
-            email: clerkUser.emailAddresses[0]?.emailAddress || "",
-            avatarUrl: clerkUser.imageUrl || null,
-        });
+        await db
+            .insert(users)
+            .values({
+                clerkId: clerkUser.id,
+                name: clerkUser.fullName || clerkUser.username || "Usuário",
+                email: clerkUser.emailAddresses[0]?.emailAddress || "",
+                avatarUrl: clerkUser.imageUrl,
+            })
+            .onConflictDoUpdate({
+                target: users.clerkId,
+                set: {
+                    name: clerkUser.fullName || clerkUser.username || "Usuário",
+                    avatarUrl: clerkUser.imageUrl,
+                    updatedAt: new Date(),
+                },
+            });
     }
+
     return (
         <div className="min-h-screen bg-slate-900 text-slate-200">
             <Sidebar />
