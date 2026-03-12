@@ -3,7 +3,18 @@
 import { useState, useRef, useEffect } from "react";
 import { Plus, X, MoreHorizontal, User as UserIcon, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getUsers, assignTaskCard, deleteTaskList, reorderTaskLists } from "@/lib/actions/tasks";
+import { 
+    getUsers, 
+    getTaskBoard,
+    createTaskList,
+    renameTaskList,
+    deleteTaskList,
+    reorderTaskLists,
+    createTaskCard,
+    updateTaskCard,
+    deleteTaskCard,
+    assignTaskCard
+} from "@/lib/actions/tasks";
 
 // =============================================
 // Types
@@ -12,8 +23,12 @@ import { getUsers, assignTaskCard, deleteTaskList, reorderTaskLists } from "@/li
 export interface TaskCard {
     id: string;
     title: string;
-    description?: string;
+    description?: string | null;
     position: number;
+    listId?: string | null;
+    assignedUserId?: string | null;
+    createdAt?: Date | null;
+    updatedAt?: Date | null;
     assignedUser?: {
         id: string;
         name: string;
@@ -25,6 +40,8 @@ export interface TaskList {
     id: string;
     name: string;
     position: number;
+    createdAt?: Date | null;
+    updatedAt?: Date | null;
     cards: TaskCard[];
 }
 
@@ -33,67 +50,6 @@ export interface UserDTO {
     name: string;
     avatarUrl: string | null;
 }
-
-// =============================================
-// Mock Data — Trello-style
-// =============================================
-
-const INITIAL_LISTS: TaskList[] = [
-    {
-        id: "list-1",
-        name: "Redação do Contrato",
-        position: 0,
-        cards: [
-            { id: "c1", title: "Revisar termos de um contrato próprio. O foco é que o cliente entenda o uso da ferramenta.", position: 0 },
-            { id: "c2", title: "Incluir cláusula definindo que é licenciamento de software, ele paga para usar enquanto o contrato estiver ativo.", position: 1 },
-            { id: "c3", title: "Criar regra de suspensão do serviço caso o pagamento atrase mais de 5 dias.", position: 2 },
-            { id: "c4", title: "Adicionar proteção para nós caso o WhatsApp ou a OpenAI fique fora do ar.", position: 3 },
-        ],
-    },
-    {
-        id: "list-2",
-        name: "Planejamento Comercial",
-        position: 1,
-        cards: [
-            { id: "c5", title: "Transformar nossos termos técnicos em benefícios para o dia a dia do advogado.", position: 0 },
-            { id: "c6", title: "Listar os 9 escritórios de colegas que você conhece e que seriam os ideais para começar.", position: 1 },
-            { id: "c7", title: "Escrever a mensagem de abordagem inicial focando na troca de experiência.", position: 2 },
-        ],
-    },
-    {
-        id: "list-3",
-        name: "Estrutura do Financeiro",
-        position: 2,
-        cards: [
-            { id: "c8", title: "Definir ou abrir a conta bancária da empresa no Asaas.", position: 0 },
-            { id: "c9", title: "Configurar o link de pagamento automático para a mensalidade.", position: 1 },
-            { id: "c10", title: "Escrever a regra de reembolso do valor de entrada caso o cliente desista logo no início.", position: 2 },
-        ],
-    },
-    {
-        id: "list-4",
-        name: "Formulário de Início",
-        position: 3,
-        cards: [
-            { id: "c11", title: "Criar um formulário online para o cliente preencher com os acessos do Google, Asaas e WhatsApp.", position: 0 },
-            { id: "c12", title: "Colocar um texto no final do formulário onde ele autoriza nossa equipe a acessar essas contas.", position: 1 },
-        ],
-    },
-    {
-        id: "list-5",
-        name: "Em andamento",
-        position: 4,
-        cards: [],
-    },
-    {
-        id: "list-6",
-        name: "Concluído",
-        position: 5,
-        cards: [
-            { id: "c13", title: "Criou conta no Trello", position: 0 },
-        ],
-    },
-];
 
 // =============================================
 // Card Component
@@ -151,6 +107,7 @@ function AddCardForm({
         if (trimmed) {
             onAdd(trimmed);
             setText("");
+            onCancel(); // Fecha depois de adicionar
         }
     }
 
@@ -451,6 +408,7 @@ function AddListForm({
         if (trimmed) {
             onAdd(trimmed);
             setName("");
+            onCancel(); // Fecha após adição
         }
     }
 
@@ -495,18 +453,31 @@ function CardModal({
     onClose,
     onAssignUser,
     onDeleteCard,
+    onUpdateCard
 }: {
     card: TaskCard;
     users: UserDTO[];
     onClose: () => void;
     onAssignUser: (cardId: string, userId: string | null) => void;
     onDeleteCard: (cardId: string) => void;
+    onUpdateCard: (cardId: string, updates: Partial<TaskCard>) => void;
 }) {
     const [isSaving, setIsSaving] = useState(false);
+    const [title, setTitle] = useState(card.title);
+
+    async function handleSaveTitle() {
+        const trimmed = title.trim();
+        if (trimmed && trimmed !== card.title) {
+            onUpdateCard(card.id, { title: trimmed });
+            // optimistic sync is in external handler
+        } else {
+            setTitle(card.title); // reset
+        }
+    }
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm bento-enter">
-            <div className="bg-slate-800 rounded-xl w-full max-w-[320px] shadow-2xl flex flex-col overflow-hidden relative">
+            <div className="bg-slate-800 rounded-xl w-full max-w-[340px] shadow-2xl flex flex-col overflow-hidden relative">
                 {/* Close Button top-right absolute */}
                 <button
                     onClick={onClose}
@@ -517,6 +488,23 @@ function CardModal({
 
                 {/* Body */}
                 <div className="px-5 py-6 space-y-6 pt-10">
+                    <div>
+                        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Título do Cartão</h3>
+                        <textarea
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            onBlur={handleSaveTitle}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSaveTitle();
+                                }
+                            }}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-brand-400 resize-none"
+                            rows={3}
+                        />
+                    </div>
+
                     <div>
                         <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Atribuído a</h3>
                         <select
@@ -540,18 +528,17 @@ function CardModal({
                         </select>
                     </div>
 
-                    <div>
-                        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Ações</h3>
+                    <div className="pt-2">
                         <button
                             onClick={() => {
                                 if(confirm("Tem certeza que deseja excluir este cartão de forma permanente?")) {
                                     onDeleteCard(card.id);
                                 }
                             }}
-                            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 rounded-lg transition-colors text-left"
+                            className="flex items-center justify-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 rounded-lg transition-colors"
                         >
                             <Trash2 className="w-4 h-4" />
-                            Excluir cartão
+                            Excluir cartão permanentemente
                         </button>
                     </div>
                 </div>
@@ -565,56 +552,92 @@ function CardModal({
 // =============================================
 
 export default function TarefasPage() {
-    const [lists, setLists] = useState<TaskList[]>(INITIAL_LISTS);
+    const [lists, setLists] = useState<TaskList[]>([]);
+    const [loading, setLoading] = useState(true);
     const [addingList, setAddingList] = useState(false);
     
     const [users, setUsers] = useState<UserDTO[]>([]);
     const [selectedCardInfo, setSelectedCardInfo] = useState<{ card: TaskCard; listId: string; listName: string } | null>(null);
 
     useEffect(() => {
-        getUsers()
-            .then(data => setUsers(data))
-            .catch(err => console.error("Failed to load users:", err));
+        Promise.all([getTaskBoard(), getUsers()])
+            .then(([boardData, userData]) => {
+                setLists(boardData);
+                setUsers(userData);
+            })
+            .catch(err => console.error("Failed to load data:", err))
+            .finally(() => setLoading(false));
     }, []);
 
-    function handleAddCard(listId: string, title: string) {
+    async function handleAddCard(listId: string, title: string) {
+        const tempId = `temp-${Date.now()}`;
+        const targetList = lists.find(l => l.id === listId);
+        if (!targetList) return;
+        const newPos = targetList.cards.length;
+
         setLists((prev) =>
             prev.map((list) => {
                 if (list.id !== listId) return list;
                 const newCard: TaskCard = {
-                    id: `c-${Date.now()}`,
+                    id: tempId,
                     title,
-                    position: list.cards.length,
+                    position: newPos,
                 };
                 return { ...list, cards: [...list.cards, newCard] };
             })
         );
+        
+        try {
+            const newCard = await createTaskCard(listId, title, newPos);
+            setLists((prev) =>
+                prev.map((list) => {
+                    if (list.id !== listId) return list;
+                    return { ...list, cards: list.cards.map(c => c.id === tempId ? newCard : c) };
+                })
+            );
+        } catch (err) {
+            console.error("Failed to persist card adding:", err);
+        }
     }
 
-    function handleAddList(name: string) {
+    async function handleAddList(name: string) {
+        const newPos = lists.length;
+        const tempId = `temp-list-${Date.now()}`;
         const newList: TaskList = {
-            id: `list-${Date.now()}`,
+            id: tempId,
             name,
-            position: lists.length,
+            position: newPos,
             cards: [],
         };
         setLists((prev) => [...prev, newList]);
         setAddingList(false);
+        
+        try {
+            const created = await createTaskList(name, newPos);
+            setLists((prev) => prev.map(l => l.id === tempId ? created : l));
+        } catch (err) {
+            console.error("Failed to persist list adding:", err);
+        }
     }
 
-    function handleRenameList(listId: string, newName: string) {
+    async function handleRenameList(listId: string, newName: string) {
         setLists((prev) =>
             prev.map((list) =>
                 list.id === listId ? { ...list, name: newName } : list
             )
         );
+        try {
+            await renameTaskList(listId, newName);
+        } catch(err) {
+            console.error("Failed to persistence list renaming:", err);
+        }
     }
 
     function handleCardClick(card: TaskCard, listId: string, listName: string) {
         setSelectedCardInfo({ card, listId, listName });
     }
 
-    function handleUpdateCard(cardId: string, updates: Partial<TaskCard>) {
+    async function handleUpdateCard(cardId: string, updates: Partial<TaskCard>) {
         setLists((prev) => prev.map(list => ({
             ...list,
             cards: list.cards.map(c => c.id === cardId ? { ...c, ...updates } : c)
@@ -623,36 +646,60 @@ export default function TarefasPage() {
         if (selectedCardInfo && selectedCardInfo.card.id === cardId) {
             setSelectedCardInfo(prev => prev ? { ...prev, card: { ...prev.card, ...updates } } : null);
         }
+        
+        // Persistir se titulo mudou
+        if (updates.title !== undefined) {
+             try {
+                await updateTaskCard(cardId, { title: updates.title });
+            } catch (err) {
+                console.error("Failed to update card title:", err);
+            }
+        }
     }
 
     async function handleAssignUser(cardId: string, userId: string | null) {
         const user = users.find(u => u.id === userId) || null;
-        handleUpdateCard(cardId, { assignedUser: user });
+        
+        // Optimistic
+        setLists((prev) => prev.map(list => ({
+            ...list,
+            cards: list.cards.map(c => c.id === cardId ? { ...c, assignedUser: user } : c)
+        })));
+        if (selectedCardInfo && selectedCardInfo.card.id === cardId) {
+            setSelectedCardInfo(prev => prev ? { ...prev, card: { ...prev.card, assignedUser: user } } : null);
+        }
+        
         try {
-            // Se IDs fictícios estiverem aqui, reverteremos localmente apenas, já prevendo erros.
             await assignTaskCard(cardId, userId);
         } catch (err) {
             console.error("Failed to assign user:", err);
         }
     }
 
-    function handleDeleteCard(cardId: string) {
+    async function handleDeleteCard(cardId: string) {
         setLists((prev) => prev.map(list => ({
             ...list,
             cards: list.cards.filter(c => c.id !== cardId)
         })));
         setSelectedCardInfo(null);
+        
+        try {
+            await deleteTaskCard(cardId);
+        } catch (err) {
+            console.error("Failed to delete card:", err);
+        }
     }
     
     async function handleDeleteList(listId: string) {
         setLists(prev => {
             const newLists = prev.filter(l => l.id !== listId);
-            // Re-normalize positions after deletion
             return newLists.map((l, idx) => ({ ...l, position: idx }));
         });
         
         try {
             await deleteTaskList(listId);
+            // Reordenar no banco as que ficaram
+            await reorderTaskLists(lists.filter(l => l.id !== listId).map(l => l.id));
         } catch (error) {
             console.error("Failed to delete list:", error);
         }
@@ -671,17 +718,16 @@ export default function TarefasPage() {
         
         try {
             const orderedIds = normalized.map(l => l.id);
-            // Fire and forget
-            reorderTaskLists(orderedIds).catch(console.error);
+            await reorderTaskLists(orderedIds);
         } catch (error) {
             console.error("Failed to move list:", error);
         }
     }
 
     return (
-        <div className="h-[calc(100vh-80px)] flex flex-col">
+        <div className="h-[calc(100vh-80px)] flex flex-col relative w-full overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between mb-4 shrink-0 bento-enter">
+            <div className="flex items-center justify-between mb-4 shrink-0 bento-enter pl-4 pr-4 lg:pl-0 lg:pr-8">
                 <div>
                     <h1 className="font-display text-3xl font-bold text-white tracking-tight">
                         Tarefas
@@ -692,39 +738,44 @@ export default function TarefasPage() {
                 </div>
             </div>
 
-            {/* Board — horizontal scroll */}
-            <div className="flex-1 flex gap-4 overflow-x-auto overflow-y-hidden pb-4 items-start">
-                {lists
-                    .sort((a, b) => a.position - b.position)
-                    .map((list) => (
-                        <TrelloList
-                            key={list.id}
-                            list={list}
-                            totalLists={lists.length}
-                            onAddCard={handleAddCard}
-                            onRenameList={handleRenameList}
-                            onCardClick={handleCardClick}
-                            onDeleteList={handleDeleteList}
-                            onMoveList={handleMoveList}
-                        />
-                    ))}
+            {loading ? (
+                <div className="flex-1 flex justify-center mt-20">
+                    <div className="w-8 h-8 rounded-full border-4 border-slate-700 border-t-brand-500 animate-spin" />
+                </div>
+            ) : (
+                <div className="flex-1 flex gap-4 overflow-x-auto overflow-y-hidden pb-4 items-start relative px-4 lg:px-0">
+                    {lists
+                        .sort((a, b) => a.position - b.position)
+                        .map((list) => (
+                            <TrelloList
+                                key={list.id}
+                                list={list}
+                                totalLists={lists.length}
+                                onAddCard={handleAddCard}
+                                onRenameList={handleRenameList}
+                                onCardClick={handleCardClick}
+                                onDeleteList={handleDeleteList}
+                                onMoveList={handleMoveList}
+                            />
+                        ))}
 
-                {/* Add list button / form */}
-                {addingList ? (
-                    <AddListForm
-                        onAdd={handleAddList}
-                        onCancel={() => setAddingList(false)}
-                    />
-                ) : (
-                    <button
-                        onClick={() => setAddingList(true)}
-                        className="flex items-center gap-2 w-[280px] min-w-[280px] px-4 py-3 rounded-xl bg-slate-800/60 hover:bg-slate-800 border-2 border-dashed border-slate-700 hover:border-brand-500/50 text-sm font-medium text-slate-400 hover:text-brand-400 transition-all shrink-0"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Adicionar outra lista
-                    </button>
-                )}
-            </div>
+                    {/* Add list button / form */}
+                    {addingList ? (
+                        <AddListForm
+                            onAdd={handleAddList}
+                            onCancel={() => setAddingList(false)}
+                        />
+                    ) : (
+                        <button
+                            onClick={() => setAddingList(true)}
+                            className="flex items-center gap-2 w-[280px] min-w-[280px] px-4 py-3 rounded-xl bg-slate-800/60 hover:bg-slate-800 border-2 border-dashed border-slate-700 hover:border-brand-500/50 text-sm font-medium text-slate-400 hover:text-brand-400 transition-all shrink-0"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Adicionar outra lista
+                        </button>
+                    )}
+                </div>
+            )}
 
             {/* Modal */}
             {selectedCardInfo && (
@@ -734,9 +785,9 @@ export default function TarefasPage() {
                     onClose={() => setSelectedCardInfo(null)}
                     onAssignUser={handleAssignUser}
                     onDeleteCard={handleDeleteCard}
+                    onUpdateCard={handleUpdateCard}
                 />
             )}
         </div>
     );
 }
-
