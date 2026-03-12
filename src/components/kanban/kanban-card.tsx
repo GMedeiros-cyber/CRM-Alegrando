@@ -5,14 +5,8 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { KanbanLead } from "@/lib/actions/kanban";
 import { addLeadTask, toggleLeadTask, deleteLeadTask } from "@/lib/actions/kanban";
-import { CalendarDays, Users, Bot, UserRound, Plus, Trash2, CheckSquare } from "lucide-react";
+import { CalendarDays, Users, Bot, UserRound, Plus, Trash2, CheckSquare, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const tempStyles = {
-    frio: "bg-blue-500/20 text-blue-300 border-blue-500/40",
-    morno: "bg-amber-500/20 text-amber-300 border-amber-500/40",
-    quente: "bg-red-500/20 text-red-300 border-red-500/40",
-} as Record<string, string>;
 
 type CheckItem = { id: string; text: string; done: boolean };
 
@@ -40,10 +34,11 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
         transition,
     };
 
-    // Checklist state — inicializado com tasks do servidor
+    // Checklist & Collapse state
     const [checkItems, setCheckItems] = useState<CheckItem[]>(lead.tasks || []);
     const [newItemText, setNewItemText] = useState("");
     const [showChecklist, setShowChecklist] = useState(false);
+    const [collapsed, setCollapsed] = useState(false);
 
     async function addCheckItem() {
         const text = newItemText.trim();
@@ -96,22 +91,27 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                 isOverlay && "shadow-xl rotate-[2deg] scale-105 border-brand-400"
             )}
         >
-            {/* Header: school name + temperature */}
+            {/* Header: school name + toggle */}
             <div className="flex items-start justify-between gap-2 mb-2" onClick={onClick}>
-                <h4 className="text-sm font-semibold text-slate-200 leading-tight line-clamp-2">
+                <h4 className="flex-1 text-sm font-semibold text-slate-200 leading-tight line-clamp-2">
                     {lead.nomeEscola}
                 </h4>
-                <span
-                    className={cn(
-                        "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full shrink-0 border",
-                        tempStyles[lead.temperatura] || tempStyles.frio
-                    )}
+                <button
+                    onClick={e => { e.stopPropagation(); setCollapsed(prev => !prev); }}
+                    className="p-1 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors shrink-0"
+                    title={collapsed ? "Expandir" : "Recolher"}
                 >
-                    {lead.temperatura}
-                </span>
+                    {collapsed
+                        ? <ChevronDown className="w-3.5 h-3.5" />
+                        : <ChevronUp className="w-3.5 h-3.5" />
+                    }
+                </button>
             </div>
 
-            {/* Details */}
+            {/* Collapsible Content */}
+            {!collapsed && (
+                <>
+                    {/* Details */}
             <div className="space-y-1.5" onClick={onClick}>
                 {lead.destino && (
                     <p className="text-xs text-slate-400 truncate">
@@ -230,29 +230,9 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                 </div>
             )}
 
-            {/* Footer: tags + checklist toggle + AI status */}
-            <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-700">
-                <div className="flex items-center gap-1 flex-wrap">
-                    {lead.tags.slice(0, 2).map((tag) => (
-                        <span
-                            key={tag.id}
-                            className="text-[10px] font-medium px-1.5 py-0.5 rounded-md"
-                            style={{
-                                backgroundColor: tag.color + "30",
-                                color: tag.color,
-                            }}
-                        >
-                            {tag.name}
-                        </span>
-                    ))}
-                    {lead.tags.length > 2 && (
-                        <span className="text-[10px] text-slate-500">
-                            +{lead.tags.length - 2}
-                        </span>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-1.5">
+                    {/* Footer: checklist toggle + AI status */}
+                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-700">
+                        <div className="flex items-center gap-1.5">
                     {/* Checklist toggle button */}
                     <button
                         onClick={(e) => {
@@ -293,10 +273,12 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                         ) : (
                             <UserRound className="w-2.5 h-2.5" />
                         )}
-                        {lead.iaAtiva ? "IA" : "Manual"}
+                            {lead.iaAtiva ? "IA" : "Manual"}
+                        </div>
                     </div>
                 </div>
-            </div>
+                </>
+            )}
         </div>
     );
 }

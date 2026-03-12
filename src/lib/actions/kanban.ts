@@ -51,7 +51,6 @@ export async function getKanbanData(): Promise<KanbanData> {
         supabase
             .from("Clientes _WhatsApp")
             .select("*")
-            .not("kanban_column_id", "is", null)
             .order("kanban_position", { ascending: true }),
     ]);
 
@@ -80,6 +79,16 @@ export async function getKanbanData(): Promise<KanbanData> {
 
     const leads: KanbanLead[] = rawLeads.map((row: Record<string, unknown>) => {
         const tel = row.telefone;
+        let colId = row.kanban_column_id as string;
+        
+        // Se o lead não tem coluna, manda para a coluna "novo_lead"
+        if (!colId) {
+            const novoLeadCol = columns.find(c => c.slug === "novo_lead" || c.name === "Novo Lead");
+            if (novoLeadCol) {
+                colId = novoLeadCol.id;
+            }
+        }
+
         return {
             id: row.id as string,
             nomeEscola: (row.nome as string) || "Lead sem nome",
@@ -88,7 +97,7 @@ export async function getKanbanData(): Promise<KanbanData> {
             dataEvento: null,
             destino: (row.destino as string) || null,
             quantidadeAlunos: null,
-            kanbanColumnId: row.kanban_column_id as string,
+            kanbanColumnId: colId,
             kanbanPosition: (row.kanban_position as number) || 0,
             iaAtiva: (row.ia_ativa as boolean) ?? true,
             createdAt: row.created_at ? new Date(row.created_at as string) : null,
