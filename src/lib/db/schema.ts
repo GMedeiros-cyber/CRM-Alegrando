@@ -62,6 +62,8 @@ export const clientesWhatsapp = pgTable("Clientes _WhatsApp", {
     facebook: text("facebook"),
     instagram: text("instagram"),
     iaAtiva: boolean("ia_ativa").notNull().default(true),
+    kanbanColumnId: uuid("kanban_column_id"),
+    kanbanPosition: integer("kanban_position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 

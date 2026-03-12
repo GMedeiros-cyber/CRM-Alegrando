@@ -82,6 +82,7 @@ export function LeadDetailSheet({
         linkedin: "",
         facebook: "",
         instagram: "",
+        kanbanColumnId: "",
     });
 
     // Chat
@@ -122,6 +123,7 @@ export function LeadDetailSheet({
                     linkedin: clienteData.linkedin || "",
                     facebook: clienteData.facebook || "",
                     instagram: clienteData.instagram || "",
+                    kanbanColumnId: clienteData.kanbanColumnId || "",
                 });
                 // Carregar tasks
                 const tel = parseInt(clienteData.telefone, 10);
@@ -132,6 +134,14 @@ export function LeadDetailSheet({
                 // Carregar colunas kanban para dropdown
                 const cols = await getKanbanColumns();
                 setKanbanColumns(cols);
+
+                // Se o lead não tem coluna, pré-selecionar 'novo_lead'
+                if (!clienteData.kanbanColumnId && cols.length > 0) {
+                    const novoLeadCol = cols.find(c => c.slug === "novo_lead");
+                    if (novoLeadCol) {
+                        setForm(f => ({ ...f, kanbanColumnId: novoLeadCol.id }));
+                    }
+                }
             }
         } catch (err) {
             setToast({ type: "error", text: `Erro ao carregar cliente: ${err}` });
@@ -178,6 +188,7 @@ export function LeadDetailSheet({
                     linkedin,
                     facebook,
                     instagram,
+                    kanbanColumnId: form.kanbanColumnId || null,
                 });
                 setToast({ type: "success", text: "Cliente atualizado!" });
                 onSaved?.();
@@ -379,36 +390,28 @@ export function LeadDetailSheet({
 
                                 <div className="space-y-1.5">
                                     <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                                        🔄 Atendimento
+                                        🔄 Status (Kanban)
                                     </Label>
-                                    {kanbanColumns.length > 0 ? (
-                                        <Select
-                                            value={form.statusAtendimento}
-                                            onValueChange={(v) =>
-                                                setForm((f) => ({ ...f, statusAtendimento: v }))
-                                            }
-                                        >
-                                            <SelectTrigger className="rounded-xl">
-                                                <SelectValue placeholder="Selecione..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {kanbanColumns.map((col) => (
-                                                    <SelectItem key={col.id} value={col.name}>
+                                    <Select
+                                        value={form.kanbanColumnId}
+                                        onValueChange={(v) =>
+                                            setForm((f) => ({ ...f, kanbanColumnId: v }))
+                                        }
+                                    >
+                                        <SelectTrigger className="rounded-xl">
+                                            <SelectValue placeholder="Selecione a coluna..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {kanbanColumns.map((col) => (
+                                                <SelectItem key={col.id} value={col.id}>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-2 h-2 rounded-full" style={{ background: col.color || "#6366f1" }} />
                                                         {col.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    ) : (
-                                        <Input
-                                            value={form.statusAtendimento}
-                                            onChange={(e) =>
-                                                setForm((f) => ({ ...f, statusAtendimento: e.target.value }))
-                                            }
-                                            placeholder="Ex: Ativo"
-                                            className="rounded-xl"
-                                        />
-                                    )}
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
 

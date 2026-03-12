@@ -31,6 +31,8 @@ export type ClienteDetail = {
     facebook: string | null;
     instagram: string | null;
     iaAtiva: boolean;
+    kanbanColumnId: string | null;
+    kanbanPosition: number | null;
     createdAt: Date | null;
 };
 
@@ -106,6 +108,8 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         facebook: cliente.facebook,
         instagram: cliente.instagram,
         iaAtiva: cliente.iaAtiva,
+        kanbanColumnId: cliente.kanbanColumnId,
+        kanbanPosition: cliente.kanbanPosition,
         createdAt: cliente.createdAt,
     };
 }
@@ -136,6 +140,8 @@ export async function updateCliente(
         linkedin?: string | null;
         facebook?: string | null;
         instagram?: string | null;
+        kanbanColumnId?: string | null;
+        kanbanPosition?: number;
     }
 ) {
     await db

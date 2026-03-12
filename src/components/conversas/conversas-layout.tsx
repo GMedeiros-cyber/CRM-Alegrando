@@ -100,6 +100,7 @@ export function ConversasLayout() {
         linkedin: "",
         facebook: "",
         instagram: "",
+        kanbanColumnId: "",
     });
 
     // Chat
@@ -159,6 +160,7 @@ export function ConversasLayout() {
                     linkedin: clienteData.linkedin || "",
                     facebook: clienteData.facebook || "",
                     instagram: clienteData.instagram || "",
+                    kanbanColumnId: clienteData.kanbanColumnId || "",
                 });
                 // Carregar tasks
                 const tel = parseInt(clienteData.telefone, 10);
@@ -232,6 +234,7 @@ export function ConversasLayout() {
                     linkedin,
                     facebook,
                     instagram,
+                    kanbanColumnId: form.kanbanColumnId || null,
                 });
                 setToast({ type: "success", text: "Cliente atualizado!" });
                 loadList();
@@ -584,38 +587,27 @@ export function ConversasLayout() {
                                 </FieldGroup>
                             </div>
 
-                            <FieldGroup label="📋 Status">
-                                {kanbanColumns.length > 0 ? (
-                                    <Select
-                                        value={form.status}
-                                        onValueChange={(v) =>
-                                            setForm((f) => ({ ...f, status: v }))
-                                        }
-                                    >
-                                        <SelectTrigger className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white">
-                                            <SelectValue placeholder="Selecione..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {kanbanColumns.map((col) => (
-                                                <SelectItem key={col.id} value={col.name}>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: col.color || "#6366f1" }} />
-                                                        {col.name}
-                                                    </div>
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                ) : (
-                                    <Input
-                                        value={form.status}
-                                        onChange={(e) =>
-                                            setForm((f) => ({ ...f, status: e.target.value }))
-                                        }
-                                        placeholder="Ex: Lead, Cliente"
-                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
-                                    />
-                                )}
+                            <FieldGroup label="📋 Status (Kanban)">
+                                <Select
+                                    value={form.kanbanColumnId}
+                                    onValueChange={(v) =>
+                                        setForm((f) => ({ ...f, kanbanColumnId: v }))
+                                    }
+                                >
+                                    <SelectTrigger className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white">
+                                        <SelectValue placeholder="Mudar coluna..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {kanbanColumns.map((col) => (
+                                            <SelectItem key={col.id} value={col.id}>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: col.color || "#6366f1" }} />
+                                                    {col.name}
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </FieldGroup>
 
                             {/* Redes Sociais */}
