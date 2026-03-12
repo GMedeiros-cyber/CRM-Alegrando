@@ -55,16 +55,117 @@ export interface UserDTO {
 // Card Component
 // =============================================
 
-function TrelloCard({ card, onClick }: { card: TaskCard; onClick: () => void }) {
+function TrelloCard({ 
+    card,
+    users,
+    onAssignUser,
+    onUpdateTitle,
+    onDeleteCard,
+}: { 
+    card: TaskCard;
+    users: UserDTO[];
+    onAssignUser: (cardId: string, userId: string | null) => void;
+    onUpdateTitle: (cardId: string, title: string) => void;
+    onDeleteCard: (cardId: string) => void;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [title, setTitle] = useState(card.title);
+    
+    // popover for users
+    const [showUsers, setShowUsers] = useState(false);
+    const usersMenuRef = useRef<HTMLDivElement>(null);
+
+    // save title
+    function handleSaveTitle() {
+        const trimmed = title.trim();
+        if (trimmed && trimmed !== card.title) {
+            onUpdateTitle(card.id, trimmed);
+        } else {
+            setTitle(card.title);
+        }
+        setEditing(false);
+    }
+
+    // close users popover when clicking outside or pressing escape
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (usersMenuRef.current && !usersMenuRef.current.contains(e.target as Node)) {
+                setShowUsers(false);
+            }
+        }
+        function handleEscape(e: KeyboardEvent) {
+            if (e.key === "Escape") {
+                setShowUsers(false);
+            }
+        }
+        if (showUsers) {
+            document.addEventListener("mousedown", handleClickOutside);
+            document.addEventListener("keydown", handleEscape);
+        }
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+            document.removeEventListener("keydown", handleEscape);
+        };
+    }, [showUsers]);
+
     return (
         <div 
-            onClick={onClick}
-            className="bg-slate-700/90 hover:bg-slate-600/90 rounded-lg border border-slate-600/50 hover:border-slate-500/60 px-3 py-2.5 cursor-pointer transition-all duration-150 group shadow-sm hover:shadow-md"
+            onDoubleClick={() => {
+                if (!showUsers) {
+                    setEditing(true);
+                }
+            }}
+            onClick={() => {
+                if (!editing) {
+                    setShowUsers(!showUsers);
+                }
+            }}
+            className="group relative bg-slate-700/90 hover:bg-slate-600/90 rounded-lg border border-slate-600/50 hover:border-slate-500/60 px-3 py-2.5 cursor-pointer transition-all duration-150 shadow-sm hover:shadow-md"
         >
-            <p className="text-[13px] text-slate-200 leading-snug">
-                {card.title}
-            </p>
-            {card.assignedUser && (
+            {editing ? (
+                <textarea
+                    autoFocus
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    onBlur={handleSaveTitle}
+                    onClick={(e) => e.stopPropagation()} // prevent triggering showUsers
+                    onDoubleClick={(e) => e.stopPropagation()} // prevent triggering itself
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSaveTitle();
+                        }
+                        if (e.key === "Escape") {
+                            setTitle(card.title);
+                            setEditing(false);
+                        }
+                    }}
+                    className="w-full bg-slate-800 rounded px-2 py-1 text-[13px] text-slate-200 outline-none focus:ring-2 focus:ring-brand-400 resize-none"
+                    rows={3}
+                />
+            ) : (
+                <p className="text-[13px] text-slate-200 leading-snug pr-6">
+                    {card.title}
+                </p>
+            )}
+
+            {/* Hover Delete Button */}
+            {!editing && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if(confirm("Tem certeza que deseja excluir este cartão de forma permanente?")) {
+                            onDeleteCard(card.id);
+                        }
+                    }}
+                    className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-700/90 rounded"
+                >
+                    <Trash2 className="w-3.5 h-3.5" />
+                </button>
+            )}
+
+            {/* Assignment Avatar */}
+            {!editing && card.assignedUser && (
                 <div className="flex justify-end mt-2">
                     <div
                         title={card.assignedUser.name}
@@ -77,6 +178,49 @@ function TrelloCard({ card, onClick }: { card: TaskCard; onClick: () => void }) 
                             {card.assignedUser.name.charAt(0).toUpperCase()}
                         </div>
                     )}
+                    </div>
+                </div>
+            )}
+
+            {/* Popover User Assignment (Single Click) */}
+            {showUsers && !editing && (
+                <div 
+                    ref={usersMenuRef} 
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-10 left-0 mt-1 w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100"
+                >
+                    <div className="p-2 space-y-1 max-h-48 overflow-y-auto">
+                        <button
+                            onClick={() => {
+                                onAssignUser(card.id, null);
+                                setShowUsers(false);
+                            }}
+                            className="w-full text-left px-2 py-1.5 hover:bg-slate-700 text-slate-300 rounded text-xs"
+                        >
+                            Sem atribuição
+                        </button>
+                        <div className="h-px bg-slate-700 my-1 mx-1" />
+                        {users.map(user => (
+                            <button
+                                key={user.id}
+                                onClick={() => {
+                                    onAssignUser(card.id, user.id);
+                                    setShowUsers(false);
+                                }}
+                                className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700 text-slate-200 rounded text-xs"
+                            >
+                                <div className="w-5 h-5 rounded-full overflow-hidden shrink-0">
+                                    {user.avatarUrl ? (
+                                        <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-white font-bold">
+                                            {user.name.charAt(0).toUpperCase()}
+                                        </div>
+                                    )}
+                                </div>
+                                <span className="truncate">{user.name}</span>
+                            </button>
+                        ))}
                     </div>
                 </div>
             )}
@@ -153,19 +297,25 @@ function AddCardForm({
 function TrelloList({
     list,
     totalLists,
+    users,
     onAddCard,
     onRenameList,
-    onCardClick,
     onDeleteList,
-    onMoveList
+    onMoveList,
+    onAssignUser,
+    onUpdateCard,
+    onDeleteCard
 }: {
     list: TaskList;
     totalLists: number;
+    users: UserDTO[];
     onAddCard: (listId: string, title: string) => void;
     onRenameList: (listId: string, name: string) => void;
-    onCardClick: (card: TaskCard, listId: string, listName: string) => void;
     onDeleteList: (listId: string) => void;
     onMoveList: (listId: string, newIndex: number) => void;
+    onAssignUser: (cardId: string, userId: string | null) => void;
+    onUpdateCard: (cardId: string, title: string) => void;
+    onDeleteCard: (cardId: string) => void;
 }) {
     const [addingCard, setAddingCard] = useState(false);
     const [editingName, setEditingName] = useState(false);
@@ -358,7 +508,14 @@ function TrelloList({
             {/* Cards */}
             <div className="flex-1 flex flex-col gap-2 px-2 overflow-y-auto pb-1 min-h-0">
                 {list.cards.map((card) => (
-                    <TrelloCard key={card.id} card={card} onClick={() => onCardClick(card, list.id, list.name)} />
+                    <TrelloCard 
+                        key={card.id} 
+                        card={card} 
+                        users={users}
+                        onAssignUser={onAssignUser}
+                        onUpdateTitle={onUpdateCard}
+                        onDeleteCard={onDeleteCard}
+                    />
                 ))}
             </div>
 
@@ -444,110 +601,6 @@ function AddListForm({
 }
 
 // =============================================
-// Card Modal Component (Simplified)
-// =============================================
-
-function CardModal({
-    card,
-    users,
-    onClose,
-    onAssignUser,
-    onDeleteCard,
-    onUpdateCard
-}: {
-    card: TaskCard;
-    users: UserDTO[];
-    onClose: () => void;
-    onAssignUser: (cardId: string, userId: string | null) => void;
-    onDeleteCard: (cardId: string) => void;
-    onUpdateCard: (cardId: string, updates: Partial<TaskCard>) => void;
-}) {
-    const [isSaving, setIsSaving] = useState(false);
-    const [title, setTitle] = useState(card.title);
-
-    async function handleSaveTitle() {
-        const trimmed = title.trim();
-        if (trimmed && trimmed !== card.title) {
-            onUpdateCard(card.id, { title: trimmed });
-            // optimistic sync is in external handler
-        } else {
-            setTitle(card.title); // reset
-        }
-    }
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm bento-enter">
-            <div className="bg-slate-800 rounded-xl w-full max-w-[340px] shadow-2xl flex flex-col overflow-hidden relative">
-                {/* Close Button top-right absolute */}
-                <button
-                    onClick={onClose}
-                    className="absolute top-3 right-3 p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors z-10"
-                >
-                    <X className="w-4 h-4" />
-                </button>
-
-                {/* Body */}
-                <div className="px-5 py-6 space-y-6 pt-10">
-                    <div>
-                        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Título do Cartão</h3>
-                        <textarea
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            onBlur={handleSaveTitle}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleSaveTitle();
-                                }
-                            }}
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-brand-400 resize-none"
-                            rows={3}
-                        />
-                    </div>
-
-                    <div>
-                        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Atribuído a</h3>
-                        <select
-                            value={card.assignedUser?.id || ""}
-                            onChange={async (e) => {
-                                const value = e.target.value;
-                                const userId = value || null;
-                                setIsSaving(true);
-                                await onAssignUser(card.id, userId);
-                                setIsSaving(false);
-                            }}
-                            disabled={isSaving}
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-brand-400 appearance-none cursor-pointer disabled:opacity-50"
-                        >
-                            <option value="">Sem atribuição</option>
-                            {users.map(user => (
-                                <option key={user.id} value={user.id}>
-                                    {user.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="pt-2">
-                        <button
-                            onClick={() => {
-                                if(confirm("Tem certeza que deseja excluir este cartão de forma permanente?")) {
-                                    onDeleteCard(card.id);
-                                }
-                            }}
-                            className="flex items-center justify-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:text-red-300 bg-red-400/10 hover:bg-red-400/20 rounded-lg transition-colors"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                            Excluir cartão permanentemente
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// =============================================
 // Page
 // =============================================
 
@@ -557,7 +610,6 @@ export default function TarefasPage() {
     const [addingList, setAddingList] = useState(false);
     
     const [users, setUsers] = useState<UserDTO[]>([]);
-    const [selectedCardInfo, setSelectedCardInfo] = useState<{ card: TaskCard; listId: string; listName: string } | null>(null);
 
     useEffect(() => {
         Promise.all([getTaskBoard(), getUsers()])
@@ -633,27 +685,16 @@ export default function TarefasPage() {
         }
     }
 
-    function handleCardClick(card: TaskCard, listId: string, listName: string) {
-        setSelectedCardInfo({ card, listId, listName });
-    }
-
-    async function handleUpdateCard(cardId: string, updates: Partial<TaskCard>) {
+    async function handleUpdateCard(cardId: string, title: string) {
         setLists((prev) => prev.map(list => ({
             ...list,
-            cards: list.cards.map(c => c.id === cardId ? { ...c, ...updates } : c)
+            cards: list.cards.map(c => c.id === cardId ? { ...c, title } : c)
         })));
         
-        if (selectedCardInfo && selectedCardInfo.card.id === cardId) {
-            setSelectedCardInfo(prev => prev ? { ...prev, card: { ...prev.card, ...updates } } : null);
-        }
-        
-        // Persistir se titulo mudou
-        if (updates.title !== undefined) {
-             try {
-                await updateTaskCard(cardId, { title: updates.title });
-            } catch (err) {
-                console.error("Failed to update card title:", err);
-            }
+        try {
+            await updateTaskCard(cardId, { title });
+        } catch (err) {
+            console.error("Failed to update card title:", err);
         }
     }
 
@@ -665,9 +706,6 @@ export default function TarefasPage() {
             ...list,
             cards: list.cards.map(c => c.id === cardId ? { ...c, assignedUser: user } : c)
         })));
-        if (selectedCardInfo && selectedCardInfo.card.id === cardId) {
-            setSelectedCardInfo(prev => prev ? { ...prev, card: { ...prev.card, assignedUser: user } } : null);
-        }
         
         try {
             await assignTaskCard(cardId, userId);
@@ -681,7 +719,6 @@ export default function TarefasPage() {
             ...list,
             cards: list.cards.filter(c => c.id !== cardId)
         })));
-        setSelectedCardInfo(null);
         
         try {
             await deleteTaskCard(cardId);
@@ -751,9 +788,12 @@ export default function TarefasPage() {
                                 key={list.id}
                                 list={list}
                                 totalLists={lists.length}
+                                users={users}
                                 onAddCard={handleAddCard}
                                 onRenameList={handleRenameList}
-                                onCardClick={handleCardClick}
+                                onAssignUser={handleAssignUser}
+                                onUpdateCard={handleUpdateCard}
+                                onDeleteCard={handleDeleteCard}
                                 onDeleteList={handleDeleteList}
                                 onMoveList={handleMoveList}
                             />
@@ -775,18 +815,6 @@ export default function TarefasPage() {
                         </button>
                     )}
                 </div>
-            )}
-
-            {/* Modal */}
-            {selectedCardInfo && (
-                <CardModal
-                    card={selectedCardInfo.card}
-                    users={users}
-                    onClose={() => setSelectedCardInfo(null)}
-                    onAssignUser={handleAssignUser}
-                    onDeleteCard={handleDeleteCard}
-                    onUpdateCard={handleUpdateCard}
-                />
             )}
         </div>
     );
