@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { clientesWhatsapp, documents } from "@/lib/db/schema";
-import { asc, desc, sql, ilike, or } from "drizzle-orm";
+import { clientesWhatsapp, documents, messages } from "@/lib/db/schema";
+import { asc, desc, sql, ilike, or, eq, and, gt } from "drizzle-orm";
 
 // =============================================
 // TYPES
@@ -16,6 +16,8 @@ export type ClienteListItem = {
     status: string | null;
     statusAtendimento: string | null;
     iaAtiva: boolean;
+    unreadCount: number;
+    lastMessageAt: Date | null;
     createdAt: Date | null;
 };
 
@@ -33,6 +35,7 @@ export type ClienteDetail = {
     iaAtiva: boolean;
     kanbanColumnId: string | null;
     kanbanPosition: number | null;
+    lastSeenAt: Date | null;
     createdAt: Date | null;
 };
 
@@ -55,6 +58,34 @@ export type LeadMessage = {
  * Ordenados por created_at DESC (mais recentes primeiro).
  */
 export async function listClientes(search?: string): Promise<ClienteListItem[]> {
+    // 1. Subquery para buscar a data da última mensagem de cada lead
+    const lastMessageSubquery = db
+        .select({
+            telefone: messages.telefone,
+            lastMessageAt: sql<Date>`max(${messages.createdAt})`.as("last_message_at"),
+        })
+        .from(messages)
+        .groupBy(messages.telefone)
+        .as("lm");
+
+    // 2. Subquery para contar mensagens não lidas
+    // Mensagens do cliente (senderType = 'cliente') enviadas após lastSeenAt do lead
+    const unreadCountSubquery = db
+        .select({
+            telefone: messages.telefone,
+            unreadCount: sql<number>`count(*)`.as("unread_count"),
+        })
+        .from(messages)
+        .leftJoin(clientesWhatsapp, eq(messages.telefone, clientesWhatsapp.telefone))
+        .where(
+            and(
+                eq(messages.senderType, "cliente"),
+                sql`${messages.createdAt} > COALESCE(${clientesWhatsapp.lastSeenAt}, '1970-01-01'::timestamp)`
+            )
+        )
+        .groupBy(messages.telefone)
+        .as("uc");
+
     let query = db
         .select({
             telefone: clientesWhatsapp.telefone,
@@ -64,24 +95,42 @@ export async function listClientes(search?: string): Promise<ClienteListItem[]> 
             statusAtendimento: clientesWhatsapp.statusAtendimento,
             iaAtiva: clientesWhatsapp.iaAtiva,
             createdAt: clientesWhatsapp.createdAt,
+            lastMessageAt: lastMessageSubquery.lastMessageAt,
+            unreadCount: sql<number>`COALESCE(${unreadCountSubquery.unreadCount}, 0)`.as("unread_count_calculated"),
         })
         .from(clientesWhatsapp)
+        .leftJoin(lastMessageSubquery, eq(clientesWhatsapp.telefone, lastMessageSubquery.telefone))
+        .leftJoin(unreadCountSubquery, eq(clientesWhatsapp.telefone, unreadCountSubquery.telefone))
         .orderBy(desc(clientesWhatsapp.createdAt));
 
     const results = await query;
 
-    // Filtrar por busca
-    let filtered = results;
+    // Filtrar por busca e mapear para o tipo correto
+    let mapped: ClienteListItem[] = results.map(r => ({
+        ...r,
+        unreadCount: Number(r.unreadCount) || 0,
+    }));
+
     if (search && search.trim()) {
         const term = search.toLowerCase();
-        filtered = results.filter(
+        mapped = mapped.filter(
             (r) =>
                 r.nome?.toLowerCase().includes(term) ||
                 r.telefone?.includes(term)
         );
     }
 
-    return filtered;
+    return mapped;
+}
+
+/**
+ * Marca as mensagens de um cliente como lidas (atualiza lastSeenAt).
+ */
+export async function markAsRead(telefone: string): Promise<void> {
+    await db
+        .update(clientesWhatsapp)
+        .set({ lastSeenAt: new Date() })
+        .where(sql`${clientesWhatsapp.telefone}::text = ${telefone}`);
 }
 
 /**
@@ -110,6 +159,7 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         iaAtiva: cliente.iaAtiva,
         kanbanColumnId: cliente.kanbanColumnId,
         kanbanPosition: cliente.kanbanPosition,
+        lastSeenAt: cliente.lastSeenAt,
         createdAt: cliente.createdAt,
     };
 }

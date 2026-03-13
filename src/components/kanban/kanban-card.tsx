@@ -93,7 +93,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
         >
             {/* Header: school name + toggle */}
             <div className="flex items-start justify-between gap-2 mb-2" onClick={onClick}>
-                <h4 className="flex-1 text-sm font-semibold text-slate-200 leading-tight line-clamp-2">
+                <h4 className="flex-1 text-sm font-semibold text-slate-200 leading-tight break-words">
                     {lead.nomeEscola}
                 </h4>
                 <button
@@ -182,7 +182,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                             </button>
                             <span
                                 className={cn(
-                                    "text-xs flex-1 min-w-0 truncate",
+                                    "text-xs flex-1 min-w-0 break-words",
                                     item.done
                                         ? "text-slate-600 line-through opacity-50"
                                         : "text-slate-300"

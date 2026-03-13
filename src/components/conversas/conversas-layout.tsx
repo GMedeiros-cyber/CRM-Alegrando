@@ -19,6 +19,7 @@ import {
     getClienteByTelefone,
     updateCliente,
     toggleIaAtiva,
+    markAsRead,
 } from "@/lib/actions/leads";
 import { sendMessageToN8n } from "@/lib/actions/messages";
 import {
@@ -41,7 +42,6 @@ import {
     UserRound,
     Send,
     Loader2,
-    Save,
     MessageSquare,
     Phone,
     User,
@@ -56,6 +56,7 @@ import {
     ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase/client";
 
 type TaskItem = { id: string; text: string; done: boolean };
 
@@ -117,6 +118,8 @@ export function ConversasLayout() {
     const [agendamentos, setAgendamentos] = useState<AgendamentoEvent[]>([]);
     const [loadingAgendamentos, setLoadingAgendamentos] = useState(false);
 
+    const [sortOrder, setSortOrder] = useState<string>("recent");
+
     // Auto-hide toast
     useEffect(() => {
         if (toast) {
@@ -124,6 +127,27 @@ export function ConversasLayout() {
             return () => clearTimeout(t);
         }
     }, [toast]);
+
+    // Ordenação client-side
+    const sortedLeads = [...clientesList].sort((a, b) => {
+        if (sortOrder === "recent") {
+            const timeA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+            const timeB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+            return timeB - timeA;
+        }
+        if (sortOrder === "oldest") {
+            const timeA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+            const timeB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+            return timeA - timeB;
+        }
+        if (sortOrder === "az") {
+            return (a.nome || "").localeCompare(b.nome || "");
+        }
+        if (sortOrder === "za") {
+            return (b.nome || "").localeCompare(a.nome || "");
+        }
+        return 0;
+    });
 
     // Load clientes list
     const loadList = useCallback(async () => {
@@ -142,13 +166,40 @@ export function ConversasLayout() {
         getKanbanColumns().then(setKanbanColumns);
     }, [loadList]);
 
+    // Realtime: atualiza lista quando nova mensagem é inserida na tabela messages
+    useEffect(() => {
+        const channel = supabase
+            .channel("conversas-list-realtime")
+            .on(
+                "postgres_changes",
+                { event: "INSERT", schema: "public", table: "messages" },
+                () => {
+                    loadList();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [loadList]);
+
     // Load selected cliente
     const loadCliente = useCallback(async (telefone: string) => {
         setLoadingCliente(true);
+        setLoadingAgendamentos(true);
         setTasks([]);
         setAgendamentos([]);
+
         try {
-            const clienteData = await getClienteByTelefone(telefone);
+            const tel = parseInt(telefone, 10);
+
+            // As 3 chamadas disparam em paralelo
+            const [clienteData, tasksData, todosAgendamentos] = await Promise.all([
+                getClienteByTelefone(telefone),
+                !isNaN(tel) ? getLeadTasks(tel) : Promise.resolve([]),
+                getAgendamentos(),
+            ]);
 
             if (clienteData) {
                 setCliente(clienteData);
@@ -162,45 +213,56 @@ export function ConversasLayout() {
                     instagram: clienteData.instagram || "",
                     kanbanColumnId: clienteData.kanbanColumnId || "",
                 });
-                // Carregar tasks
-                const tel = parseInt(clienteData.telefone, 10);
-                if (!isNaN(tel)) {
-                    const t = await getLeadTasks(tel);
-                    setTasks(t);
-                }
-                // Carregar agendamentos vinculados ao cliente pelo nome
+
+                // Tasks
+                setTasks(tasksData);
+
+                // Agendamentos — filtra pelo nome do cliente (pode ser null)
                 if (clienteData.nome) {
-                    setLoadingAgendamentos(true);
-                    try {
-                        const todos = await getAgendamentos();
-                        const filtrados = todos.filter(
-                            (ev) =>
-                                ev.extendedProps.nomeEscola?.toLowerCase().trim() ===
-                                clienteData.nome!.toLowerCase().trim()
-                        );
-                        setAgendamentos(filtrados);
-                    } finally {
-                        setLoadingAgendamentos(false);
-                    }
+                    const filtrados = todosAgendamentos.filter(
+                        (ev) =>
+                            ev.extendedProps.nomeEscola?.toLowerCase().trim() ===
+                            clienteData.nome!.toLowerCase().trim()
+                    );
+                    setAgendamentos(filtrados);
+                } else {
+                    setAgendamentos([]);
                 }
             }
         } catch (err) {
             setToast({ type: "error", text: `Erro ao carregar cliente: ${err}` });
         } finally {
             setLoadingCliente(false);
+            setLoadingAgendamentos(false);
         }
     }, []);
+
+    // Select cliente and mark as read
+    const handleSelectCliente = useCallback(
+        async (telefone: string) => {
+            setSelectedTelefone(telefone);
+            router.push(`/conversas?telefone=${telefone}`, { scroll: false });
+
+            // Marcar como lida localmente e no banco
+            try {
+                await markAsRead(telefone);
+                setClientesList((prev) =>
+                    prev.map((c) =>
+                        String(c.telefone) === String(telefone) ? { ...c, unreadCount: 0 } : c
+                    )
+                );
+            } catch (err) {
+                console.error("Erro ao marcar como lida:", err);
+            }
+        },
+        [router]
+    );
 
     useEffect(() => {
         if (selectedTelefone) loadCliente(selectedTelefone);
     }, [selectedTelefone, loadCliente]);
 
     // Handlers
-
-    function selectCliente(telefone: string) {
-        setSelectedTelefone(telefone);
-        router.replace(`/conversas?telefone=${telefone}`, { scroll: false });
-    }
 
     const formatUrl = (val: string | null) => {
         if (!val) return null;
@@ -251,6 +313,13 @@ export function ConversasLayout() {
             try {
                 await toggleIaAtiva(selectedTelefone, newVal);
                 setCliente((prev) => (prev ? { ...prev, iaAtiva: newVal } : null));
+                setClientesList((prev) =>
+                    prev.map((c) =>
+                        String(c.telefone) === String(selectedTelefone)
+                            ? { ...c, iaAtiva: newVal }
+                            : c
+                    )
+                );
                 setToast({
                     type: "success",
                     text: newVal
@@ -323,7 +392,7 @@ export function ConversasLayout() {
     return (
         <div className="flex h-[calc(100vh-2rem)] -m-6 lg:-m-8 rounded-2xl overflow-hidden bg-slate-900">
             {/* =================== LEFT: CLIENTE LIST =================== */}
-            <div className="w-[280px] min-w-[280px] border-r-2 border-slate-700 flex flex-col bg-slate-900">
+            <div className="w-[350px] min-w-[350px] border-r-2 border-slate-700 flex flex-col bg-slate-900">
                 {/* Header */}
                 <div className="px-4 pt-5 pb-3 shrink-0 border-b-2 border-slate-700">
                     <h2 className="font-display text-lg font-bold text-white tracking-tight">
@@ -337,6 +406,22 @@ export function ConversasLayout() {
                             placeholder="Buscar por nome ou telefone..."
                             className="pl-9 rounded-xl bg-slate-800 border-slate-600 h-9 text-sm text-white placeholder:text-slate-500 focus:border-brand-500 focus:ring-brand-500/20"
                         />
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                            Ordenar por:
+                        </span>
+                        <select
+                            value={sortOrder}
+                            onChange={(e) => setSortOrder(e.target.value)}
+                            className="text-[11px] bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-slate-300 outline-none focus:border-brand-500 transition-colors cursor-pointer"
+                        >
+                            <option value="recent">Mais recente</option>
+                            <option value="oldest">Mais antigo</option>
+                            <option value="az">A-Z</option>
+                            <option value="za">Z-A</option>
+                        </select>
                     </div>
                 </div>
 
@@ -352,46 +437,56 @@ export function ConversasLayout() {
                         </div>
                     ) : (
                         <div className="space-y-1.5">
-                            {clientesList.map((item) => (
+                            {sortedLeads.map((item) => (
                                 <button
-                                    key={item.telefone}
-                                    onClick={() => selectCliente(item.telefone)}
+                                    key={item.telefone.toString()}
+                                    onClick={() => handleSelectCliente(item.telefone.toString())}
                                     className={cn(
                                         "w-full text-left px-3 py-3 rounded-xl transition-all duration-150 border-2",
-                                        selectedTelefone === item.telefone
+                                        selectedTelefone === item.telefone.toString()
                                             ? "bg-slate-800 border-brand-500 shadow-lg shadow-brand-500/15"
                                             : "bg-slate-800/60 border-slate-700/50 hover:bg-slate-800 hover:border-slate-600"
                                     )}
                                 >
                                     <div className="flex items-start justify-between gap-2">
-                                        <p
-                                            className={cn(
-                                                "text-sm font-semibold truncate",
-                                                selectedTelefone === item.telefone
-                                                    ? "text-brand-400"
-                                                    : "text-slate-200"
-                                            )}
-                                        >
-                                            {item.nome || item.telefone}
-                                        </p>
-                                        {item.statusAtendimento && (
-                                            <span
-                                                className={cn(
-                                                    "text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full shrink-0 border",
-                                                    statusStyles[item.statusAtendimento] || "bg-slate-500/20 text-slate-300 border-slate-500/40"
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <p
+                                                    className={cn(
+                                                        "text-sm font-semibold truncate",
+                                                        selectedTelefone === item.telefone.toString()
+                                                            ? "text-brand-400"
+                                                            : "text-slate-200"
+                                                    )}
+                                                >
+                                                    {item.nome || item.telefone}
+                                                </p>
+                                                {item.unreadCount > 0 && (
+                                                    <span className="ml-auto min-w-[18px] h-4.5 px-1 rounded-full bg-brand-500 text-white text-[10px] font-bold flex items-center justify-center animate-in zoom-in-50">
+                                                        {item.unreadCount > 99 ? '99+' : item.unreadCount}
+                                                    </span>
                                                 )}
-                                            >
-                                                {item.statusAtendimento}
-                                            </span>
-                                        )}
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-[11px] text-slate-400 truncate flex-1">
+                                                    {item.telefone}
+                                                </span>
+                                                {item.statusAtendimento && (
+                                                    <span
+                                                        className={cn(
+                                                            "text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full shrink-0 border",
+                                                            statusStyles[item.statusAtendimento] || "bg-slate-500/20 text-slate-300 border-slate-500/40"
+                                                        )}
+                                                    >
+                                                        {item.statusAtendimento}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2 mt-1.5">
-                                        <Phone className="w-3 h-3 text-slate-500 shrink-0" />
-                                        <span className="text-[11px] text-slate-400 truncate">
-                                            {item.telefone}
-                                        </span>
+                                    <div className="mt-2 flex justify-end h-5">
                                         {!item.iaAtiva && (
-                                            <span className="ml-auto text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
                                                 Manual
                                             </span>
                                         )}
@@ -548,6 +643,7 @@ export function ConversasLayout() {
                                     onChange={(e) =>
                                         setForm((f) => ({ ...f, nome: e.target.value }))
                                     }
+                                    onBlur={handleSave}
                                     placeholder="Nome do cliente"
                                     className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
                                 />
@@ -571,6 +667,7 @@ export function ConversasLayout() {
                                         onChange={(e) =>
                                             setForm((f) => ({ ...f, email: e.target.value }))
                                         }
+                                        onBlur={handleSave}
                                         placeholder="email@exemplo.com"
                                         className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
                                     />
@@ -581,6 +678,7 @@ export function ConversasLayout() {
                                         onChange={(e) =>
                                             setForm((f) => ({ ...f, cpf: e.target.value }))
                                         }
+                                        onBlur={handleSave}
                                         placeholder="000.000.000-00"
                                         className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
                                     />
@@ -590,9 +688,22 @@ export function ConversasLayout() {
                             <FieldGroup label="📋 Status (Kanban)">
                                 <Select
                                     value={form.kanbanColumnId}
-                                    onValueChange={(v) =>
-                                        setForm((f) => ({ ...f, kanbanColumnId: v }))
-                                    }
+                                    onValueChange={(val) => {
+                                        setForm((f) => ({ ...f, kanbanColumnId: val }));
+                                        if (selectedTelefone) {
+                                            startTransition(async () => {
+                                                try {
+                                                    await updateCliente(selectedTelefone, {
+                                                        kanbanColumnId: val || null,
+                                                    });
+                                                    setToast({ type: "success", text: "Cliente atualizado!" });
+                                                    loadList();
+                                                } catch (err) {
+                                                    setToast({ type: "error", text: `Erro ao salvar: ${err}` });
+                                                }
+                                            });
+                                        }
+                                    }}
                                 >
                                     <SelectTrigger className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white">
                                         <SelectValue placeholder="Mudar coluna..." />
@@ -620,6 +731,7 @@ export function ConversasLayout() {
                                         <Input
                                             value={form.linkedin}
                                             onChange={(e) => setForm((f) => ({ ...f, linkedin: e.target.value }))}
+                                            onBlur={handleSave}
                                             placeholder="https://linkedin.com/in/..."
                                             className="rounded-lg h-8 pr-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
                                         />
@@ -638,6 +750,7 @@ export function ConversasLayout() {
                                         <Input
                                             value={form.facebook}
                                             onChange={(e) => setForm((f) => ({ ...f, facebook: e.target.value }))}
+                                            onBlur={handleSave}
                                             placeholder="https://facebook.com/..."
                                             className="rounded-lg h-8 pr-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
                                         />
@@ -656,6 +769,7 @@ export function ConversasLayout() {
                                         <Input
                                             value={form.instagram}
                                             onChange={(e) => setForm((f) => ({ ...f, instagram: e.target.value }))}
+                                            onBlur={handleSave}
                                             placeholder="https://instagram.com/..."
                                             className="rounded-lg h-8 pr-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
                                         />
@@ -673,20 +787,6 @@ export function ConversasLayout() {
                                 </div>
                             </div>
                         </div>
-
-                        {/* Save */}
-                        <button
-                            onClick={handleSave}
-                            disabled={isPending}
-                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25"
-                        >
-                            {isPending ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <Save className="w-4 h-4" />
-                            )}
-                            Salvar
-                        </button>
 
                         {/* Agendamentos */}
                         <div className="pt-4 border-t border-slate-700">
@@ -812,7 +912,7 @@ export function ConversasLayout() {
                                             )}
                                         </button>
                                         <span className={cn(
-                                            "text-xs flex-1 min-w-0",
+                                            "text-xs flex-1 min-w-0 break-words",
                                             task.done ? "text-slate-600 line-through" : "text-slate-300"
                                         )}>
                                             {task.text}

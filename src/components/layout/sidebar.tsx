@@ -32,7 +32,7 @@ export function Sidebar() {
             onMouseLeave={() => setExpanded(false)}
             className={cn(
                 "fixed left-0 top-0 z-40 flex h-screen flex-col items-center bg-[#FFA832] border-r-2 border-orange-400 py-4 transition-all duration-300",
-                expanded ? "w-[220px]" : "w-[64px]"
+                expanded ? "w-[176px]" : "w-[64px]"
             )}
         >
             {/* Brand — Logo */}

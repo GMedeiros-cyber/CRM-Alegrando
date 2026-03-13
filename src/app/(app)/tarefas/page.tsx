@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Plus, X, MoreHorizontal, User as UserIcon, Trash2, SquarePen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
@@ -79,6 +80,8 @@ function TrelloCard({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const menuRef = useRef<HTMLDivElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
 
     // save title
     function handleSaveTitle() {
@@ -120,178 +123,201 @@ function TrelloCard({
     }, [menuOpen, showUsers, showDeleteConfirm, editing, card.title]);
 
     return (
-        <div className="group relative bg-slate-700/90 hover:bg-slate-600/90 rounded-lg border border-slate-600/50 hover:border-slate-500/60 p-3 shadow-sm hover:shadow-md transition-all duration-150">
-            {editing ? (
-                <div>
-                    <textarea
-                        autoFocus
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSaveTitle();
-                            }
-                            if (e.key === "Escape") {
-                                setTitle(card.title);
-                                setEditing(false);
-                            }
-                        }}
-                        className="w-full bg-slate-800 rounded px-2 py-1 text-[13px] text-slate-200 outline-none focus:ring-2 focus:ring-brand-400 resize-none"
-                        rows={3}
-                    />
-                    <div className="flex justify-start mt-2">
-                        <button
-                            onClick={handleSaveTitle}
-                            className="px-3 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-semibold hover:bg-brand-600 transition-colors"
-                        >
-                            Salvar
-                        </button>
-                    </div>
-                </div>
-            ) : (
-                <div 
-                    onClick={() => setEditing(true)}
-                    className="cursor-pointer min-h-[40px]"
-                >
-                    <p className="text-[13px] text-slate-200 leading-snug pr-6">
-                        {card.title}
-                    </p>
-                    {/* Assignment Avatar */}
-                    {card.assignedUser && (
-                        <div className="flex justify-end mt-2">
-                            <div
-                                title={card.assignedUser.name}
-                                className="w-5 h-5 rounded-full overflow-hidden border border-slate-500"
+        <>
+            <div className="group relative bg-slate-700/90 hover:bg-slate-600/90 rounded-lg border border-slate-600/50 hover:border-slate-500/60 p-3 shadow-sm hover:shadow-md transition-all duration-150">
+                {editing ? (
+                    <div>
+                        <textarea
+                            autoFocus
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSaveTitle();
+                                }
+                                if (e.key === "Escape") {
+                                    setTitle(card.title);
+                                    setEditing(false);
+                                }
+                            }}
+                            className="w-full bg-slate-800 rounded px-2 py-1 text-[13px] text-slate-200 outline-none focus:ring-2 focus:ring-brand-400 resize-none"
+                            rows={3}
+                        />
+                        <div className="flex justify-start mt-2">
+                            <button
+                                onClick={handleSaveTitle}
+                                className="px-3 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-semibold hover:bg-brand-600 transition-colors"
                             >
-                            {card.assignedUser.avatarUrl ? (
-                                <img src={card.assignedUser.avatarUrl} alt={card.assignedUser.name} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-white font-bold">
-                                    {card.assignedUser.name.charAt(0).toUpperCase()}
+                                Salvar
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div 
+                        onClick={() => setEditing(true)}
+                        className="cursor-pointer"
+                    >
+                        <p className="text-[13px] text-slate-200 leading-snug pr-6 break-words">
+                            {card.title}
+                        </p>
+                        {/* Assignment Avatar */}
+                        {card.assignedUser && (
+                            <div className="flex justify-end mt-2">
+                                <div
+                                    title={card.assignedUser.name}
+                                    className="w-5 h-5 rounded-full overflow-hidden border border-slate-500"
+                                >
+                                {card.assignedUser.avatarUrl ? (
+                                    <img src={card.assignedUser.avatarUrl} alt={card.assignedUser.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-white font-bold">
+                                        {card.assignedUser.name.charAt(0).toUpperCase()}
+                                    </div>
+                                )}
                                 </div>
-                            )}
                             </div>
-                        </div>
-                    )}
-                </div>
-            )}
+                        )}
+                    </div>
+                )}
 
-            {/* Hover Edit Icon */}
-            {!editing && (
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        setMenuOpen(!menuOpen);
-                        setShowUsers(false);
-                        setShowDeleteConfirm(false);
-                    }}
-                    className="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity bg-slate-600 hover:bg-slate-500 rounded"
-                >
-                    <SquarePen className="w-3.5 h-3.5 text-slate-300" />
-                </button>
-            )}
+                {/* Hover Edit Icon */}
+                {!editing && (
+                    <button
+                        ref={buttonRef}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (!menuOpen && buttonRef.current) {
+                                const rect = buttonRef.current.getBoundingClientRect();
+                                setMenuPos({
+                                    top: rect.bottom + window.scrollY + 4,
+                                    left: rect.right + window.scrollX - 224,
+                                });
+                            }
+                            setMenuOpen(!menuOpen);
+                            setShowUsers(false);
+                            setShowDeleteConfirm(false);
+                        }}
+                        className="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity bg-slate-600 hover:bg-slate-500 rounded"
+                    >
+                        <SquarePen className="w-3.5 h-3.5 text-slate-300" />
+                    </button>
+                )}
+            </div>
 
-            {/* Sub-menu options */}
-            {menuOpen && (
-                <div 
-                    ref={menuRef}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute top-10 right-0 mt-1 w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-50 overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100"
-                >
-                    {showDeleteConfirm ? (
-                        <div className="p-3">
-                            <p className="text-slate-200 font-medium mb-3 text-xs">Excluir este cartão?</p>
-                            <div className="flex gap-2">
-                                <button 
-                                    onClick={() => {
-                                        onDeleteCard(card.id);
-                                        setMenuOpen(false);
-                                    }}
-                                    className="flex-1 px-2 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-semibold transition-colors"
-                                >
-                                    Confirmar
-                                </button>
-                                <button 
-                                    onClick={() => setShowDeleteConfirm(false)}
-                                    className="flex-1 px-2 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 rounded text-xs font-semibold transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                            </div>
-                        </div>
-                    ) : showUsers ? (
-                        <div className="p-2 space-y-1">
-                            <div className="flex items-center gap-2 mb-2 px-2">
-                                <button 
-                                    onClick={() => setShowUsers(false)}
-                                    className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700"
-                                >
-                                    <X className="w-3 h-3" />
-                                </button>
-                                <p className="text-slate-200 font-semibold text-xs border-b border-slate-700 flex-1 pb-1">Membros</p>
-                            </div>
-                            <div className="max-h-48 overflow-y-auto space-y-1">
-                                <button
-                                    onClick={() => {
-                                        onAssignUser(card.id, null);
-                                        setMenuOpen(false);
-                                    }}
-                                    className="w-full text-left px-2 py-1.5 hover:bg-slate-700 text-slate-300 rounded text-xs transition-colors"
-                                >
-                                    Sem atribuição
-                                </button>
-                                <div className="h-px bg-slate-700 my-1 mx-1" />
-                                {users.map(user => (
-                                    <button
-                                        key={user.id}
+            {menuOpen && typeof window !== "undefined" && createPortal(
+                <>
+                    {/* Backdrop — fecha ao clicar fora */}
+                    <div
+                        className="fixed inset-0 z-[99]"
+                        onClick={() => {
+                            setMenuOpen(false);
+                            setShowUsers(false);
+                            setShowDeleteConfirm(false);
+                        }}
+                    />
+                    {/* Menu */}
+                    <div
+                        ref={menuRef}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ top: menuPos.top, left: menuPos.left }}
+                        className="fixed w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-[100] overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100"
+                    >
+                        {showDeleteConfirm ? (
+                            <div className="p-3">
+                                <p className="text-slate-200 font-medium mb-3 text-xs">Excluir este cartão?</p>
+                                <div className="flex gap-2">
+                                    <button 
                                         onClick={() => {
-                                            if (card.assignedUser?.id !== user.id) {
-                                                onAssignUser(card.id, user.id);
-                                            }
+                                            onDeleteCard(card.id);
                                             setMenuOpen(false);
                                         }}
-                                        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700 text-slate-200 rounded text-xs transition-colors"
+                                        className="flex-1 px-2 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-semibold transition-colors"
                                     >
-                                        <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-slate-600">
-                                            {user.avatarUrl ? (
-                                                <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
-                                            ) : (
-                                                <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-white font-bold">
-                                                    {user.name.charAt(0).toUpperCase()}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <span className="truncate">{user.name}</span>
-                                        {card.assignedUser?.id === user.id && (
-                                            <span className="ml-auto text-[10px] text-brand-400 font-bold">✓</span>
-                                        )}
+                                        Confirmar
                                     </button>
-                                ))}
+                                    <button 
+                                        onClick={() => setShowDeleteConfirm(false)}
+                                        className="flex-1 px-2 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 rounded text-xs font-semibold transition-colors"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="p-1.5 space-y-0.5">
-                            <button 
-                                onClick={() => setShowUsers(true)}
-                                className="w-full text-left px-2 py-1.5 hover:bg-slate-700 text-slate-200 rounded transition-colors text-xs font-medium flex items-center gap-2"
-                            >
-                                <UserIcon className="w-3.5 h-3.5 text-slate-400" />
-                                Alterar Membros
-                            </button>
-                            <div className="h-px bg-slate-700 my-1 mx-2" />
-                            <button 
-                                onClick={() => setShowDeleteConfirm(true)}
-                                className="w-full text-left px-2 py-1.5 hover:bg-red-500/10 text-red-400 rounded transition-colors text-xs font-medium flex items-center gap-2"
-                            >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                Excluir
-                            </button>
-                        </div>
-                    )}
-                </div>
+                        ) : showUsers ? (
+                            <div className="p-2 space-y-1">
+                                <div className="flex items-center gap-2 mb-2 px-2">
+                                    <button 
+                                        onClick={() => setShowUsers(false)}
+                                        className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                    <p className="text-slate-200 font-semibold text-xs border-b border-slate-700 flex-1 pb-1">Membros</p>
+                                </div>
+                                <div className="max-h-48 overflow-y-auto space-y-1">
+                                    <button
+                                        onClick={() => {
+                                            onAssignUser(card.id, null);
+                                            setMenuOpen(false);
+                                        }}
+                                        className="w-full text-left px-2 py-1.5 hover:bg-slate-700 text-slate-300 rounded text-xs transition-colors"
+                                    >
+                                        Sem atribuição
+                                    </button>
+                                    <div className="h-px bg-slate-700 my-1 mx-1" />
+                                    {users.map(user => (
+                                        <button
+                                            key={user.id}
+                                            onClick={() => {
+                                                if (card.assignedUser?.id !== user.id) {
+                                                    onAssignUser(card.id, user.id);
+                                                }
+                                                setMenuOpen(false);
+                                            }}
+                                            className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700 text-slate-200 rounded text-xs transition-colors"
+                                        >
+                                            <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-slate-600">
+                                                {user.avatarUrl ? (
+                                                    <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-white font-bold">
+                                                        {user.name.charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <span className="truncate">{user.name}</span>
+                                            {card.assignedUser?.id === user.id && (
+                                                <span className="ml-auto text-[10px] text-brand-400 font-bold">✓</span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-1.5 space-y-0.5">
+                                <button 
+                                    onClick={() => setShowUsers(true)}
+                                    className="w-full text-left px-2 py-1.5 hover:bg-slate-700 text-slate-200 rounded transition-colors text-xs font-medium flex items-center gap-2"
+                                >
+                                    <UserIcon className="w-3.5 h-3.5 text-slate-400" />
+                                    Alterar Membros
+                                </button>
+                                <div className="h-px bg-slate-700 my-1 mx-2" />
+                                <button 
+                                    onClick={() => setShowDeleteConfirm(true)}
+                                    className="w-full text-left px-2 py-1.5 hover:bg-red-500/10 text-red-400 rounded transition-colors text-xs font-medium flex items-center gap-2"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    Excluir
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </>,
+                document.body
             )}
-        </div>
+        </>
     );
 }
 
