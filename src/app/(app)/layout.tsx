@@ -1,7 +1,6 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { currentUser } from "@clerk/nextjs/server";
-import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -12,22 +11,19 @@ export default async function AppLayout({
 }) {
     const clerkUser = await currentUser();
     if (clerkUser) {
-        await db
-            .insert(users)
-            .values({
-                clerkId: clerkUser.id,
-                name: clerkUser.fullName || clerkUser.username || "Usuário",
-                email: clerkUser.emailAddresses[0]?.emailAddress || "",
-                avatarUrl: clerkUser.imageUrl,
-            })
-            .onConflictDoUpdate({
-                target: users.clerkId,
-                set: {
+        const supabase = createServerSupabaseClient();
+        await supabase
+            .from("users")
+            .upsert(
+                {
+                    clerk_id: clerkUser.id,
                     name: clerkUser.fullName || clerkUser.username || "Usuário",
-                    avatarUrl: clerkUser.imageUrl,
-                    updatedAt: new Date(),
+                    email: clerkUser.emailAddresses[0]?.emailAddress || "",
+                    avatar_url: clerkUser.imageUrl,
+                    updated_at: new Date().toISOString(),
                 },
-            });
+                { onConflict: "clerk_id" }
+            );
     }
 
     return (

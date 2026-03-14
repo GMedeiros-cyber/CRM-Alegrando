@@ -1,7 +1,9 @@
 "use server";
 
-import { supabase } from "@/lib/supabase/client";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getCalendarClient } from "@/lib/google/calendar";
+
+const supabase = createServerSupabaseClient();
 
 // =============================================
 // DASHBOARD SERVER ACTIONS
@@ -16,7 +18,6 @@ export async function getTotalLeads(): Promise<number> {
         .select("*", { count: "exact", head: true });
 
     if (error) {
-        console.error("Erro ao contar leads:", error);
         return 0;
     }
     return count || 0;
@@ -30,7 +31,6 @@ export async function getLeadsPorMes(): Promise<{ mes: string; leads: number }[]
 
     // Se a RPC não existir, fallback via query raw
     if (error) {
-        console.error("Erro na RPC get_leads_por_mes, tentando fallback:", error);
 
         // Fallback: buscar todos os leads dos últimos 6 meses e agrupar no JS
         const sixMonthsAgo = new Date();
@@ -43,7 +43,6 @@ export async function getLeadsPorMes(): Promise<{ mes: string; leads: number }[]
             .order("created_at", { ascending: true });
 
         if (fallbackError || !leads) {
-            console.error("Erro no fallback:", fallbackError);
             return [];
         }
 
@@ -87,7 +86,6 @@ export async function getTopDestinos(): Promise<{ destino: string; total: number
         .lte("created_at", lastDay);
 
     if (error) {
-        console.error("Erro ao buscar destinos:", error);
         return [];
     }
 
@@ -128,8 +126,7 @@ export async function getEventosDoMes(): Promise<number> {
         });
 
         return response.data.items?.length || 0;
-    } catch (err) {
-        console.error("Erro ao contar eventos do mês:", err);
+    } catch {
         return 0;
     }
 }
@@ -149,7 +146,6 @@ export async function getTotalPasseiosDoMes(): Promise<number> {
         .lte("data_passeio", lastDay);
 
     if (error) {
-        console.error("Erro ao contar passeios do mês:", error);
         return 0;
     }
     return count || 0;

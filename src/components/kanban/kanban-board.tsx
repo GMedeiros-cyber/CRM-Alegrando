@@ -96,8 +96,7 @@ export function KanbanBoard({
             setLeadsMap((prev) => ({ ...prev, [created.id]: [] }));
             setNewColName("");
             setAddingColumn(false);
-        } catch (err) {
-            console.error("Erro ao criar coluna:", err);
+        } catch {
         }
     }
 
@@ -242,7 +241,7 @@ export function KanbanBoard({
 
                     setTimeout(() => {
                         if (pendingColumnOrder.current.length > 0) {
-                            reorderKanbanColumns(pendingColumnOrder.current).catch(console.error);
+                            reorderKanbanColumns(pendingColumnOrder.current).catch(() => {});
                             pendingColumnOrder.current = [];
                         }
                     }, 0);
@@ -277,7 +276,7 @@ export function KanbanBoard({
             const finalColId = findColumnOfLead(activeId) || overColId;
             const finalLeads = leadsMap[finalColId] || [];
             const finalIdx = finalLeads.findIndex((l) => l.id === activeId);
-            moveLeadInKanban(activeId, finalColId, finalIdx >= 0 ? finalIdx : 0).catch(console.error);
+            moveLeadInKanban(activeId, finalColId, finalIdx >= 0 ? finalIdx : 0).catch(() => {});
         },
         [findColumnOfLead, leadsMap, columns]
     );

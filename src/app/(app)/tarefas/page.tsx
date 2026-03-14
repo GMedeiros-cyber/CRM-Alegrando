@@ -710,7 +710,7 @@ export default function TarefasPage() {
                 setLists(boardData);
                 setUsers(userData);
             })
-            .catch(err => console.error("Failed to load data:", err))
+            .catch(() => {})
             .finally(() => setLoading(false));
     }, []);
 
@@ -740,8 +740,7 @@ export default function TarefasPage() {
                     return { ...list, cards: list.cards.map(c => c.id === tempId ? newCard : c) };
                 })
             );
-        } catch (err) {
-            console.error("Failed to persist card adding:", err);
+        } catch {
         }
     }
 
@@ -760,8 +759,7 @@ export default function TarefasPage() {
         try {
             const created = await createTaskList(name, newPos);
             setLists((prev) => prev.map(l => l.id === tempId ? created : l));
-        } catch (err) {
-            console.error("Failed to persist list adding:", err);
+        } catch {
         }
     }
 
@@ -773,8 +771,7 @@ export default function TarefasPage() {
         );
         try {
             await renameTaskList(listId, newName);
-        } catch(err) {
-            console.error("Failed to persistence list renaming:", err);
+        } catch {
         }
     }
 
@@ -786,8 +783,7 @@ export default function TarefasPage() {
         
         try {
             await updateTaskCard(cardId, { title });
-        } catch (err) {
-            console.error("Failed to update card title:", err);
+        } catch {
         }
     }
 
@@ -802,8 +798,7 @@ export default function TarefasPage() {
         
         try {
             await assignTaskCard(cardId, userId);
-        } catch (err) {
-            console.error("Failed to assign user:", err);
+        } catch {
         }
     }
 
@@ -815,8 +810,7 @@ export default function TarefasPage() {
         
         try {
             await deleteTaskCard(cardId);
-        } catch (err) {
-            console.error("Failed to delete card:", err);
+        } catch {
         }
     }
     
@@ -830,8 +824,7 @@ export default function TarefasPage() {
             await deleteTaskList(listId);
             // Reordenar no banco as que ficaram
             await reorderTaskLists(lists.filter(l => l.id !== listId).map(l => l.id));
-        } catch (error) {
-            console.error("Failed to delete list:", error);
+        } catch {
         }
     }
     
@@ -849,8 +842,7 @@ export default function TarefasPage() {
         try {
             const orderedIds = normalized.map(l => l.id);
             await reorderTaskLists(orderedIds);
-        } catch (error) {
-            console.error("Failed to move list:", error);
+        } catch {
         }
     }
 

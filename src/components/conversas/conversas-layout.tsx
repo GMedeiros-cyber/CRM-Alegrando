@@ -119,6 +119,9 @@ export function ConversasLayout() {
     const [loadingAgendamentos, setLoadingAgendamentos] = useState(false);
 
     const [sortOrder, setSortOrder] = useState<string>("recent");
+    const [totalClientes, setTotalClientes] = useState(0);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const CLIENTES_LIMIT = 50;
 
     // Auto-hide toast
     useEffect(() => {
@@ -149,17 +152,31 @@ export function ConversasLayout() {
         return 0;
     });
 
-    // Load clientes list
+    // Load clientes list (page 1)
     const loadList = useCallback(async () => {
         try {
-            const data = await listClientes(searchTerm || undefined);
-            setClientesList(data);
-        } catch (err) {
-            console.error("Erro ao carregar clientes:", err);
+            const result = await listClientes({ search: searchTerm || undefined, page: 1, limit: CLIENTES_LIMIT });
+            setClientesList(result.data);
+            setTotalClientes(result.total);
+        } catch {
         } finally {
             setLoading(false);
         }
     }, [searchTerm]);
+
+    // Load more clientes (next page)
+    async function loadMore() {
+        const nextPage = Math.floor(clientesList.length / CLIENTES_LIMIT) + 1;
+        setLoadingMore(true);
+        try {
+            const result = await listClientes({ search: searchTerm || undefined, page: nextPage, limit: CLIENTES_LIMIT });
+            setClientesList(prev => [...prev, ...result.data]);
+            setTotalClientes(result.total);
+        } catch {
+        } finally {
+            setLoadingMore(false);
+        }
+    }
 
     useEffect(() => {
         loadList();
@@ -251,8 +268,7 @@ export function ConversasLayout() {
                         String(c.telefone) === String(telefone) ? { ...c, unreadCount: 0 } : c
                     )
                 );
-            } catch (err) {
-                console.error("Erro ao marcar como lida:", err);
+            } catch {
             }
         },
         [router]
@@ -436,7 +452,7 @@ export function ConversasLayout() {
                             Nenhum cliente encontrado
                         </div>
                     ) : (
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 flex flex-col">
                             {sortedLeads.map((item) => (
                                 <button
                                     key={item.telefone.toString()}
@@ -493,6 +509,22 @@ export function ConversasLayout() {
                                     </div>
                                 </button>
                             ))}
+                            {clientesList.length < totalClientes && (
+                                <button
+                                    onClick={loadMore}
+                                    disabled={loadingMore}
+                                    className="w-full mt-2 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 bg-slate-800/60 hover:bg-slate-800 rounded-xl border border-slate-700/50 transition-colors disabled:opacity-40"
+                                >
+                                    {loadingMore ? (
+                                        <span className="flex items-center justify-center gap-1.5">
+                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                            Carregando...
+                                        </span>
+                                    ) : (
+                                        `Carregar mais (${clientesList.length}/${totalClientes})`
+                                    )}
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>

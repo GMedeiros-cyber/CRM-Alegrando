@@ -102,8 +102,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
             if (res.success) {
                 onColumnDeleted?.(column.id);
             }
-        } catch (err) {
-            console.error("Erro ao deletar coluna:", err);
+        } catch {
         }
         setConfirmingDelete(false);
     }
