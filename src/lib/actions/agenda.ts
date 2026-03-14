@@ -183,8 +183,14 @@ export async function updateAgendamento(
     const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
     const timeZone = "America/Sao_Paulo";
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const patch: any = {};
+    interface CalendarEventPatch {
+        summary?: string;
+        description?: string;
+        start?: { dateTime?: string; date?: string; timeZone?: string };
+        end?: { dateTime?: string; date?: string; timeZone?: string };
+        extendedProperties?: { private: Record<string, string> };
+    }
+    const patch: CalendarEventPatch = {};
 
     if (data.titulo) {
         patch.summary = data.titulo;

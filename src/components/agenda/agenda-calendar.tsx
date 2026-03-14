@@ -33,6 +33,7 @@ import {
     Trash2,
     Loader2,
     Pencil,
+    RefreshCw,
 } from "lucide-react";
 import {
     getAgendamentos,
@@ -112,7 +113,6 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
             setAllEvents(events);
             onEventsChange?.(events);
         } catch (err) {
-            console.error("Erro ao carregar agendamentos:", err);
             setErrorMsg(String(err));
         } finally {
             setLoadingEvents(false);
@@ -121,10 +121,9 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
 
     async function loadClientes() {
         try {
-            const data = await listClientes();
-            setClientes(data);
-        } catch (err) {
-            console.error("Erro ao carregar clientes:", err);
+            const result = await listClientes({ limit: 1000 });
+            setClientes(result.data);
+        } catch {
         }
     }
 
@@ -134,15 +133,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         loadClientes();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // 1️⃣ Polling: sincroniza com Google Calendar a cada 10s
-    useEffect(() => {
-        const interval = setInterval(() => {
-            loadEvents();
-        }, 10_000);
-        return () => clearInterval(interval);
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // 2️⃣ Inicializa editForm quando evento selecionado
+    // Inicializa editForm quando evento selecionado
     useEffect(() => {
         if (selectedEvent && modalMode === "view") {
             const startDate = selectedEvent.start.split("T")[0];
@@ -249,8 +240,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 });
                 setModalOpen(false);
                 await loadEvents();
-            } catch (err) {
-                console.error("Erro ao criar agendamento:", err);
+            } catch {
             }
         });
     }
@@ -278,8 +268,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 setEditing(false);
                 setModalOpen(false);
                 await loadEvents();
-            } catch (err) {
-                console.error("Erro ao atualizar evento:", err);
+            } catch {
             }
         });
     }
@@ -292,8 +281,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 setSelectedEvent(null);
                 setModalOpen(false);
                 await loadEvents();
-            } catch (err) {
-                console.error("Erro ao excluir agendamento:", err);
+            } catch {
             }
         });
     }
@@ -313,6 +301,16 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                     ❌ Erro Google Calendar: {errorMsg}
                 </div>
             )}
+            <div className="flex items-center justify-end mb-3">
+                <button
+                    onClick={() => loadEvents()}
+                    disabled={loadingEvents}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 text-sm hover:bg-slate-600 transition-colors disabled:opacity-40"
+                >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingEvents ? "animate-spin" : ""}`} />
+                    Atualizar
+                </button>
+            </div>
             <div className="agenda-dark-calendar relative">
                 {loadingEvents && (
                     <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/60 rounded-2xl backdrop-blur-sm">

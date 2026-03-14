@@ -18,8 +18,7 @@ export function useLeadMessages(telefone: string) {
                 if (isMounted) {
                     setMessages(data);
                 }
-            } catch (error) {
-                console.error("Erro ao carregar historico de mensagens:", error);
+            } catch {
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -84,7 +83,6 @@ async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> 
         .order("created_at", { ascending: true });
 
     if (error) {
-        console.error("Erro ao buscar mensagens por telefone:", error);
         return [];
     }
 

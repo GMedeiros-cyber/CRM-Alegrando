@@ -1,8 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db";
-import { clientesWhatsapp, documents, messages } from "@/lib/db/schema";
-import { asc, desc, sql, ilike, or, eq, and, gt } from "drizzle-orm";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 // =============================================
 // TYPES
@@ -54,113 +52,126 @@ export type LeadMessage = {
 // =============================================
 
 /**
- * Lista todos os clientes da tabela Clientes _WhatsApp.
+ * Lista clientes da tabela Clientes _WhatsApp com paginação.
  * Ordenados por created_at DESC (mais recentes primeiro).
  */
-export async function listClientes(search?: string): Promise<ClienteListItem[]> {
-    // 1. Subquery para buscar a data da última mensagem de cada lead
-    const lastMessageSubquery = db
-        .select({
-            telefone: messages.telefone,
-            lastMessageAt: sql<Date>`max(${messages.createdAt})`.as("last_message_at"),
-        })
-        .from(messages)
-        .groupBy(messages.telefone)
-        .as("lm");
+export async function listClientes(params?: {
+    search?: string;
+    page?: number;
+    limit?: number;
+}): Promise<{ data: ClienteListItem[]; total: number }> {
+    const supabase = createServerSupabaseClient();
+    const search = params?.search?.trim();
+    const page = params?.page ?? 1;
+    const limit = params?.limit ?? 50;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
 
-    // 2. Subquery para contar mensagens não lidas
-    // Mensagens do cliente (senderType = 'cliente') enviadas após lastSeenAt do lead
-    const unreadCountSubquery = db
-        .select({
-            telefone: messages.telefone,
-            unreadCount: sql<number>`count(*)`.as("unread_count"),
-        })
-        .from(messages)
-        .leftJoin(clientesWhatsapp, eq(messages.telefone, clientesWhatsapp.telefone))
-        .where(
-            and(
-                eq(messages.senderType, "cliente"),
-                sql`${messages.createdAt} > COALESCE(${clientesWhatsapp.lastSeenAt}, '1970-01-01'::timestamp)`
-            )
-        )
-        .groupBy(messages.telefone)
-        .as("uc");
+    // 1. Buscar clientes com contagem total
+    let query = supabase
+        .from("Clientes _WhatsApp")
+        .select("telefone, nome, email, status, status_atendimento, ia_ativa, last_seen_at, created_at", { count: "exact" })
+        .order("created_at", { ascending: false });
 
-    let query = db
-        .select({
-            telefone: clientesWhatsapp.telefone,
-            nome: clientesWhatsapp.nome,
-            email: clientesWhatsapp.email,
-            status: clientesWhatsapp.status,
-            statusAtendimento: clientesWhatsapp.statusAtendimento,
-            iaAtiva: clientesWhatsapp.iaAtiva,
-            createdAt: clientesWhatsapp.createdAt,
-            lastMessageAt: lastMessageSubquery.lastMessageAt,
-            unreadCount: sql<number>`COALESCE(${unreadCountSubquery.unreadCount}, 0)`.as("unread_count_calculated"),
-        })
-        .from(clientesWhatsapp)
-        .leftJoin(lastMessageSubquery, eq(clientesWhatsapp.telefone, lastMessageSubquery.telefone))
-        .leftJoin(unreadCountSubquery, eq(clientesWhatsapp.telefone, unreadCountSubquery.telefone))
-        .orderBy(desc(clientesWhatsapp.createdAt));
-
-    const results = await query;
-
-    // Filtrar por busca e mapear para o tipo correto
-    let mapped: ClienteListItem[] = results.map(r => ({
-        ...r,
-        unreadCount: Number(r.unreadCount) || 0,
-    }));
-
-    if (search && search.trim()) {
-        const term = search.toLowerCase();
-        mapped = mapped.filter(
-            (r) =>
-                r.nome?.toLowerCase().includes(term) ||
-                r.telefone?.includes(term)
-        );
+    if (search) {
+        query = query.ilike("nome", `%${search}%`);
     }
 
-    return mapped;
+    const { data: clients, error: clientsError, count } = await query.range(from, to);
+
+    if (clientsError || !clients || clients.length === 0) return { data: [], total: count || 0 };
+
+    // 2. Buscar mensagens dos telefones retornados para calcular lastMessageAt e unreadCount
+    const telefones = clients.map(c => c.telefone);
+    const { data: msgs } = await supabase
+        .from("messages")
+        .select("telefone, sender_type, created_at")
+        .in("telefone", telefones)
+        .order("created_at", { ascending: false });
+
+    // 3. Calcular lastMessageAt e unreadCount no JS
+    const lastMessageMap = new Map<string, Date>();
+    const unreadCountMap = new Map<string, number>();
+
+    const lastSeenMap = new Map<string, Date | null>();
+    for (const c of clients) {
+        lastSeenMap.set(String(c.telefone), c.last_seen_at ? new Date(c.last_seen_at) : null);
+    }
+
+    for (const msg of msgs || []) {
+        const tel = String(msg.telefone);
+        const msgDate = msg.created_at ? new Date(msg.created_at) : null;
+
+        if (msgDate) {
+            const current = lastMessageMap.get(tel);
+            if (!current || msgDate > current) {
+                lastMessageMap.set(tel, msgDate);
+            }
+        }
+
+        if (msg.sender_type === "cliente" && msgDate) {
+            const lastSeen = lastSeenMap.get(tel);
+            if (!lastSeen || msgDate > lastSeen) {
+                unreadCountMap.set(tel, (unreadCountMap.get(tel) || 0) + 1);
+            }
+        }
+    }
+
+    // 4. Mapear para ClienteListItem
+    const mapped: ClienteListItem[] = clients.map(c => ({
+        telefone: String(c.telefone),
+        nome: c.nome,
+        email: c.email,
+        status: c.status,
+        statusAtendimento: c.status_atendimento,
+        iaAtiva: c.ia_ativa ?? true,
+        unreadCount: unreadCountMap.get(String(c.telefone)) || 0,
+        lastMessageAt: lastMessageMap.get(String(c.telefone)) || null,
+        createdAt: c.created_at ? new Date(c.created_at) : null,
+    }));
+
+    return { data: mapped, total: count || 0 };
 }
 
 /**
  * Marca as mensagens de um cliente como lidas (atualiza lastSeenAt).
  */
 export async function markAsRead(telefone: string): Promise<void> {
-    await db
-        .update(clientesWhatsapp)
-        .set({ lastSeenAt: new Date() })
-        .where(sql`${clientesWhatsapp.telefone}::text = ${telefone}`);
+    const supabase = createServerSupabaseClient();
+    await supabase
+        .from("Clientes _WhatsApp")
+        .update({ last_seen_at: new Date().toISOString() })
+        .eq("telefone", telefone);
 }
 
 /**
  * Busca um cliente pelo telefone.
  */
 export async function getClienteByTelefone(telefone: string): Promise<ClienteDetail | null> {
-    const results = await db
-        .select()
-        .from(clientesWhatsapp)
-        .where(sql`${clientesWhatsapp.telefone}::text = ${telefone}`)
-        .limit(1);
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("*")
+        .eq("telefone", telefone)
+        .maybeSingle();
 
-    const cliente = results[0];
-    if (!cliente) return null;
+    if (error || !data) return null;
 
     return {
-        telefone: cliente.telefone,
-        nome: cliente.nome,
-        status: cliente.status,
-        cpf: cliente.cpf,
-        email: cliente.email,
-        statusAtendimento: cliente.statusAtendimento,
-        linkedin: cliente.linkedin,
-        facebook: cliente.facebook,
-        instagram: cliente.instagram,
-        iaAtiva: cliente.iaAtiva,
-        kanbanColumnId: cliente.kanbanColumnId,
-        kanbanPosition: cliente.kanbanPosition,
-        lastSeenAt: cliente.lastSeenAt,
-        createdAt: cliente.createdAt,
+        telefone: String(data.telefone),
+        nome: data.nome,
+        status: data.status,
+        cpf: data.cpf,
+        email: data.email,
+        statusAtendimento: data.status_atendimento,
+        linkedin: data.linkedin,
+        facebook: data.facebook,
+        instagram: data.instagram,
+        iaAtiva: data.ia_ativa ?? true,
+        kanbanColumnId: data.kanban_column_id,
+        kanbanPosition: data.kanban_position,
+        lastSeenAt: data.last_seen_at ? new Date(data.last_seen_at) : null,
+        createdAt: data.created_at ? new Date(data.created_at) : null,
     };
 }
 
@@ -168,10 +179,11 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
  * Atualiza ia_ativa do cliente.
  */
 export async function toggleIaAtiva(telefone: string, iaAtiva: boolean) {
-    await db
-        .update(clientesWhatsapp)
-        .set({ iaAtiva })
-        .where(sql`${clientesWhatsapp.telefone}::text = ${telefone}`);
+    const supabase = createServerSupabaseClient();
+    await supabase
+        .from("Clientes _WhatsApp")
+        .update({ ia_ativa: iaAtiva })
+        .eq("telefone", telefone);
 
     return { success: true, iaAtiva };
 }
@@ -194,10 +206,24 @@ export async function updateCliente(
         kanbanPosition?: number;
     }
 ) {
-    await db
-        .update(clientesWhatsapp)
-        .set(data)
-        .where(sql`${clientesWhatsapp.telefone}::text = ${telefone}`);
+    const supabase = createServerSupabaseClient();
+
+    const updateData: Record<string, unknown> = {};
+    if (data.nome !== undefined) updateData.nome = data.nome;
+    if (data.status !== undefined) updateData.status = data.status;
+    if (data.cpf !== undefined) updateData.cpf = data.cpf;
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.statusAtendimento !== undefined) updateData.status_atendimento = data.statusAtendimento;
+    if (data.linkedin !== undefined) updateData.linkedin = data.linkedin;
+    if (data.facebook !== undefined) updateData.facebook = data.facebook;
+    if (data.instagram !== undefined) updateData.instagram = data.instagram;
+    if (data.kanbanColumnId !== undefined) updateData.kanban_column_id = data.kanbanColumnId;
+    if (data.kanbanPosition !== undefined) updateData.kanban_position = data.kanbanPosition;
+
+    await supabase
+        .from("Clientes _WhatsApp")
+        .update(updateData)
+        .eq("telefone", telefone);
 
     return { success: true };
 }
@@ -206,13 +232,19 @@ export async function updateCliente(
  * Busca os destinos únicos disponíveis na tabela documents.
  */
 export async function getAvailableDestinations(): Promise<string[]> {
-    const results = await db
-        .selectDistinct({
-            tipoPasseio: documents.tipoPasseio,
-        })
-        .from(documents)
-        .where(sql`${documents.tipoPasseio} IS NOT NULL AND TRIM(${documents.tipoPasseio}) != ''`)
-        .orderBy(asc(documents.tipoPasseio));
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+        .from("documents")
+        .select("tipo_passeio")
+        .not("tipo_passeio", "is", null)
+        .order("tipo_passeio", { ascending: true });
 
-    return results.map(r => r.tipoPasseio as string);
+    if (error || !data) return [];
+
+    const unique = [...new Set(
+        data
+            .map(r => r.tipo_passeio as string)
+            .filter(v => v && v.trim() !== "")
+    )];
+    return unique.sort();
 }

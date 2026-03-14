@@ -1,6 +1,8 @@
 "use server";
 
-import { supabase } from "@/lib/supabase/client";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+const supabase = createServerSupabaseClient();
 
 // =============================================
 // TYPES
@@ -55,11 +57,9 @@ export async function getKanbanData(): Promise<KanbanData> {
     ]);
 
     if (columnsRes.error) {
-        console.error("Erro ao buscar colunas:", columnsRes.error);
         return { columns: [], leads: [] };
     }
     if (leadsRes.error) {
-        console.error("Erro ao buscar leads:", leadsRes.error);
         return { columns: columnsRes.data.map(mapColumn), leads: [] };
     }
 
@@ -123,7 +123,6 @@ export async function getKanbanColumns(): Promise<KanbanColumn[]> {
         .order("position", { ascending: true });
 
     if (error) {
-        console.error("Erro ao buscar colunas:", error);
         return [];
     }
     return (data || []).map(mapColumn);
@@ -150,7 +149,6 @@ export async function moveLeadInKanban(
         .eq("id", leadId);
 
     if (error) {
-        console.error("Erro ao mover lead:", error);
         return { success: false, error: error.message };
     }
     return { success: true };
@@ -184,7 +182,6 @@ export async function createKanbanColumn(
         .single();
 
     if (error) {
-        console.error("Erro ao criar coluna:", error);
         return null;
     }
     return mapColumn(data);
@@ -200,7 +197,6 @@ export async function renameKanbanColumn(id: string, name: string) {
         .eq("id", id);
 
     if (error) {
-        console.error("Erro ao renomear coluna:", error);
         return { success: false };
     }
     return { success: true };
@@ -244,7 +240,6 @@ export async function deleteKanbanColumn(id: string) {
         .eq("id", id);
 
     if (error) {
-        console.error("Erro ao deletar coluna:", error);
         return { success: false, error: error.message };
     }
     return { success: true };
@@ -275,7 +270,6 @@ export async function seedDefaultColumns() {
         .insert(defaultCols);
 
     if (error) {
-        console.error("Erro no seed:", error);
         return { message: `Erro: ${error.message}`, seeded: false };
     }
 
@@ -286,11 +280,13 @@ export async function seedDefaultColumns() {
  * Reordena colunas kanban.
  */
 export async function reorderKanbanColumns(columnIds: string[]) {
-    const updates = columnIds.map((id, index) =>
-        supabase.from("kanban_columns").update({ position: index }).eq("id", id)
-    );
+    const { error } = await supabase.rpc("reorder_kanban_columns", {
+        column_ids: columnIds,
+    });
 
-    await Promise.all(updates);
+    if (error) {
+        return { success: false, error: error.message };
+    }
     return { success: true };
 }
 
@@ -306,7 +302,6 @@ export async function getLeadTasks(telefone: number) {
         .order("created_at", { ascending: true });
 
     if (error) {
-        console.error("Erro ao buscar tasks:", error);
         return [];
     }
 
@@ -325,7 +320,6 @@ export async function addLeadTask(telefone: number, text: string) {
         .single();
 
     if (error) {
-        console.error("Erro ao adicionar task:", error);
         return null;
     }
 
@@ -343,7 +337,6 @@ export async function toggleLeadTask(id: string, done: boolean) {
         .eq("id", id);
 
     if (error) {
-        console.error("Erro ao toggle task:", error);
         return { success: false };
     }
     return { success: true };
@@ -356,7 +349,6 @@ export async function deleteLeadTask(id: string) {
         .eq("id", id);
 
     if (error) {
-        console.error("Erro ao deletar task:", error);
         return { success: false };
     }
     return { success: true };
