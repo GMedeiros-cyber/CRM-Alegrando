@@ -98,8 +98,10 @@ export async function deleteTaskList(id: string) {
 
 export async function reorderTaskLists(listIds: string[]) {
     const supabase = createServerSupabaseClient();
+    const newPositions = listIds.map((_, index) => index);
     await supabase.rpc("reorder_task_lists", {
         list_ids: listIds,
+        new_positions: newPositions,
     });
     revalidatePath("/tarefas");
 }
