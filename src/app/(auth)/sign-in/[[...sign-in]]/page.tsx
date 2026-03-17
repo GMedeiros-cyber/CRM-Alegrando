@@ -1,54 +1,42 @@
 import { SignIn } from "@clerk/nextjs";
+import Image from "next/image";
 
 export default function SignInPage() {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-50 via-white to-brand-100/30">
-            {/* Decorative elements */}
-            <div className="fixed inset-0 pointer-events-none overflow-hidden">
-                <div className="absolute -top-40 -right-40 w-96 h-96 bg-brand-200/20 rounded-full blur-3xl" />
-                <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-brand-100/30 rounded-full blur-3xl" />
-            </div>
-
-            <div className="relative z-10 flex flex-col items-center gap-8">
-                {/* Logo / Brand */}
-                <div className="text-center space-y-2">
-                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand-500 shadow-lg shadow-brand-500/25">
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="white"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="w-7 h-7"
-                        >
-                            <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                            <path d="M2 17l10 5 10-5" />
-                            <path d="M2 12l10 5 10-5" />
-                        </svg>
-                    </div>
-                    <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">
-                        Alegrando CRM
-                    </h1>
-                    <p className="text-muted-foreground text-sm">
-                        Gestão comercial para turismo pedagógico
-                    </p>
-                </div>
+        <div className="min-h-screen flex items-center justify-center animate-[gradientShift_8s_ease_infinite]" style={{
+            background: "linear-gradient(135deg, #FFA832 0%, #FF8C00 25%, #E67300 50%, #CC5500 75%, #B34700 100%)",
+            backgroundSize: "400% 400%",
+        }}>
+            <div className="flex flex-col items-center gap-8">
+                <Image
+                    src="/logo.png"
+                    alt="Alegrando"
+                    width={100}
+                    height={100}
+                />
 
                 <SignIn
                     fallbackRedirectUrl="/dashboard"
                     appearance={{
                         elements: {
                             rootBox: "w-full",
-                            cardBox: "shadow-xl shadow-black/5 rounded-2xl border border-border/30",
-                            card: "rounded-2xl",
-                            headerTitle: "font-display",
-                            headerSubtitle: "font-sans",
-                            formButtonPrimary:
-                                "bg-brand-500 hover:bg-brand-600 text-white shadow-md shadow-brand-500/20",
-                            footerActionLink: "text-brand-600 hover:text-brand-700",
-                            formFieldInput:
-                                "rounded-xl border-border focus:ring-brand-500/20 focus:border-brand-400",
+                            cardBox: "shadow-2xl shadow-black/20 rounded-2xl border border-slate-700",
+                            card: "rounded-2xl bg-slate-800",
+                            headerTitle: "font-display text-white",
+                            headerSubtitle: "text-slate-400",
+                            formButtonPrimary: "bg-[#FFA832] hover:bg-[#E67300] text-white font-semibold shadow-md shadow-orange-500/20",
+                            footerActionLink: "text-[#FFA832] hover:text-[#FF8C00]",
+                            formFieldInput: "rounded-xl bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 focus:ring-[#FFA832]/20 focus:border-[#FFA832]",
+                            formFieldLabel: "text-slate-300",
+                            dividerLine: "bg-slate-700",
+                            dividerText: "text-slate-500",
+                            socialButtonsBlockButton: "bg-slate-900 border-slate-600 text-slate-200 hover:bg-slate-700",
+                            socialButtonsBlockButtonText: "text-slate-200",
+                            footerActionText: "text-slate-400",
+                            identityPreviewEditButton: "text-[#FFA832]",
+                            formFieldAction: "text-[#FFA832]",
+                            otpCodeFieldInput: "bg-slate-900 border-slate-600 text-white",
+                            footer: "bg-slate-800",
                         },
                     }}
                 />

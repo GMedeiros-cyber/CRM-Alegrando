@@ -2,8 +2,6 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-const supabase = createServerSupabaseClient();
-
 // =============================================
 // TYPES
 // =============================================
@@ -45,6 +43,7 @@ export type KanbanData = {
  * Busca todas as colunas e leads com kanban_column_id.
  */
 export async function getKanbanData(): Promise<KanbanData> {
+    const supabase = createServerSupabaseClient();
     const [columnsRes, leadsRes] = await Promise.all([
         supabase
             .from("kanban_columns")
@@ -117,6 +116,7 @@ export async function getKanbanData(): Promise<KanbanData> {
  * Retorna as colunas kanban ordenadas por posição.
  */
 export async function getKanbanColumns(): Promise<KanbanColumn[]> {
+    const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("kanban_columns")
         .select("id, name, slug, position, color")
@@ -140,6 +140,7 @@ export async function moveLeadInKanban(
     targetColumnId: string | null,
     newPosition: number
 ) {
+    const supabase = createServerSupabaseClient();
     const { error } = await supabase
         .from("Clientes _WhatsApp")
         .update({
@@ -161,6 +162,7 @@ export async function createKanbanColumn(
     name: string,
     color?: string
 ): Promise<KanbanColumn | null> {
+    const supabase = createServerSupabaseClient();
     const { data: existing } = await supabase
         .from("kanban_columns")
         .select("position")
@@ -191,6 +193,7 @@ export async function createKanbanColumn(
  * Renomeia uma coluna. Não altera slug.
  */
 export async function renameKanbanColumn(id: string, name: string) {
+    const supabase = createServerSupabaseClient();
     const { error } = await supabase
         .from("kanban_columns")
         .update({ name })
@@ -206,6 +209,7 @@ export async function renameKanbanColumn(id: string, name: string) {
  * Deleta uma coluna (não protegida). Move leads para novo_lead antes.
  */
 export async function deleteKanbanColumn(id: string) {
+    const supabase = createServerSupabaseClient();
     // Verificar se é protegida (tem slug)
     const { data: col } = await supabase
         .from("kanban_columns")
@@ -249,6 +253,7 @@ export async function deleteKanbanColumn(id: string) {
  * Seed colunas padrão se não existirem.
  */
 export async function seedDefaultColumns() {
+    const supabase = createServerSupabaseClient();
     const { data: existing } = await supabase
         .from("kanban_columns")
         .select("id")
@@ -280,8 +285,11 @@ export async function seedDefaultColumns() {
  * Reordena colunas kanban.
  */
 export async function reorderKanbanColumns(columnIds: string[]) {
+    const supabase = createServerSupabaseClient();
+    const newPositions = columnIds.map((_, index) => index);
     const { error } = await supabase.rpc("reorder_kanban_columns", {
         column_ids: columnIds,
+        new_positions: newPositions,
     });
 
     if (error) {
@@ -295,6 +303,7 @@ export async function reorderKanbanColumns(columnIds: string[]) {
 // =============================================
 
 export async function getLeadTasks(telefone: number) {
+    const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("lead_tasks")
         .select("*")
@@ -313,6 +322,7 @@ export async function getLeadTasks(telefone: number) {
 }
 
 export async function addLeadTask(telefone: number, text: string) {
+    const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("lead_tasks")
         .insert({ telefone, text })
@@ -331,6 +341,7 @@ export async function addLeadTask(telefone: number, text: string) {
 }
 
 export async function toggleLeadTask(id: string, done: boolean) {
+    const supabase = createServerSupabaseClient();
     const { error } = await supabase
         .from("lead_tasks")
         .update({ done })
@@ -343,6 +354,7 @@ export async function toggleLeadTask(id: string, done: boolean) {
 }
 
 export async function deleteLeadTask(id: string) {
+    const supabase = createServerSupabaseClient();
     const { error } = await supabase
         .from("lead_tasks")
         .delete()

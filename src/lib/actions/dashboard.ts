@@ -3,8 +3,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getCalendarClient } from "@/lib/google/calendar";
 
-const supabase = createServerSupabaseClient();
-
 // =============================================
 // DASHBOARD SERVER ACTIONS
 // =============================================
@@ -13,6 +11,7 @@ const supabase = createServerSupabaseClient();
  * Conta total de leads (clientes) na tabela Clientes _WhatsApp.
  */
 export async function getTotalLeads(): Promise<number> {
+    const supabase = createServerSupabaseClient();
     const { count, error } = await supabase
         .from("Clientes _WhatsApp")
         .select("*", { count: "exact", head: true });
@@ -27,6 +26,7 @@ export async function getTotalLeads(): Promise<number> {
  * Leads agrupados por mês (últimos 6 meses).
  */
 export async function getLeadsPorMes(): Promise<{ mes: string; leads: number }[]> {
+    const supabase = createServerSupabaseClient();
     const { data, error } = await supabase.rpc("get_leads_por_mes");
 
     // Se a RPC não existir, fallback via query raw
@@ -75,6 +75,7 @@ export async function getLeadsPorMes(): Promise<{ mes: string; leads: number }[]
  * Top 5 destinos do mês atual, da tabela destinos_interesse.
  */
 export async function getTopDestinos(): Promise<{ destino: string; total: number }[]> {
+    const supabase = createServerSupabaseClient();
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
@@ -135,6 +136,7 @@ export async function getEventosDoMes(): Promise<number> {
  * Conta passeios confirmados no mês atual via passeios_realizados.
  */
 export async function getTotalPasseiosDoMes(): Promise<number> {
+    const supabase = createServerSupabaseClient();
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
