@@ -102,6 +102,10 @@ export function ConversasLayout() {
         facebook: "",
         instagram: "",
         kanbanColumnId: "",
+        ultimoPasseio: "",
+        followupDias: 45,
+        followupAtivo: false,
+        followupEnviado: false,
     });
 
     // Chat
@@ -229,6 +233,10 @@ export function ConversasLayout() {
                     facebook: clienteData.facebook || "",
                     instagram: clienteData.instagram || "",
                     kanbanColumnId: clienteData.kanbanColumnId || "",
+                    ultimoPasseio: clienteData.ultimoPasseio || "",
+                    followupDias: clienteData.followupDias ?? 45,
+                    followupAtivo: clienteData.followupAtivo ?? false,
+                    followupEnviado: clienteData.followupEnviado ?? false,
                 });
 
                 // Tasks
@@ -313,6 +321,9 @@ export function ConversasLayout() {
                     facebook,
                     instagram,
                     kanbanColumnId: form.kanbanColumnId || null,
+                    ultimoPasseio: form.ultimoPasseio || null,
+                    followupDias: form.followupDias,
+                    followupAtivo: form.followupAtivo,
                 });
                 setToast({ type: "success", text: "Cliente atualizado!" });
                 loadList();
@@ -752,6 +763,62 @@ export function ConversasLayout() {
                                     </SelectContent>
                                 </Select>
                             </FieldGroup>
+
+                            {/* Follow-up */}
+                            <FieldGroup label="📅 Último Passeio">
+                                <Input
+                                    type="date"
+                                    value={form.ultimoPasseio}
+                                    onChange={(e) => setForm((f) => ({ ...f, ultimoPasseio: e.target.value }))}
+                                    onBlur={handleSave}
+                                    className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white"
+                                />
+                            </FieldGroup>
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <FieldGroup label="🔄 Follow-up (dias)">
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        value={form.followupDias}
+                                        onChange={(e) => setForm((f) => ({ ...f, followupDias: parseInt(e.target.value) || 45 }))}
+                                        onBlur={handleSave}
+                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white"
+                                    />
+                                </FieldGroup>
+
+                                <FieldGroup label="✅ Follow-up ativo">
+                                    <div className="flex items-center h-8">
+                                        <Switch
+                                            checked={form.followupAtivo}
+                                            onCheckedChange={(checked) => {
+                                                setForm((f) => ({ ...f, followupAtivo: checked }));
+                                                if (selectedTelefone) {
+                                                    startTransition(async () => {
+                                                        try {
+                                                            await updateCliente(selectedTelefone, { followupAtivo: checked });
+                                                            setToast({ type: "success", text: "Follow-up atualizado!" });
+                                                            loadList();
+                                                        } catch {}
+                                                    });
+                                                }
+                                            }}
+                                            className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-slate-600"
+                                        />
+                                    </div>
+                                </FieldGroup>
+                            </div>
+
+                            {form.followupEnviado && (
+                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30">
+                                    <span className="text-xs font-medium text-emerald-400">✅ Follow-up já enviado</span>
+                                </div>
+                            )}
+                            {form.ultimoPasseio && !form.followupEnviado && form.followupAtivo && (
+                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/30">
+                                    <span className="text-xs font-medium text-amber-400">⏳ Follow-up programado para {form.followupDias} dias após o passeio</span>
+                                </div>
+                            )}
 
                             {/* Redes Sociais */}
                             <div className="pt-2">
