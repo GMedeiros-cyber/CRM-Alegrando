@@ -1,0 +1,145 @@
+import { NextResponse } from "next/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+
+export async function POST(req: Request) {
+    // 1. Validar token
+    const authHeader = req.headers.get("authorization");
+    const expectedToken = process.env.CRON_SECRET;
+
+    if (!expectedToken) {
+        console.error("[followup] CRON_SECRET não configurado");
+        return NextResponse.json(
+            { error: "CRON_SECRET não configurado" },
+            { status: 500 }
+        );
+    }
+
+    if (authHeader !== `Bearer ${expectedToken}`) {
+        return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    const supabase = createServerSupabaseClient();
+    const googleReviewLink =
+        process.env.GOOGLE_REVIEW_LINK || "https://g.page/alegrando";
+
+    // 2. Buscar leads elegíveis
+    const { data: leads, error } = await supabase
+        .from("Clientes _WhatsApp")
+        .select(
+            "telefone, nome, ultimo_passeio, followup_dias, followup_enviado"
+        )
+        .eq("followup_ativo", true)
+        .eq("followup_enviado", false)
+        .not("ultimo_passeio", "is", null);
+
+    if (error) {
+        console.error("[followup] Erro ao buscar leads:", error.message);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (!leads || leads.length === 0) {
+        return NextResponse.json({
+            success: true,
+            processed: 0,
+            message: "Nenhum lead elegível",
+        });
+    }
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    let avaliacaoEnviadas = 0;
+    let followupsEnviados = 0;
+    let erros = 0;
+
+    for (const lead of leads) {
+        try {
+            const telefone = String(lead.telefone);
+            const nome = lead.nome || "Olá";
+            const ultimoPasseio = new Date(lead.ultimo_passeio);
+            ultimoPasseio.setHours(0, 0, 0, 0);
+
+            const diffMs = hoje.getTime() - ultimoPasseio.getTime();
+            const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const followupDias = lead.followup_dias ?? 45;
+
+            // D+1 — Avaliação Google
+            if (diffDias === 1) {
+                const mensagem = `Olá ${nome}! 😊\n\nEsperamos que o passeio tenha sido incrível para todos!\n\nSe puder, deixa uma avaliação pra gente no Google — ajuda muito a Alegrando a levar mais crianças a experiências incríveis! 🌟\n\n${googleReviewLink}`;
+
+                const result = await sendWhatsAppMessage(telefone, mensagem);
+
+                if (result.success) {
+                    avaliacaoEnviadas++;
+                    console.log(
+                        `[followup] D+1 avaliação enviada para ${telefone}`
+                    );
+
+                    // Salvar no histórico de chat
+                    await supabase.from("messages").insert({
+                        telefone: lead.telefone,
+                        sender_type: "humano",
+                        sender_name: "Alegrando",
+                        content: mensagem,
+                    });
+                } else {
+                    erros++;
+                    console.error(
+                        `[followup] Erro D+1 para ${telefone}: ${result.error}`
+                    );
+                }
+            }
+
+            // D+followup_dias — Follow-up
+            if (diffDias === followupDias) {
+                const mensagem = `Olá ${nome}! 🌟\n\nO nosso último passeio foi incrível né? As crianças adoraram!\n\nQue tal já começarmos a planejar a próxima aventura? Temos destinos incríveis esperando pelos pequenos. 🚌\n\nSe quiser, a gente monta um novo roteiro — é só falar! 😊`;
+
+                const result = await sendWhatsAppMessage(telefone, mensagem);
+
+                if (result.success) {
+                    followupsEnviados++;
+                    console.log(
+                        `[followup] D+${followupDias} follow-up enviado para ${telefone}`
+                    );
+
+                    // Salvar no histórico de chat
+                    await supabase.from("messages").insert({
+                        telefone: lead.telefone,
+                        sender_type: "humano",
+                        sender_name: "Alegrando",
+                        content: mensagem,
+                    });
+
+                    // Marca como enviado no banco
+                    await supabase
+                        .from("Clientes _WhatsApp")
+                        .update({ followup_enviado: true })
+                        .eq("telefone", lead.telefone);
+                } else {
+                    erros++;
+                    console.error(
+                        `[followup] Erro follow-up para ${telefone}: ${result.error}`
+                    );
+                }
+            }
+        } catch (err) {
+            erros++;
+            console.error(
+                `[followup] Erro inesperado no lead ${lead.telefone}:`,
+                err
+            );
+        }
+    }
+
+    const resumo = {
+        success: true,
+        leadsAnalisados: leads.length,
+        avaliacaoEnviadas,
+        followupsEnviados,
+        erros,
+    };
+
+    console.log("[followup] Resumo:", resumo);
+    return NextResponse.json(resumo);
+}

@@ -71,15 +71,8 @@ export function KanbanBoard({
 
     const COLORS = ["#8b5cf6", "#3b82f6", "#f59e0b", "#22c55e", "#ef5544", "#ec4899"];
 
-    // Ordenação visual fixa: passeio_realizado no final
     const sortedColumns = useMemo(() => {
-        const passeioRealizado = columns.find((c) => c.slug === "passeio_realizado");
-        const outros = columns.filter((c) => c.slug !== "passeio_realizado");
-
-        return [
-            ...outros,
-            ...(passeioRealizado ? [passeioRealizado] : []),
-        ];
+        return [...columns].sort((a, b) => a.position - b.position);
     }, [columns]);
 
     async function handleAddColumn() {
@@ -150,9 +143,8 @@ export function KanbanBoard({
 
             if (id.startsWith("col-sortable-")) {
                 const colId = id.replace("col-sortable-", "");
-                // Não permitir drag da coluna de passeios realizados
                 const col = columns.find((c) => c.id === colId);
-                if (col?.slug === "passeio_realizado") return;
+                if (col?.slug === "novo_lead") return;
                 setActiveColumnId(colId);
                 return;
             }
@@ -226,8 +218,7 @@ export function KanbanBoard({
                 const fromCol = columns.find((c) => c.id === fromColId);
                 const toCol = columns.find((c) => c.id === toColId);
 
-                // Bloquear reordenação de/para passeio_realizado
-                if (fromCol?.slug === "passeio_realizado" || toCol?.slug === "passeio_realizado") return;
+                if (fromCol?.slug === "novo_lead" || toCol?.slug === "novo_lead") return;
 
                 if (fromColId !== toColId) {
                     setColumns((prev) => {

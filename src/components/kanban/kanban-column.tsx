@@ -57,7 +57,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
     // Delete confirmation
     const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-    const isProtected = !!column.slug;
+    const isProtected = column.slug === "novo_lead";
 
     useEffect(() => {
         setName(column.name);

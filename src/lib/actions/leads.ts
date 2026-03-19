@@ -35,6 +35,10 @@ export type ClienteDetail = {
     kanbanPosition: number | null;
     lastSeenAt: Date | null;
     createdAt: Date | null;
+    ultimoPasseio: string | null;
+    followupDias: number;
+    followupAtivo: boolean;
+    followupEnviado: boolean;
 };
 
 /** Mensagem individual do chat */
@@ -172,6 +176,10 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         kanbanPosition: data.kanban_position,
         lastSeenAt: data.last_seen_at ? new Date(data.last_seen_at) : null,
         createdAt: data.created_at ? new Date(data.created_at) : null,
+        ultimoPasseio: data.ultimo_passeio || null,
+        followupDias: data.followup_dias ?? 45,
+        followupAtivo: data.followup_ativo ?? false,
+        followupEnviado: data.followup_enviado ?? false,
     };
 }
 
@@ -204,6 +212,9 @@ export async function updateCliente(
         instagram?: string | null;
         kanbanColumnId?: string | null;
         kanbanPosition?: number;
+        ultimoPasseio?: string | null;
+        followupDias?: number;
+        followupAtivo?: boolean;
     }
 ) {
     const supabase = createServerSupabaseClient();
@@ -219,6 +230,9 @@ export async function updateCliente(
     if (data.instagram !== undefined) updateData.instagram = data.instagram;
     if (data.kanbanColumnId !== undefined) updateData.kanban_column_id = data.kanbanColumnId;
     if (data.kanbanPosition !== undefined) updateData.kanban_position = data.kanbanPosition;
+    if (data.ultimoPasseio !== undefined) updateData.ultimo_passeio = data.ultimoPasseio;
+    if (data.followupDias !== undefined) updateData.followup_dias = data.followupDias;
+    if (data.followupAtivo !== undefined) updateData.followup_ativo = data.followupAtivo;
 
     await supabase
         .from("Clientes _WhatsApp")

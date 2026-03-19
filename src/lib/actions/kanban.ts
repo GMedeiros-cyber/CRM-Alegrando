@@ -217,7 +217,7 @@ export async function deleteKanbanColumn(id: string) {
         .eq("id", id)
         .single();
 
-    if (col?.slug) {
+    if (col?.slug === "novo_lead") {
         return { success: false, error: "Coluna protegida não pode ser deletada." };
     }
 
