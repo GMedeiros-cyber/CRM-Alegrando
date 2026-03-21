@@ -27,7 +27,7 @@ export default async function AppLayout({
     }
 
     return (
-        <div className="min-h-screen bg-slate-900 text-slate-200">
+        <div className="min-h-screen bg-background text-foreground">
             <Sidebar />
             <main className="pl-[64px] transition-all duration-300">
                 <div className="p-6 lg:p-8 max-w-[1600px] mx-auto">

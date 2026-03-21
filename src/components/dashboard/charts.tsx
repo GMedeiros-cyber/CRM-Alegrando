@@ -27,8 +27,8 @@ const CustomTooltipContent = ({
 }) => {
     if (!active || !payload) return null;
     return (
-        <div className="bg-slate-800 rounded-xl shadow-lg border-2 border-slate-600 px-4 py-3 text-sm">
-            <p className="font-medium text-white mb-1">{label}</p>
+        <div className="bg-card rounded-xl shadow-lg border-2 border-border px-4 py-3 text-sm">
+            <p className="font-medium text-foreground mb-1">{label}</p>
             {payload.map((entry, index) => (
                 <p key={index} style={{ color: entry.color }} className="text-xs">
                     {entry.name}: <span className="font-semibold">{entry.value}</span>
@@ -54,10 +54,10 @@ export function LeadsPorMesChart() {
     return (
         <div className="bento-card-static p-6 bento-enter" style={{ animationDelay: "200ms" }}>
             <div className="mb-6">
-                <h3 className="font-display text-lg font-semibold text-white">
+                <h3 className="font-display text-lg font-semibold text-foreground">
                     Leads por Mês
                 </h3>
-                <p className="text-sm text-slate-400 mt-0.5">
+                <p className="text-sm text-muted-foreground mt-0.5">
                     Evolução dos últimos 6 meses
                 </p>
             </div>
@@ -118,12 +118,12 @@ export function TopDestinosChart() {
     }, []);
 
     return (
-        <div className="bento-card-static p-6 bento-enter bg-slate-800" style={{ animationDelay: "500ms" }}>
+        <div className="bento-card-static p-6 bento-enter" style={{ animationDelay: "500ms" }}>
             <div className="mb-6">
-                <h3 className="font-display text-lg font-semibold text-white">
+                <h3 className="font-display text-lg font-semibold text-foreground">
                     Top Destinos & Passeios
                 </h3>
-                <p className="text-sm text-slate-400 mt-0.5">
+                <p className="text-sm text-muted-foreground mt-0.5">
                     Pedidos vs fechados este mês
                 </p>
             </div>

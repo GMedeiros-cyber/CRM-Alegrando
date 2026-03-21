@@ -61,10 +61,10 @@ export default function KanbanPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="font-display text-3xl font-bold text-white tracking-tight">
+                    <h1 className="font-display text-3xl font-bold text-foreground tracking-tight">
                         Kanban
                     </h1>
-                    <p className="text-slate-400 mt-0.5 text-sm">
+                    <p className="text-muted-foreground mt-0.5 text-sm">
                         Quadro de vendas — arraste os cards entre as colunas
                     </p>
                 </div>
@@ -74,7 +74,7 @@ export default function KanbanPage() {
                     <button
                         onClick={() => { setMessage(null); loadData(); }}
                         disabled={isPending}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 border-slate-700 bg-slate-800 text-sm font-medium text-slate-400 hover:text-white hover:border-slate-600 transition-all"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 border-border bg-card text-sm font-medium text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-all"
                     >
                         <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
                         <span className="hidden sm:inline">Atualizar</span>
@@ -116,10 +116,10 @@ export default function KanbanPage() {
                         <Kanban className="w-8 h-8 text-brand-400" />
                     </div>
                     <div className="text-center">
-                        <p className="font-display text-lg font-semibold text-white">
+                        <p className="font-display text-lg font-semibold text-foreground">
                             Kanban vazio
                         </p>
-                        <p className="text-sm text-slate-400 mt-1 max-w-sm">
+                        <p className="text-sm text-muted-foreground mt-1 max-w-sm">
                             Adicione leads ao board arrastando da lista de conversas, ou aguarde
                             novos leads entrarem automaticamente.
                         </p>

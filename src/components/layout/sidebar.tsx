@@ -41,7 +41,7 @@ export function Sidebar() {
             onMouseEnter={() => { if (!isMobile) setExpanded(true); }}
             onMouseLeave={() => { if (!isMobile) setExpanded(false); }}
             className={cn(
-                "fixed left-0 top-0 z-40 flex h-screen flex-col items-center bg-[#FFA832] border-r-2 border-orange-400 py-4 transition-all duration-300",
+                "fixed left-0 top-0 z-40 flex h-screen flex-col items-center bg-[#D4845A] border-r border-[#C0744C] py-4 transition-all duration-300",
                 isMobile
                     ? expanded ? "w-[200px] shadow-2xl" : "w-[64px]"
                     : expanded ? "w-[176px]" : "w-[64px]"
@@ -63,7 +63,7 @@ export function Sidebar() {
             {isMobile && (
                 <button
                     onClick={() => setExpanded((e) => !e)}
-                    className="w-full flex items-center justify-center p-2 mb-2 rounded-lg text-slate-800 hover:bg-white/20 transition-colors"
+                    className="w-full flex items-center justify-center p-2 mb-2 rounded-lg text-slate-900 hover:bg-black/10 transition-colors"
                 >
                     {expanded ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
                 </button>
@@ -83,8 +83,8 @@ export function Sidebar() {
                             className={cn(
                                 "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 overflow-hidden",
                                 isActive
-                                    ? "bg-white/30 text-slate-900 shadow-sm backdrop-blur-sm"
-                                    : "text-slate-800 hover:bg-white/20 hover:text-slate-900"
+                                    ? "bg-white/25 text-slate-900 shadow-sm backdrop-blur-sm"
+                                    : "text-slate-900 hover:bg-black/10 hover:text-black"
                             )}
                         >
                             <item.icon
@@ -92,7 +92,7 @@ export function Sidebar() {
                                     "h-5 w-5 shrink-0 transition-colors duration-200",
                                     isActive
                                         ? "text-slate-900"
-                                        : "text-slate-700 group-hover:text-slate-900"
+                                        : "text-slate-900 group-hover:text-black"
                                 )}
                             />
                             <span
@@ -109,7 +109,7 @@ export function Sidebar() {
             </nav>
 
             {/* User section — foto maior */}
-            <div className="w-full px-2 pt-4 border-t border-white/20">
+            <div className="w-full px-2 pt-4 border-t border-black/10">
                 <div className="flex items-center justify-center gap-3 px-3 py-2">
                     <UserButton
                         afterSignOutUrl="/sign-in"
@@ -121,7 +121,7 @@ export function Sidebar() {
                     />
                     <span
                         className={cn(
-                            "text-xs text-slate-800 font-semibold truncate whitespace-nowrap transition-all duration-300 overflow-hidden",
+                            "text-xs text-slate-900 font-semibold truncate whitespace-nowrap transition-all duration-300 overflow-hidden",
                             expanded ? "w-auto opacity-100" : "w-0 opacity-0"
                         )}
                     >

@@ -112,13 +112,13 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
             ref={setSortableRef}
             style={sortableStyle}
             className={cn(
-                "flex flex-col w-[300px] min-w-[300px] rounded-2xl bg-slate-800/50 border-2 border-slate-700 shrink-0 transition-all duration-200 group/col",
+                "flex flex-col w-[300px] min-w-[300px] rounded-2xl bg-card/50 border-2 border-border shrink-0 transition-all duration-200 group/col",
                 isOver && "bg-brand-500/10 ring-2 ring-brand-400 ring-inset border-brand-500",
                 isColumnDragging && "opacity-40 shadow-none"
             )}
         >
             {/* Column header */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b-2 border-slate-700">
+            <div className="flex items-center gap-2 px-4 py-3 border-b-2 border-border">
                 {/* Drag handle */}
                 <button
                     {...sortableAttrs}
@@ -142,7 +142,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                             onChange={(e) => setName(e.target.value)}
                             onKeyDown={handleKeyDown}
                             onBlur={handleSaveName}
-                            className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-2 py-1 text-sm font-semibold text-white outline-none focus:ring-2 focus:ring-brand-400 min-w-0"
+                            className="flex-1 bg-background border border-border rounded-lg px-2 py-1 text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-brand-400 min-w-0"
                         />
                         <button
                             onClick={handleSaveName}
@@ -154,7 +154,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                 ) : (
                     <h3
                         onClick={() => setEditing(true)}
-                        className="font-display text-sm font-semibold text-white truncate cursor-pointer group flex items-center gap-1.5 hover:text-brand-400 transition-colors flex-1 min-w-0"
+                        className="font-display text-sm font-semibold text-foreground truncate cursor-pointer group flex items-center gap-1.5 hover:text-brand-400 transition-colors flex-1 min-w-0"
                         title="Clique para editar o nome"
                     >
                         {name}
@@ -162,7 +162,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                     </h3>
                 )}
 
-                <span className="text-xs font-medium text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full shrink-0">
+                <span className="text-xs font-medium text-muted-foreground bg-secondary px-2 py-0.5 rounded-full shrink-0">
                     {leads.length}
                 </span>
 
@@ -193,7 +193,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                         </button>
                         <button
                             onClick={() => setConfirmingDelete(false)}
-                            className="flex-1 px-2 py-1.5 rounded-lg bg-slate-700 text-slate-300 text-xs font-medium hover:bg-slate-600 transition-colors"
+                            className="flex-1 px-2 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:bg-muted transition-colors"
                         >
                             Cancelar
                         </button>
@@ -217,7 +217,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                 </SortableContext>
 
                 {leads.length === 0 && (
-                    <div className="flex-1 flex items-center justify-center py-8 text-xs text-slate-600 border-2 border-dashed border-slate-700 rounded-xl">
+                    <div className="flex-1 flex items-center justify-center py-8 text-xs text-muted-foreground border-2 border-dashed border-border rounded-xl">
                         Arraste leads aqui
                     </div>
                 )}
