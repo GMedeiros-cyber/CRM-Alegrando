@@ -22,7 +22,7 @@ import {
     updateCliente,
     toggleIaAtiva,
 } from "@/lib/actions/leads";
-import { sendMessageToN8n } from "@/lib/actions/messages";
+import { sendMessage } from "@/lib/actions/messages";
 import {
     getKanbanColumns,
     getLeadTasks,
@@ -224,13 +224,14 @@ export function LeadDetailSheet({
 
         startTransition(async () => {
             try {
-                await sendMessageToN8n({
+                await sendMessage({
                     telefone: cliente.telefone,
                     mensagem: text,
                     sender_name: "Equipe",
+                    iaAtiva: cliente.iaAtiva,
                 });
             } catch (err) {
-                setToast({ type: "error", text: `Erro ao enviar via n8n: ${err}` });
+                setToast({ type: "error", text: `Erro ao enviar: ${err}` });
             }
         });
     }
