@@ -4,13 +4,8 @@ import { useState, useEffect } from "react";
 import {
     Users,
     CalendarDays,
-    Target,
     ArrowRight,
-    Pencil,
-    Check,
     Loader2,
-    ChevronDown,
-    ChevronUp,
 } from "lucide-react";
 import Link from "next/link";
 import { MetricCard } from "@/components/dashboard/metric-card";
@@ -18,156 +13,116 @@ import {
     LeadsPorMesChart,
     TopDestinosChart,
 } from "@/components/dashboard/charts";
-import { getTotalLeads, getEventosDoMes, getTotalPasseiosDoMes, getPasseiosDoMes } from "@/lib/actions/dashboard";
+import { getTotalLeads, getEventosDoMes, getTotalPasseiosDoMes, getPasseiosDoMes, getFollowupsAtivos } from "@/lib/actions/dashboard";
+import { updateCliente } from "@/lib/actions/leads";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { getAgendamentos } from "@/lib/actions/agenda";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
 
 // =============================================
-// META DE PASSEIOS CARD (localStorage)
+// PASSEIOS + FOLLOW-UPS CARD (unificado)
 // =============================================
-function MetaPasseiosCard() {
-    const [meta, setMeta] = useState<number>(30);
-    const [atual, setAtual] = useState<number>(0);
-    const [editing, setEditing] = useState(false);
-    const [inputValue, setInputValue] = useState("");
-    const [showPasseios, setShowPasseios] = useState(false);
-    const [passeios, setPasseios] = useState<{ nome: string; telefone: string; destino: string | null; data: string }[]>([]);
-    const [loadingPasseios, setLoadingPasseios] = useState(false);
+function PasseiosFollowupCard() {
+    const [passeiosMes, setPaseiosMes] = useState(0);
+    const [followupsAtivos, setFollowupsAtivos] = useState(0);
+    const [activeTab, setActiveTab] = useState<"passeios" | "followups" | null>(null);
+    const [passeiosList, setPaseiosList] = useState<{ nome: string; telefone: string; destino: string | null; data: string }[]>([]);
+    const [followupsList, setFollowupsList] = useState<{
+        telefone: string; nome: string; ultimoPasseio: string | null;
+        followupDias: number; followupHora: string; followupEnviado: boolean;
+    }[]>([]);
+    const [loading, setLoading] = useState(false);
 
-    // Load meta from localStorage + passeios reais
     useEffect(() => {
-        const saved = localStorage.getItem("alegrando_meta_passeios");
-        if (saved) setMeta(parseInt(saved));
-        getTotalPasseiosDoMes().then(setAtual);
+        getTotalPasseiosDoMes().then(setPaseiosMes);
+        getFollowupsAtivos().then(data => setFollowupsAtivos(data.length));
     }, []);
 
-    function handleSave() {
-        const val = parseInt(inputValue);
-        if (!isNaN(val) && val > 0) {
-            setMeta(val);
-            localStorage.setItem("alegrando_meta_passeios", String(val));
-        }
-        setEditing(false);
-    }
-
-    async function handleClickMeta() {
-        if (editing) return;
-        if (showPasseios) {
-            setShowPasseios(false);
+    async function handleTabClick(tab: "passeios" | "followups") {
+        if (activeTab === tab) {
+            setActiveTab(null);
             return;
         }
-        setShowPasseios(true);
-        if (passeios.length === 0) {
-            setLoadingPasseios(true);
+        setLoading(true);
+        if (tab === "passeios") {
             const data = await getPasseiosDoMes();
-            setPasseios(data);
-            setLoadingPasseios(false);
+            setPaseiosList(data);
+        } else {
+            const data = await getFollowupsAtivos();
+            setFollowupsList(data);
         }
+        setActiveTab(tab);
+        setLoading(false);
     }
 
-    const progress = meta > 0 ? Math.min((atual / meta) * 100, 100) : 0;
+    async function handleToggleFollowup(telefone: string, ativo: boolean) {
+        await updateCliente(telefone, { followupAtivo: ativo });
+        setFollowupsList(prev =>
+            prev.filter(f => ativo || f.telefone !== telefone)
+        );
+        if (!ativo) setFollowupsAtivos(prev => prev - 1);
+    }
 
     return (
         <div
-            className="bento-card p-6 relative overflow-hidden bento-enter kpi-gradient-emerald"
+            className="bento-card p-6 relative overflow-hidden bento-enter kpi-gradient-emerald col-span-full"
             style={{ animationDelay: "100ms" }}
         >
-            {/* Decorative circle */}
             <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-[0.12] bg-emerald-500" />
 
-            <div className="relative z-10 flex flex-col gap-3">
-                {/* Icon + Title */}
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900/50 backdrop-blur-sm shadow-sm">
-                        <Target className="w-5 h-5 text-emerald-500" />
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <button
-                            onClick={() => {
-                                if (editing) {
-                                    handleSave();
-                                } else {
-                                    setInputValue(String(meta));
-                                    setEditing(true);
-                                }
-                            }}
-                            className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors flex items-center gap-1"
-                        >
-                            {editing ? (
-                                <>
-                                    <Check className="w-3 h-3" />
-                                    Salvar
-                                </>
-                            ) : (
-                                <>
-                                    <Pencil className="w-3 h-3" />
-                                    Editar Meta
-                                </>
-                            )}
-                        </button>
-                    </div>
+            <div className="relative z-10">
+                {/* Header com 2 métricas clicáveis */}
+                <div className="flex gap-4 mb-4">
+                    <button
+                        onClick={() => handleTabClick("passeios")}
+                        className={cn(
+                            "flex-1 p-3 rounded-xl border-2 transition-all text-left",
+                            activeTab === "passeios"
+                                ? "border-emerald-500/50 bg-emerald-500/10"
+                                : "border-slate-700 hover:border-slate-600"
+                        )}
+                    >
+                        <p className="font-display text-2xl font-bold text-white">{passeiosMes}</p>
+                        <p className="text-xs text-slate-400">Passeios este mês</p>
+                    </button>
+
+                    <button
+                        onClick={() => handleTabClick("followups")}
+                        className={cn(
+                            "flex-1 p-3 rounded-xl border-2 transition-all text-left",
+                            activeTab === "followups"
+                                ? "border-brand-500/50 bg-brand-500/10"
+                                : "border-slate-700 hover:border-slate-600"
+                        )}
+                    >
+                        <p className="font-display text-2xl font-bold text-white">{followupsAtivos}</p>
+                        <p className="text-xs text-slate-400">Follow-ups ativos</p>
+                    </button>
                 </div>
 
-                {/* Value — clickable to expand */}
-                <div
-                    onClick={handleClickMeta}
-                    className={!editing ? "cursor-pointer" : ""}
-                >
-                    {editing ? (
-                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            <input
-                                type="number"
-                                value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                                className="w-20 bg-slate-900/50 border border-slate-600 rounded-lg px-3 py-1 text-2xl font-bold text-white text-center outline-none focus:border-emerald-500"
-                                autoFocus
-                                min={1}
-                            />
-                            <span className="text-xl text-slate-400">passeios</span>
-                        </div>
-                    ) : (
-                        <div className="flex items-center justify-between">
-                            <p className="font-display text-3xl font-bold text-white tracking-tight">
-                                {atual} <span className="text-lg text-slate-400 font-normal">/ {meta}</span>
-                            </p>
-                            {atual > 0 && (
-                                showPasseios
-                                    ? <ChevronUp className="w-4 h-4 text-slate-400" />
-                                    : <ChevronDown className="w-4 h-4 text-slate-400" />
-                            )}
-                        </div>
-                    )}
-                    <p className="text-sm text-slate-400 mt-0.5">Meta de Passeios</p>
-                    {/* Progress bar */}
-                    <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                            style={{ width: `${progress}%` }}
-                        />
+                {/* Conteúdo expandido */}
+                {loading && (
+                    <div className="flex justify-center py-4">
+                        <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
                     </div>
-                </div>
+                )}
 
-                {/* Expandable list of passeios */}
-                {showPasseios && (
-                    <div className="mt-1 space-y-1.5 max-h-[200px] overflow-y-auto">
-                        {loadingPasseios ? (
-                            <div className="flex items-center justify-center py-3">
-                                <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                            </div>
-                        ) : passeios.length > 0 ? (
-                            passeios.map((p, i) => (
+                {!loading && activeTab === "passeios" && (
+                    <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                        {passeiosList.length === 0 ? (
+                            <p className="text-xs text-slate-500 italic py-2">Nenhum passeio registrado este mês.</p>
+                        ) : (
+                            passeiosList.map(p => (
                                 <Link
-                                    key={i}
+                                    key={p.telefone}
                                     href={`/conversas?telefone=${p.telefone}`}
-                                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-900/60 hover:bg-slate-900 border border-slate-700/50 transition-colors group"
+                                    className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-700/50 transition-colors"
                                 >
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-xs font-medium text-slate-200 truncate group-hover:text-emerald-400 transition-colors">
-                                            {p.nome}
-                                        </p>
+                                        <span className="text-xs text-slate-200 font-medium truncate block">{p.nome}</span>
                                         {p.destino && (
-                                            <p className="text-[10px] text-slate-500 truncate">{p.destino}</p>
+                                            <span className="text-[10px] text-slate-500 truncate block">{p.destino}</span>
                                         )}
                                     </div>
                                     <span className="text-[10px] text-slate-500 shrink-0">
@@ -175,8 +130,39 @@ function MetaPasseiosCard() {
                                     </span>
                                 </Link>
                             ))
+                        )}
+                    </div>
+                )}
+
+                {!loading && activeTab === "followups" && (
+                    <div className="space-y-2 max-h-[250px] overflow-y-auto">
+                        {followupsList.length === 0 ? (
+                            <p className="text-xs text-slate-500 italic py-2">Nenhum follow-up ativo.</p>
                         ) : (
-                            <p className="text-xs text-slate-500 text-center py-2">Nenhum passeio registrado.</p>
+                            followupsList.map(f => (
+                                <div key={f.telefone} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-900/40 border border-slate-700/50">
+                                    <div className="flex-1 min-w-0">
+                                        <Link
+                                            href={`/conversas?telefone=${f.telefone}`}
+                                            className="text-xs text-slate-200 font-medium hover:text-brand-400 transition-colors truncate block"
+                                        >
+                                            {f.nome}
+                                        </Link>
+                                        <p className="text-[10px] text-slate-500">
+                                            {f.ultimoPasseio
+                                                ? `Passeio: ${new Date(f.ultimoPasseio + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}`
+                                                : "Sem passeio"}
+                                            {" · "}{f.followupDias}d · {f.followupHora}
+                                            {f.followupEnviado && " · Enviado"}
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={true}
+                                        onCheckedChange={(checked) => handleToggleFollowup(f.telefone, checked)}
+                                        className="data-[state=checked]:bg-emerald-500 shrink-0"
+                                    />
+                                </div>
+                            ))
                         )}
                     </div>
                 )}
@@ -250,7 +236,7 @@ export default function DashboardPage() {
                     delay={50}
                     href="/agenda"
                 />
-                <MetaPasseiosCard />
+                <PasseiosFollowupCard />
             </div>
 
             {/* Charts Row */}
@@ -310,6 +296,11 @@ export default function DashboardPage() {
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-semibold text-slate-200 truncate group-hover:text-brand-400 transition-colors">
                                             {evento.title}
+                                            {evento.extendedProps.leadId && (
+                                                <span className="ml-1.5 text-[9px] font-bold text-brand-400 bg-brand-500/15 px-1 py-0.5 rounded">
+                                                    LEAD
+                                                </span>
+                                            )}
                                         </p>
                                         <p className="text-xs text-slate-500 truncate">
                                             {evento.extendedProps.nomeEscola}

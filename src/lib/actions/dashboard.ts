@@ -186,3 +186,33 @@ export async function getTotalPasseiosDoMes(): Promise<number> {
     }
     return count || 0;
 }
+
+/**
+ * Lista leads com follow-up ativo.
+ */
+export async function getFollowupsAtivos(): Promise<{
+    telefone: string;
+    nome: string;
+    ultimoPasseio: string | null;
+    followupDias: number;
+    followupHora: string;
+    followupEnviado: boolean;
+}[]> {
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("telefone, nome, ultimo_passeio, followup_dias, followup_hora, followup_enviado")
+        .eq("followup_ativo", true)
+        .order("ultimo_passeio", { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map(d => ({
+        telefone: String(d.telefone),
+        nome: d.nome || "Sem nome",
+        ultimoPasseio: d.ultimo_passeio || null,
+        followupDias: d.followup_dias ?? 45,
+        followupHora: d.followup_hora || "09:00",
+        followupEnviado: d.followup_enviado ?? false,
+    }));
+}

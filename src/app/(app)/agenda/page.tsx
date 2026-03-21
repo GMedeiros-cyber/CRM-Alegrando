@@ -132,6 +132,11 @@ export default function AgendaPage() {
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold text-slate-200 truncate group-hover:text-brand-400 transition-colors">
                                         {evt.title}
+                                        {evt.extendedProps.leadId && (
+                                            <span className="ml-1.5 text-[9px] font-bold text-brand-400 bg-brand-500/15 px-1 py-0.5 rounded">
+                                                LEAD
+                                            </span>
+                                        )}
                                     </p>
                                     <div className="flex items-center gap-3 mt-0.5">
                                         <span className="text-xs text-slate-500">
@@ -156,6 +161,13 @@ export default function AgendaPage() {
                                 <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-slate-700 text-slate-300 shrink-0">
                                     {daysUntil(evt.start)}
                                 </span>
+
+                                {/* Badge de lead vinculado */}
+                                {evt.extendedProps.leadId && (
+                                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30 shrink-0">
+                                        {evt.extendedProps.nomeEscola}
+                                    </span>
+                                )}
 
                                 {/* Link to conversas */}
                                 <Link

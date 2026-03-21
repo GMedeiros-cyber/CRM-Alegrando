@@ -21,7 +21,12 @@ import {
     toggleIaAtiva,
     markAsRead,
     sendManualFollowup,
+    getPasseiosHistorico,
+    addPasseioHistorico,
+    deletePasseioHistorico,
+    getAvailableDestinations,
 } from "@/lib/actions/leads";
+import type { PasseioHistorico } from "@/lib/actions/leads";
 import { sendMessage } from "@/lib/actions/messages";
 import {
     getKanbanColumns,
@@ -56,6 +61,7 @@ import {
     ExternalLink,
     ArrowLeft,
     PanelRightOpen,
+    Save,
 } from "lucide-react";
 import {
     Sheet,
@@ -137,6 +143,13 @@ export function ConversasLayout() {
     // Mobile responsiveness
     const [mobileView, setMobileView] = useState<"list" | "chat">("list");
     const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+
+    // Passeios historico
+    const [passeiosHistorico, setPaseiosHistorico] = useState<PasseioHistorico[]>([]);
+    const [destinosDisponiveis, setDestinosDisponiveis] = useState<string[]>([]);
+    const [addingPasseio, setAddingPasseio] = useState(false);
+    const [novoPasseioDestino, setNovoPasseioDestino] = useState("");
+    const [novoPasseioData, setNovoPasseioData] = useState("");
 
     // Auto-hide toast
     useEffect(() => {
@@ -222,16 +235,23 @@ export function ConversasLayout() {
         setLoadingAgendamentos(true);
         setTasks([]);
         setAgendamentos([]);
+        setPaseiosHistorico([]);
+        setAddingPasseio(false);
 
         try {
             const tel = parseInt(telefone, 10);
 
-            // As 3 chamadas disparam em paralelo
-            const [clienteData, tasksData, todosAgendamentos] = await Promise.all([
+            // As chamadas disparam em paralelo
+            const [clienteData, tasksData, todosAgendamentos, historico, destinos] = await Promise.all([
                 getClienteByTelefone(telefone),
                 !isNaN(tel) ? getLeadTasks(tel) : Promise.resolve([]),
                 getAgendamentos(),
+                getPasseiosHistorico(telefone),
+                getAvailableDestinations(),
             ]);
+
+            setPaseiosHistorico(historico);
+            setDestinosDisponiveis(destinos);
 
             if (clienteData) {
                 setCliente(clienteData);
@@ -428,6 +448,28 @@ export function ConversasLayout() {
         await deleteAgendamento(googleEventId);
     }
 
+    // ========= Passeios historico handlers =========
+    async function handleAddPasseio() {
+        if (!selectedTelefone || !novoPasseioDestino || !novoPasseioData) return;
+        const result = await addPasseioHistorico(selectedTelefone, novoPasseioDestino, novoPasseioData);
+        if (result) {
+            setPaseiosHistorico(prev => [result, ...prev]);
+            setForm(f => ({ ...f, ultimoPasseio: result.dataPaseio > (f.ultimoPasseio || "") ? result.dataPaseio : f.ultimoPasseio }));
+            setNovoPasseioDestino("");
+            setNovoPasseioData("");
+            setAddingPasseio(false);
+            setToast({ type: "success", text: "Passeio registrado!" });
+        }
+    }
+
+    async function handleDeletePasseio(id: string) {
+        if (!selectedTelefone) return;
+        await deletePasseioHistorico(id, selectedTelefone);
+        setPaseiosHistorico(prev => prev.filter(p => p.id !== id));
+        loadCliente(selectedTelefone);
+        setToast({ type: "success", text: "Passeio removido." });
+    }
+
     // =============================================
     // SHARED DETAILS PANEL (desktop + mobile sheet)
     // =============================================
@@ -550,6 +592,95 @@ export function ConversasLayout() {
                         </Select>
                     </FieldGroup>
 
+                    {/* Último Passeio — sempre visível, read-only */}
+                    <FieldGroup label="Último Passeio">
+                        <p className="text-sm text-white px-1 h-8 flex items-center">
+                            {form.ultimoPasseio
+                                ? new Date(form.ultimoPasseio + "T00:00:00").toLocaleDateString("pt-BR")
+                                : "Nenhum passeio registrado"}
+                        </p>
+                    </FieldGroup>
+
+                    {/* Histórico de Passeios */}
+                    <div className="pt-2 border-t border-slate-700">
+                        <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                Histórico de Passeios
+                                {passeiosHistorico.length > 0 && (
+                                    <span className="ml-1 text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full">
+                                        {passeiosHistorico.length}
+                                    </span>
+                                )}
+                            </h4>
+                            <button
+                                onClick={() => setAddingPasseio(!addingPasseio)}
+                                className="text-[10px] font-semibold text-brand-400 hover:text-brand-300 transition-colors"
+                            >
+                                {addingPasseio ? "Cancelar" : "+ Registrar"}
+                            </button>
+                        </div>
+
+                        {/* Formulário de adicionar passeio */}
+                        {addingPasseio && (
+                            <div className="space-y-2 mb-3 p-2 rounded-lg bg-slate-800/60 border border-slate-700">
+                                <Select
+                                    value={novoPasseioDestino}
+                                    onValueChange={setNovoPasseioDestino}
+                                >
+                                    <SelectTrigger className="h-8 rounded-lg bg-slate-900 border-slate-600 text-sm text-white">
+                                        <SelectValue placeholder="Selecione o destino/pacote..." />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-slate-800 border-slate-700">
+                                        {destinosDisponiveis.map((d) => (
+                                            <SelectItem key={d} value={d}>{d}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Input
+                                    type="date"
+                                    value={novoPasseioData}
+                                    onChange={(e) => setNovoPasseioData(e.target.value)}
+                                    className="rounded-lg h-8 text-sm bg-slate-900 border-slate-600 text-white"
+                                />
+                                <button
+                                    onClick={handleAddPasseio}
+                                    disabled={!novoPasseioDestino || !novoPasseioData}
+                                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-semibold hover:bg-brand-600 disabled:opacity-40 transition-colors"
+                                >
+                                    <Save className="w-3 h-3" />
+                                    Salvar Passeio
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Lista de passeios */}
+                        {passeiosHistorico.length === 0 ? (
+                            <p className="text-xs text-slate-600 italic">Nenhum passeio registrado.</p>
+                        ) : (
+                            <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                                {passeiosHistorico.map((p) => (
+                                    <div
+                                        key={p.id}
+                                        className="group/passeio flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-800/60 transition-colors"
+                                    >
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs text-slate-200 font-medium truncate">{p.destino}</p>
+                                            <p className="text-[10px] text-slate-500">
+                                                {new Date(p.dataPaseio + "T00:00:00").toLocaleDateString("pt-BR")}
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleDeletePasseio(p.id)}
+                                            className="opacity-0 group-hover/passeio:opacity-100 text-red-400 hover:text-red-300 transition-opacity shrink-0 ml-2"
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                     {/* Follow-up */}
                     <FieldGroup label="Follow-up ativo">
                         <div className="flex items-center h-8">
@@ -574,16 +705,6 @@ export function ConversasLayout() {
 
                     {form.followupAtivo && (
                         <>
-                            <FieldGroup label="Ultimo Passeio">
-                                <Input
-                                    type="date"
-                                    value={form.ultimoPasseio}
-                                    onChange={(e) => setForm((f) => ({ ...f, ultimoPasseio: e.target.value }))}
-                                    onBlur={handleSave}
-                                    className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white"
-                                />
-                            </FieldGroup>
-
                             <div className="grid grid-cols-2 gap-2">
                                 <FieldGroup label="Follow-up (dias)">
                                     <Input
