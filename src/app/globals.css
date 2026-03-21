@@ -92,8 +92,8 @@
   --color-surface-subtle: #1e293b;
 
   /* Sidebar specific (orange light) */
-  --color-sidebar-bg: #fff7ed;
-  --color-sidebar-hover: #fed7aa;
+  --color-sidebar-bg: #D4845A;
+  --color-sidebar-hover: #C0744C;
   --color-sidebar-active: #ef5544;
   --color-sidebar-text: #1e293b;
 }
@@ -163,16 +163,17 @@
 /* Bento Box Card Styles (Dark Mode) */
 @layer components {
   .bento-card {
-    @apply bg-slate-800 rounded-2xl border-2 border-slate-700 shadow-sm transition-all duration-300 ease-out;
+    @apply bg-card rounded-2xl border-2 border-border shadow-sm transition-all duration-300 ease-out;
   }
 
   .bento-card:hover {
-    @apply shadow-md border-slate-600;
+    @apply shadow-md;
+    border-color: var(--muted-foreground);
     transform: translateY(-1px);
   }
 
   .bento-card-static {
-    @apply bg-slate-800 rounded-2xl border border-slate-700/60 shadow-sm;
+    @apply bg-card rounded-2xl border border-border/60 shadow-sm;
     outline: none !important;
   }
 

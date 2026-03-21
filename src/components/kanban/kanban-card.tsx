@@ -109,20 +109,20 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
             {...attributes}
             {...listeners}
             className={cn(
-                "group bg-slate-800 rounded-xl border-2 border-slate-700 p-3.5 cursor-grab active:cursor-grabbing",
-                "hover:shadow-md hover:border-slate-600 transition-all duration-200",
+                "group bg-card rounded-xl border-2 border-border p-3.5 cursor-grab active:cursor-grabbing",
+                "hover:shadow-md hover:border-muted-foreground/40 transition-all duration-200",
                 isDragging && "opacity-30 shadow-none",
                 isOverlay && "shadow-xl rotate-[2deg] scale-105 border-brand-400"
             )}
         >
             {/* Header: school name + toggle */}
             <div className="flex items-start justify-between gap-2 mb-2" onClick={onClick}>
-                <h4 className="flex-1 text-sm font-semibold text-slate-200 leading-tight break-words">
+                <h4 className="flex-1 text-sm font-semibold text-foreground/90 leading-tight break-words">
                     {lead.nomeEscola}
                 </h4>
                 <button
                     onClick={e => { e.stopPropagation(); setCollapsed(prev => !prev); }}
-                    className="p-1 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors shrink-0"
+                    className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shrink-0"
                     title={collapsed ? "Expandir" : "Recolher"}
                 >
                     {collapsed
@@ -138,12 +138,12 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                     {/* Details */}
             <div className="space-y-1.5" onClick={onClick}>
                 {lead.destino && (
-                    <p className="text-xs text-slate-400 truncate">
+                    <p className="text-xs text-muted-foreground truncate">
                         📍 {lead.destino}
                     </p>
                 )}
 
-                <div className="flex items-center gap-3 text-xs text-slate-500">
+                <div className="flex items-center gap-3 text-xs text-muted-foreground/70">
                     {lead.dataEvento && (
                         <span className="flex items-center gap-1">
                             <CalendarDays className="w-3 h-3" />
@@ -161,12 +161,12 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
 
             {/* Checklist section */}
             {(showChecklist || checkItems.length > 0) && (
-                <div className="mt-2.5 pt-2 border-t border-slate-700 space-y-1.5">
+                <div className="mt-2.5 pt-2 border-t border-border space-y-1.5">
                     {/* Progress bar */}
                     {checkItems.length > 0 && (
                         <div className="flex items-center gap-2 mb-1">
                             <CheckSquare className="w-3 h-3 text-slate-500" />
-                            <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                            <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
                                 <div
                                     className="h-full bg-brand-500 rounded-full transition-all duration-300"
                                     style={{
@@ -195,7 +195,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                                     "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
                                     item.done
                                         ? "bg-brand-500 border-brand-500"
-                                        : "border-slate-600 hover:border-slate-400"
+                                        : "border-border hover:border-muted-foreground"
                                 )}
                             >
                                 {item.done && (
@@ -208,8 +208,8 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                                 className={cn(
                                     "text-xs flex-1 min-w-0 break-words",
                                     item.done
-                                        ? "text-slate-600 line-through opacity-50"
-                                        : "text-slate-300"
+                                        ? "text-muted-foreground line-through opacity-50"
+                                        : "text-foreground/80"
                                 )}
                             >
                                 {item.text}
@@ -236,7 +236,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                                 if (e.key === "Enter") addCheckItem();
                             }}
                             placeholder="+ Adicionar tarefa..."
-                            className="flex-1 bg-slate-900/60 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none focus:ring-1 focus:ring-brand-400 focus:border-brand-400"
+                            className="flex-1 bg-background/60 border border-border rounded-lg px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:ring-1 focus:ring-brand-400 focus:border-brand-400"
                             onClick={(e) => e.stopPropagation()}
                         />
                         {newItemText.trim() && (
@@ -255,7 +255,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
             )}
 
                     {/* Footer: checklist toggle + AI status */}
-                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-700">
+                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-border">
                         <div className="flex items-center gap-1.5">
                     {/* Checklist toggle button */}
                     <button
@@ -267,7 +267,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                             "flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-md transition-colors",
                             showChecklist || checkItems.length > 0
                                 ? "bg-brand-500/20 text-brand-400"
-                                : "bg-slate-700 text-slate-500 hover:text-slate-300"
+                                : "bg-secondary text-muted-foreground hover:text-foreground"
                         )}
                         title="Abrir checklist de tarefas"
                     >

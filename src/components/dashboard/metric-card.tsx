@@ -53,7 +53,7 @@ export function MetricCard({
                     <div
                         className={cn(
                             "flex items-center justify-center w-10 h-10 rounded-xl",
-                            "bg-slate-900/50 backdrop-blur-sm shadow-sm"
+                            "bg-background/50 backdrop-blur-sm shadow-sm"
                         )}
                     >
                         <Icon className={cn("w-5 h-5", iconColor)} />
@@ -75,12 +75,12 @@ export function MetricCard({
 
                 {/* Value */}
                 <div>
-                    <p className="font-display text-3xl font-bold text-white tracking-tight">
+                    <p className="font-display text-3xl font-bold text-foreground tracking-tight">
                         {value}
                     </p>
-                    <p className="text-sm text-slate-400 mt-0.5">{title}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">{title}</p>
                     {subtitle && (
-                        <p className="text-xs text-slate-500 mt-1">{subtitle}</p>
+                        <p className="text-xs text-muted-foreground/70 mt-1">{subtitle}</p>
                     )}
                 </div>
             </div>

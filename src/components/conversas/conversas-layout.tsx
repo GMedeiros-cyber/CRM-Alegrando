@@ -24,7 +24,7 @@ import {
     getPasseiosHistorico,
     addPasseioHistorico,
     deletePasseioHistorico,
-    getAvailableDestinations,
+
 } from "@/lib/actions/leads";
 import type { PasseioHistorico } from "@/lib/actions/leads";
 import { sendMessage } from "@/lib/actions/messages";
@@ -146,7 +146,6 @@ export function ConversasLayout() {
 
     // Passeios historico
     const [passeiosHistorico, setPaseiosHistorico] = useState<PasseioHistorico[]>([]);
-    const [destinosDisponiveis, setDestinosDisponiveis] = useState<string[]>([]);
     const [addingPasseio, setAddingPasseio] = useState(false);
     const [novoPasseioDestino, setNovoPasseioDestino] = useState("");
     const [novoPasseioData, setNovoPasseioData] = useState("");
@@ -242,16 +241,14 @@ export function ConversasLayout() {
             const tel = parseInt(telefone, 10);
 
             // As chamadas disparam em paralelo
-            const [clienteData, tasksData, todosAgendamentos, historico, destinos] = await Promise.all([
+            const [clienteData, tasksData, todosAgendamentos, historico] = await Promise.all([
                 getClienteByTelefone(telefone),
                 !isNaN(tel) ? getLeadTasks(tel) : Promise.resolve([]),
                 getAgendamentos(),
                 getPasseiosHistorico(telefone),
-                getAvailableDestinations(),
             ]);
 
             setPaseiosHistorico(historico);
-            setDestinosDisponiveis(destinos);
 
             if (clienteData) {
                 setCliente(clienteData);
@@ -478,8 +475,8 @@ export function ConversasLayout() {
         return (
             <div className="p-4 space-y-4">
                 {/* Section title */}
-                <div className="pb-3 mb-1 border-b-2 border-slate-700">
-                    <h3 className="font-display text-sm font-bold text-white uppercase tracking-wide">
+                <div className="pb-3 mb-1 border-b-2 border-border">
+                    <h3 className="font-display text-sm font-bold text-foreground uppercase tracking-wide">
                         Detalhes do Cliente
                     </h3>
                 </div>
@@ -623,19 +620,12 @@ export function ConversasLayout() {
                         {/* Formulário de adicionar passeio */}
                         {addingPasseio && (
                             <div className="space-y-2 mb-3 p-2 rounded-lg bg-slate-800/60 border border-slate-700">
-                                <Select
+                                <Input
                                     value={novoPasseioDestino}
-                                    onValueChange={setNovoPasseioDestino}
-                                >
-                                    <SelectTrigger className="h-8 rounded-lg bg-slate-900 border-slate-600 text-sm text-white">
-                                        <SelectValue placeholder="Selecione o destino/pacote..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-slate-800 border-slate-700">
-                                        {destinosDisponiveis.map((d) => (
-                                            <SelectItem key={d} value={d}>{d}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    onChange={(e) => setNovoPasseioDestino(e.target.value)}
+                                    placeholder="Ex: Passeio Sítio do Carroção"
+                                    className="rounded-lg h-8 text-sm bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+                                />
                                 <Input
                                     type="date"
                                     value={novoPasseioData}
@@ -1011,15 +1001,15 @@ export function ConversasLayout() {
     // RENDER
     // =============================================
     return (
-        <div className="flex h-[calc(100vh-2rem)] -m-6 lg:-m-8 rounded-2xl overflow-hidden bg-slate-900 max-w-[1800px] mx-auto">
+        <div className="flex h-[calc(100vh-2rem)] -m-6 lg:-m-8 rounded-2xl overflow-hidden bg-background max-w-[1800px] mx-auto">
             {/* =================== LEFT: CLIENTE LIST =================== */}
             <div className={cn(
-                "w-full md:w-[350px] md:min-w-[350px] border-r-0 md:border-r-2 border-slate-700 flex-col bg-slate-900",
+                "w-full md:w-[350px] md:min-w-[350px] border-r-0 md:border-r-2 border-border flex-col bg-background",
                 mobileView === "list" ? "flex" : "hidden md:flex"
             )}>
                 {/* Header */}
-                <div className="px-4 pt-5 pb-3 shrink-0 border-b-2 border-slate-700">
-                    <h2 className="font-display text-lg font-bold text-white tracking-tight">
+                <div className="px-4 pt-5 pb-3 shrink-0 border-b-2 border-border">
+                    <h2 className="font-display text-lg font-bold text-foreground tracking-tight">
                         Conversas
                     </h2>
                     <div className="relative mt-3">
@@ -1068,8 +1058,8 @@ export function ConversasLayout() {
                                     className={cn(
                                         "w-full text-left px-3 py-3 rounded-xl transition-all duration-150 border-2",
                                         selectedTelefone === item.telefone.toString()
-                                            ? "bg-slate-800 border-brand-500 shadow-lg shadow-brand-500/15"
-                                            : "bg-slate-800/60 border-slate-700/50 hover:bg-slate-800 hover:border-slate-600"
+                                            ? "bg-card border-brand-500 shadow-lg shadow-brand-500/15"
+                                            : "bg-card/60 border-border/50 hover:bg-card hover:border-muted-foreground/40"
                                     )}
                                 >
                                     <div className="flex items-start justify-between gap-2">
@@ -1140,13 +1130,13 @@ export function ConversasLayout() {
 
             {/* =================== CENTER: CHAT =================== */}
             <div className={cn(
-                "flex-1 flex-col min-w-0 bg-[#0f172a] overflow-x-hidden",
+                "flex-1 flex-col min-w-0 bg-background overflow-x-hidden",
                 mobileView === "chat" ? "flex" : "hidden md:flex"
             )}>
                 {!selectedTelefone ? (
                     // Empty state
                     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-                        <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center mb-4">
+                        <div className="w-16 h-16 rounded-2xl bg-card flex items-center justify-center mb-4">
                             <MessageSquare className="w-8 h-8 text-slate-600" />
                         </div>
                         <h3 className="font-display text-lg font-semibold text-slate-400">
@@ -1163,7 +1153,7 @@ export function ConversasLayout() {
                 ) : cliente ? (
                     <>
                         {/* Chat Header */}
-                        <div className="px-3 md:px-5 py-3.5 border-b-2 border-slate-700 shrink-0 flex items-center justify-between bg-slate-900/80 gap-2">
+                        <div className="px-3 md:px-5 py-3.5 border-b-2 border-border shrink-0 flex items-center justify-between bg-background/80 gap-2">
                             <div className="flex items-center gap-2 min-w-0">
                                 <button
                                     onClick={() => setMobileView("list")}
@@ -1244,7 +1234,7 @@ export function ConversasLayout() {
                         <ChatWindow telefone={cliente.telefone} />
 
                         {/* Input */}
-                        <div className="px-5 py-3 border-t-2 border-slate-700 shrink-0 bg-slate-900/80">
+                        <div className="px-5 py-3 border-t-2 border-border shrink-0 bg-background/80">
                             <div className="flex gap-2">
                                 <Input
                                     value={chatMessage}
@@ -1283,7 +1273,7 @@ export function ConversasLayout() {
             </div>
 
             {/* =================== RIGHT: DETAILS (desktop) =================== */}
-            <div className="hidden md:block w-[300px] min-w-[300px] border-l-2 border-slate-700 overflow-y-auto bg-slate-900">
+            <div className="hidden md:block w-[300px] min-w-[300px] border-l-2 border-border overflow-y-auto bg-background">
                 {selectedTelefone && cliente ? (
                     renderClienteDetails()
                 ) : (
@@ -1297,7 +1287,7 @@ export function ConversasLayout() {
 
             {/* =================== MOBILE: Details Sheet =================== */}
             <Sheet open={mobileDetailsOpen} onOpenChange={setMobileDetailsOpen}>
-                <SheetContent side="right" className="w-[320px] bg-slate-900 border-slate-700 overflow-y-auto p-0 md:hidden">
+                <SheetContent side="right" className="w-[320px] bg-background border-border overflow-y-auto p-0 md:hidden">
                     {selectedTelefone && cliente ? (
                         renderClienteDetails()
                     ) : (
