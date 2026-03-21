@@ -231,7 +231,7 @@ export default function DashboardPage() {
                             return (
                                 <Link
                                     key={evento.id}
-                                    href="/agenda"
+                                    href={`/agenda?eventId=${evento.extendedProps.googleEventId}`}
                                     className="flex items-center gap-4 p-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-700/50 transition-colors duration-200 cursor-pointer group"
                                 >
                                     <div className="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-slate-700 shadow-sm shrink-0">

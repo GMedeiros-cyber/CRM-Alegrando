@@ -37,6 +37,7 @@ export type ClienteDetail = {
     createdAt: Date | null;
     ultimoPasseio: string | null;
     followupDias: number;
+    followupHora: string;
     followupAtivo: boolean;
     followupEnviado: boolean;
 };
@@ -178,6 +179,7 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         createdAt: data.created_at ? new Date(data.created_at) : null,
         ultimoPasseio: data.ultimo_passeio || null,
         followupDias: data.followup_dias ?? 45,
+        followupHora: data.followup_hora || "09:00",
         followupAtivo: data.followup_ativo ?? false,
         followupEnviado: data.followup_enviado ?? false,
     };
@@ -214,6 +216,7 @@ export async function updateCliente(
         kanbanPosition?: number;
         ultimoPasseio?: string | null;
         followupDias?: number;
+        followupHora?: string;
         followupAtivo?: boolean;
     }
 ) {
@@ -232,6 +235,7 @@ export async function updateCliente(
     if (data.kanbanPosition !== undefined) updateData.kanban_position = data.kanbanPosition;
     if (data.ultimoPasseio !== undefined) updateData.ultimo_passeio = data.ultimoPasseio;
     if (data.followupDias !== undefined) updateData.followup_dias = data.followupDias;
+    if (data.followupHora !== undefined) updateData.followup_hora = data.followupHora;
     if (data.followupAtivo !== undefined) updateData.followup_ativo = data.followupAtivo;
 
     await supabase
@@ -240,6 +244,73 @@ export async function updateCliente(
         .eq("telefone", telefone);
 
     return { success: true };
+}
+
+/**
+ * Envia follow-up manual para um lead específico.
+ */
+export async function sendManualFollowup(telefone: string): Promise<{ success: boolean; type: string; error?: string }> {
+    const supabase = createServerSupabaseClient();
+
+    const { data: lead, error } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("telefone, nome, ultimo_passeio, followup_dias, followup_enviado, followup_ativo")
+        .eq("telefone", telefone)
+        .maybeSingle();
+
+    if (error || !lead) {
+        return { success: false, type: "none", error: "Lead não encontrado" };
+    }
+
+    if (!lead.ultimo_passeio) {
+        return { success: false, type: "none", error: "Lead sem data de último passeio" };
+    }
+
+    const nome = lead.nome || "Olá";
+    const tel = String(lead.telefone);
+
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
+    const googleReviewLink = process.env.GOOGLE_REVIEW_LINK || "https://g.page/alegrando";
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const ultimoPasseio = new Date(lead.ultimo_passeio);
+    ultimoPasseio.setHours(0, 0, 0, 0);
+    const diffMs = hoje.getTime() - ultimoPasseio.getTime();
+    const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    let mensagem: string;
+    let tipo: string;
+
+    if (diffDias <= 1) {
+        tipo = "avaliacao";
+        mensagem = `Olá ${nome}! 😊\n\nEsperamos que o passeio tenha sido incrível para todos!\n\nSe puder, deixa uma avaliação pra gente no Google — ajuda muito a Alegrando a levar mais crianças a experiências incríveis! 🌟\n\n${googleReviewLink}`;
+    } else {
+        tipo = "followup";
+        mensagem = `Olá ${nome}! 🌟\n\nO nosso último passeio foi incrível né? As crianças adoraram!\n\nQue tal já começarmos a planejar a próxima aventura? Temos destinos incríveis esperando pelos pequenos. 🚌\n\nSe quiser, a gente monta um novo roteiro — é só falar! 😊`;
+    }
+
+    const result = await sendWhatsAppMessage(tel, mensagem);
+
+    if (!result.success) {
+        return { success: false, type: tipo, error: result.error };
+    }
+
+    await supabase.from("messages").insert({
+        telefone: lead.telefone,
+        sender_type: "humano",
+        sender_name: "Alegrando",
+        content: mensagem,
+    });
+
+    if (tipo === "followup") {
+        await supabase
+            .from("Clientes _WhatsApp")
+            .update({ followup_enviado: true })
+            .eq("telefone", telefone);
+    }
+
+    return { success: true, type: tipo };
 }
 
 /**

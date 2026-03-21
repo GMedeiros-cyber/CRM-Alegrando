@@ -73,8 +73,9 @@ export async function getLeadsPorMes(): Promise<{ mes: string; leads: number }[]
 
 /**
  * Top 5 destinos do mês atual, da tabela destinos_interesse.
+ * Retorna pedidos (total) vs fechados (status = 'fechado').
  */
-export async function getTopDestinos(): Promise<{ destino: string; total: number }[]> {
+export async function getTopDestinos(): Promise<{ destino: string; pedidos: number; fechados: number }[]> {
     const supabase = createServerSupabaseClient();
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -82,7 +83,7 @@ export async function getTopDestinos(): Promise<{ destino: string; total: number
 
     const { data, error } = await supabase
         .from("destinos_interesse")
-        .select("destino")
+        .select("destino, status")
         .gte("created_at", firstDay)
         .lte("created_at", lastDay);
 
@@ -92,16 +93,20 @@ export async function getTopDestinos(): Promise<{ destino: string; total: number
 
     if (!data || data.length === 0) return [];
 
-    // Agrupar no JS e pegar top 5
-    const groups: Record<string, number> = {};
+    // Agrupar no JS: pedidos (total) e fechados
+    const groups: Record<string, { pedidos: number; fechados: number }> = {};
     for (const row of data) {
         if (!row.destino) continue;
-        groups[row.destino] = (groups[row.destino] || 0) + 1;
+        if (!groups[row.destino]) groups[row.destino] = { pedidos: 0, fechados: 0 };
+        groups[row.destino].pedidos += 1;
+        if (row.status === "fechado") {
+            groups[row.destino].fechados += 1;
+        }
     }
 
     return Object.entries(groups)
-        .map(([destino, total]) => ({ destino, total }))
-        .sort((a, b) => b.total - a.total)
+        .map(([destino, counts]) => ({ destino, ...counts }))
+        .sort((a, b) => b.pedidos - a.pedidos)
         .slice(0, 5);
 }
 
@@ -133,7 +138,7 @@ export async function getEventosDoMes(): Promise<number> {
 }
 
 /**
- * Conta passeios confirmados no mês atual via passeios_realizados.
+ * Conta passeios do mês atual via campo ultimo_passeio da Clientes _WhatsApp.
  */
 export async function getTotalPasseiosDoMes(): Promise<number> {
     const supabase = createServerSupabaseClient();
@@ -142,10 +147,10 @@ export async function getTotalPasseiosDoMes(): Promise<number> {
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
 
     const { count, error } = await supabase
-        .from("passeios_realizados")
+        .from("Clientes _WhatsApp")
         .select("*", { count: "exact", head: true })
-        .gte("data_passeio", firstDay)
-        .lte("data_passeio", lastDay);
+        .gte("ultimo_passeio", firstDay)
+        .lte("ultimo_passeio", lastDay);
 
     if (error) {
         return 0;

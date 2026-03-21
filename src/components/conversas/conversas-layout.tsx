@@ -20,6 +20,7 @@ import {
     updateCliente,
     toggleIaAtiva,
     markAsRead,
+    sendManualFollowup,
 } from "@/lib/actions/leads";
 import { sendMessageToN8n } from "@/lib/actions/messages";
 import {
@@ -54,7 +55,15 @@ import {
     CalendarDays,
     Clock,
     ExternalLink,
+    ArrowLeft,
+    PanelRightOpen,
 } from "lucide-react";
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase/client";
 
@@ -104,6 +113,7 @@ export function ConversasLayout() {
         kanbanColumnId: "",
         ultimoPasseio: "",
         followupDias: 45,
+        followupHora: "09:00",
         followupAtivo: false,
         followupEnviado: false,
     });
@@ -126,6 +136,10 @@ export function ConversasLayout() {
     const [totalClientes, setTotalClientes] = useState(0);
     const [loadingMore, setLoadingMore] = useState(false);
     const CLIENTES_LIMIT = 50;
+
+    // Mobile responsiveness
+    const [mobileView, setMobileView] = useState<"list" | "chat">("list");
+    const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
 
     // Auto-hide toast
     useEffect(() => {
@@ -235,6 +249,7 @@ export function ConversasLayout() {
                     kanbanColumnId: clienteData.kanbanColumnId || "",
                     ultimoPasseio: clienteData.ultimoPasseio || "",
                     followupDias: clienteData.followupDias ?? 45,
+                    followupHora: clienteData.followupHora || "09:00",
                     followupAtivo: clienteData.followupAtivo ?? false,
                     followupEnviado: clienteData.followupEnviado ?? false,
                 });
@@ -266,6 +281,7 @@ export function ConversasLayout() {
     const handleSelectCliente = useCallback(
         async (telefone: string) => {
             setSelectedTelefone(telefone);
+            setMobileView("chat");
             router.push(`/conversas?telefone=${telefone}`, { scroll: false });
 
             // Marcar como lida localmente e no banco
@@ -323,6 +339,7 @@ export function ConversasLayout() {
                     kanbanColumnId: form.kanbanColumnId || null,
                     ultimoPasseio: form.ultimoPasseio || null,
                     followupDias: form.followupDias,
+                    followupHora: form.followupHora,
                     followupAtivo: form.followupAtivo,
                 });
                 setToast({ type: "success", text: "Cliente atualizado!" });
@@ -417,9 +434,12 @@ export function ConversasLayout() {
     // RENDER
     // =============================================
     return (
-        <div className="flex h-[calc(100vh-2rem)] -m-6 lg:-m-8 rounded-2xl overflow-hidden bg-slate-900">
+        <div className="flex h-[calc(100vh-2rem)] -m-6 lg:-m-8 rounded-2xl overflow-hidden bg-slate-900 max-w-[1800px] mx-auto">
             {/* =================== LEFT: CLIENTE LIST =================== */}
-            <div className="w-[350px] min-w-[350px] border-r-2 border-slate-700 flex flex-col bg-slate-900">
+            <div className={cn(
+                "w-full md:w-[350px] md:min-w-[350px] border-r-0 md:border-r-2 border-slate-700 flex-col bg-slate-900",
+                mobileView === "list" ? "flex" : "hidden md:flex"
+            )}>
                 {/* Header */}
                 <div className="px-4 pt-5 pb-3 shrink-0 border-b-2 border-slate-700">
                     <h2 className="font-display text-lg font-bold text-white tracking-tight">
@@ -542,7 +562,10 @@ export function ConversasLayout() {
             </div>
 
             {/* =================== CENTER: CHAT =================== */}
-            <div className="flex-1 flex flex-col min-w-0 bg-[#0f172a] overflow-x-hidden">
+            <div className={cn(
+                "flex-1 flex-col min-w-0 bg-[#0f172a] overflow-x-hidden",
+                mobileView === "chat" ? "flex" : "hidden md:flex"
+            )}>
                 {!selectedTelefone ? (
                     // Empty state
                     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
@@ -563,43 +586,61 @@ export function ConversasLayout() {
                 ) : cliente ? (
                     <>
                         {/* Chat Header */}
-                        <div className="px-5 py-3.5 border-b-2 border-slate-700 shrink-0 flex items-center justify-between bg-slate-900/80">
-                            <div>
-                                <h3 className="font-display text-base font-bold text-white">
-                                    {cliente.nome || "Sem nome"}
-                                </h3>
-                                <p className="text-xs text-slate-400">{cliente.telefone}</p>
+                        <div className="px-3 md:px-5 py-3.5 border-b-2 border-slate-700 shrink-0 flex items-center justify-between bg-slate-900/80 gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <button
+                                    onClick={() => setMobileView("list")}
+                                    className="md:hidden p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors shrink-0"
+                                >
+                                    <ArrowLeft className="w-5 h-5" />
+                                </button>
+                                <div className="min-w-0">
+                                    <h3 className="font-display text-base font-bold text-white truncate">
+                                        {cliente.nome || "Sem nome"}
+                                    </h3>
+                                    <p className="text-xs text-slate-400">{cliente.telefone}</p>
+                                </div>
                             </div>
 
-                            {/* AI Toggle */}
-                            <div
-                                className={cn(
-                                    "flex items-center gap-3 px-3 py-2 rounded-xl border-2 transition-colors",
-                                    cliente.iaAtiva
-                                        ? "bg-emerald-500/15 border-emerald-500/50"
-                                        : "bg-orange-500/15 border-orange-500/50"
-                                )}
-                            >
-                                <div className="flex items-center gap-2">
-                                    {cliente.iaAtiva ? (
-                                        <Bot className="w-4 h-4 text-emerald-400" />
-                                    ) : (
-                                        <UserRound className="w-4 h-4 text-orange-400" />
+                            <div className="flex items-center gap-2 shrink-0">
+                                {/* Mobile: details button */}
+                                <button
+                                    onClick={() => setMobileDetailsOpen(true)}
+                                    className="md:hidden p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                                >
+                                    <PanelRightOpen className="w-5 h-5" />
+                                </button>
+
+                                {/* AI Toggle */}
+                                <div
+                                    className={cn(
+                                        "hidden md:flex items-center gap-3 px-3 py-2 rounded-xl border-2 transition-colors",
+                                        cliente.iaAtiva
+                                            ? "bg-emerald-500/15 border-emerald-500/50"
+                                            : "bg-orange-500/15 border-orange-500/50"
                                     )}
-                                    <span
-                                        className={cn(
-                                            "text-xs font-semibold",
-                                            cliente.iaAtiva ? "text-emerald-300" : "text-orange-300"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        {cliente.iaAtiva ? (
+                                            <Bot className="w-4 h-4 text-emerald-400" />
+                                        ) : (
+                                            <UserRound className="w-4 h-4 text-orange-400" />
                                         )}
-                                    >
-                                        {cliente.iaAtiva ? "IA Ativa" : "Modo Manual"}
-                                    </span>
+                                        <span
+                                            className={cn(
+                                                "text-xs font-semibold",
+                                                cliente.iaAtiva ? "text-emerald-300" : "text-orange-300"
+                                            )}
+                                        >
+                                            {cliente.iaAtiva ? "IA Ativa" : "Modo Manual"}
+                                        </span>
+                                    </div>
+                                    <Switch
+                                        checked={cliente.iaAtiva}
+                                        onCheckedChange={handleToggleIA}
+                                        className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-orange-500"
+                                    />
                                 </div>
-                                <Switch
-                                    checked={cliente.iaAtiva}
-                                    onCheckedChange={handleToggleIA}
-                                    className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-orange-500"
-                                />
                             </div>
                         </div>
 
@@ -664,8 +705,8 @@ export function ConversasLayout() {
                 ) : null}
             </div>
 
-            {/* =================== RIGHT: DETAILS =================== */}
-            <div className="w-[300px] min-w-[300px] border-l-2 border-slate-700 overflow-y-auto bg-slate-900">
+            {/* =================== RIGHT: DETAILS (desktop) =================== */}
+            <div className="hidden md:block w-[300px] min-w-[300px] border-l-2 border-slate-700 overflow-y-auto bg-slate-900">
                 {selectedTelefone && cliente ? (
                     <div className="p-4 space-y-4">
                         {/* Section title */}
@@ -765,59 +806,110 @@ export function ConversasLayout() {
                             </FieldGroup>
 
                             {/* Follow-up */}
-                            <FieldGroup label="📅 Último Passeio">
-                                <Input
-                                    type="date"
-                                    value={form.ultimoPasseio}
-                                    onChange={(e) => setForm((f) => ({ ...f, ultimoPasseio: e.target.value }))}
-                                    onBlur={handleSave}
-                                    className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white"
-                                />
+                            <FieldGroup label="✅ Follow-up ativo">
+                                <div className="flex items-center h-8">
+                                    <Switch
+                                        checked={form.followupAtivo}
+                                        onCheckedChange={(checked) => {
+                                            setForm((f) => ({ ...f, followupAtivo: checked }));
+                                            if (selectedTelefone) {
+                                                startTransition(async () => {
+                                                    try {
+                                                        await updateCliente(selectedTelefone, { followupAtivo: checked });
+                                                        setToast({ type: "success", text: checked ? "Follow-up ativado!" : "Follow-up desativado!" });
+                                                        loadList();
+                                                    } catch {}
+                                                });
+                                            }
+                                        }}
+                                        className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-slate-600"
+                                    />
+                                </div>
                             </FieldGroup>
 
-                            <div className="grid grid-cols-2 gap-2">
-                                <FieldGroup label="🔄 Follow-up (dias)">
-                                    <Input
-                                        type="number"
-                                        min={1}
-                                        value={form.followupDias}
-                                        onChange={(e) => setForm((f) => ({ ...f, followupDias: parseInt(e.target.value) || 45 }))}
-                                        onBlur={handleSave}
-                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white"
-                                    />
-                                </FieldGroup>
-
-                                <FieldGroup label="✅ Follow-up ativo">
-                                    <div className="flex items-center h-8">
-                                        <Switch
-                                            checked={form.followupAtivo}
-                                            onCheckedChange={(checked) => {
-                                                setForm((f) => ({ ...f, followupAtivo: checked }));
-                                                if (selectedTelefone) {
-                                                    startTransition(async () => {
-                                                        try {
-                                                            await updateCliente(selectedTelefone, { followupAtivo: checked });
-                                                            setToast({ type: "success", text: "Follow-up atualizado!" });
-                                                            loadList();
-                                                        } catch {}
-                                                    });
-                                                }
-                                            }}
-                                            className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-slate-600"
+                            {/* Campos expandidos — só aparecem quando follow-up está ativo */}
+                            {form.followupAtivo && (
+                                <>
+                                    <FieldGroup label="📅 Último Passeio">
+                                        <Input
+                                            type="date"
+                                            value={form.ultimoPasseio}
+                                            onChange={(e) => setForm((f) => ({ ...f, ultimoPasseio: e.target.value }))}
+                                            onBlur={handleSave}
+                                            className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white"
                                         />
-                                    </div>
-                                </FieldGroup>
-                            </div>
+                                    </FieldGroup>
 
-                            {form.followupEnviado && (
-                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30">
-                                    <span className="text-xs font-medium text-emerald-400">✅ Follow-up já enviado</span>
-                                </div>
-                            )}
-                            {form.ultimoPasseio && !form.followupEnviado && form.followupAtivo && (
-                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/30">
-                                    <span className="text-xs font-medium text-amber-400">⏳ Follow-up programado para {form.followupDias} dias após o passeio</span>
-                                </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <FieldGroup label="🔄 Follow-up (dias)">
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                value={form.followupDias}
+                                                onChange={(e) => setForm((f) => ({ ...f, followupDias: parseInt(e.target.value) || 45 }))}
+                                                onBlur={handleSave}
+                                                className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white"
+                                            />
+                                        </FieldGroup>
+
+                                        <FieldGroup label="🕐 Horário de envio">
+                                            <Input
+                                                type="time"
+                                                value={form.followupHora}
+                                                onChange={(e) => setForm((f) => ({ ...f, followupHora: e.target.value }))}
+                                                onBlur={handleSave}
+                                                className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white"
+                                            />
+                                        </FieldGroup>
+                                    </div>
+
+                                    {form.followupEnviado && (
+                                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30">
+                                            <span className="text-xs font-medium text-emerald-400">✅ Follow-up já enviado</span>
+                                        </div>
+                                    )}
+                                    {form.ultimoPasseio && !form.followupEnviado && (
+                                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/30">
+                                            <span className="text-xs font-medium text-amber-400">⏳ Follow-up programado para {form.followupDias} dias após o passeio às {form.followupHora}</span>
+                                        </div>
+                                    )}
+
+                                    {/* Botão enviar follow-up manual */}
+                                    {form.ultimoPasseio && (
+                                        <button
+                                            onClick={() => {
+                                                if (!selectedTelefone) return;
+                                                startTransition(async () => {
+                                                    try {
+                                                        const result = await sendManualFollowup(selectedTelefone);
+                                                        if (result.success) {
+                                                            setToast({
+                                                                type: "success",
+                                                                text: result.type === "avaliacao"
+                                                                    ? "Mensagem de avaliação enviada!"
+                                                                    : "Follow-up enviado com sucesso!",
+                                                            });
+                                                            loadCliente(selectedTelefone);
+                                                        } else {
+                                                            setToast({ type: "error", text: result.error || "Erro ao enviar" });
+                                                        }
+                                                    } catch {
+                                                        setToast({ type: "error", text: "Erro ao enviar follow-up" });
+                                                    }
+                                                });
+                                            }}
+                                            disabled={isPending}
+                                            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-brand-500/15 text-brand-400 text-xs font-semibold hover:bg-brand-500/25 border border-brand-500/30 transition-colors disabled:opacity-40"
+                                        >
+                                            {isPending ? (
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                                <Send className="w-3.5 h-3.5" />
+                                            )}
+                                            Enviar Follow-up Agora
+                                        </button>
+                                    )}
+                                </>
                             )}
 
                             {/* Redes Sociais */}
@@ -937,7 +1029,7 @@ export function ConversasLayout() {
                                                     </div>
                                                     <div className="flex flex-col gap-1 shrink-0">
                                                         <a
-                                                            href="/agenda"
+                                                            href={`/agenda?eventId=${ag.extendedProps.googleEventId}`}
                                                             className="p-1.5 rounded-lg bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600 transition-colors"
                                                             title="Ver na Agenda"
                                                         >
@@ -1060,6 +1152,105 @@ export function ConversasLayout() {
                     </div>
                 )}
             </div>
+
+            {/* =================== MOBILE: Details Sheet =================== */}
+            <Sheet open={mobileDetailsOpen} onOpenChange={setMobileDetailsOpen}>
+                <SheetContent side="right" className="w-[320px] bg-slate-900 border-slate-700 overflow-y-auto p-0 md:hidden">
+                    <SheetHeader className="px-4 pt-4 pb-3 border-b border-slate-700">
+                        <SheetTitle className="font-display text-sm font-bold text-white uppercase tracking-wide">
+                            Detalhes do Cliente
+                        </SheetTitle>
+                    </SheetHeader>
+                    {selectedTelefone && cliente ? (
+                        <div className="p-4 space-y-4">
+                            {/* AI Toggle (mobile) */}
+                            <div
+                                className={cn(
+                                    "flex items-center gap-3 px-3 py-2 rounded-xl border-2 transition-colors",
+                                    cliente.iaAtiva
+                                        ? "bg-emerald-500/15 border-emerald-500/50"
+                                        : "bg-orange-500/15 border-orange-500/50"
+                                )}
+                            >
+                                <div className="flex items-center gap-2">
+                                    {cliente.iaAtiva ? (
+                                        <Bot className="w-4 h-4 text-emerald-400" />
+                                    ) : (
+                                        <UserRound className="w-4 h-4 text-orange-400" />
+                                    )}
+                                    <span
+                                        className={cn(
+                                            "text-xs font-semibold",
+                                            cliente.iaAtiva ? "text-emerald-300" : "text-orange-300"
+                                        )}
+                                    >
+                                        {cliente.iaAtiva ? "IA Ativa" : "Modo Manual"}
+                                    </span>
+                                </div>
+                                <Switch
+                                    checked={cliente.iaAtiva}
+                                    onCheckedChange={handleToggleIA}
+                                    className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-orange-500"
+                                />
+                            </div>
+
+                            {/* Fields (mobile) */}
+                            <div className="space-y-3">
+                                <FieldGroup icon={<User className="w-3 h-3" />} label="Nome">
+                                    <Input
+                                        value={form.nome}
+                                        onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
+                                        onBlur={handleSave}
+                                        placeholder="Nome do cliente"
+                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                                    />
+                                </FieldGroup>
+                                <FieldGroup icon={<Phone className="w-3 h-3" />} label="Telefone">
+                                    <p className="text-sm text-white px-1">{cliente.telefone}</p>
+                                </FieldGroup>
+                                <FieldGroup icon={<Mail className="w-3 h-3" />} label="Email">
+                                    <Input
+                                        value={form.email}
+                                        onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                                        onBlur={handleSave}
+                                        placeholder="email@exemplo.com"
+                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                                    />
+                                </FieldGroup>
+                            </div>
+
+                            {/* Status (mobile) */}
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Status</Label>
+                                <Select
+                                    value={form.kanbanColumnId}
+                                    onValueChange={(v) => {
+                                        setForm((f) => ({ ...f, kanbanColumnId: v }));
+                                        setTimeout(() => handleSave(), 0);
+                                    }}
+                                >
+                                    <SelectTrigger className="h-8 rounded-lg bg-slate-800 border-slate-600 text-sm text-white">
+                                        <SelectValue placeholder="Selecione..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {kanbanColumns.map((col) => (
+                                            <SelectItem key={col.id} value={col.id}>
+                                                {col.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-full text-center px-6">
+                            <p className="text-sm text-slate-500">
+                                Selecione um cliente para ver os detalhes
+                            </p>
+                        </div>
+                    )}
+                </SheetContent>
+            </Sheet>
         </div>
     );
 }

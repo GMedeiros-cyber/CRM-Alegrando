@@ -100,6 +100,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         horaInicio: "",
         dataFim: "",
         horaFim: "",
+        clienteTelefone: "",
     });
 
     // =============================================
@@ -150,6 +151,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 horaInicio: startTime,
                 dataFim: endDate,
                 horaFim: endTime,
+                clienteTelefone: selectedEvent.extendedProps.leadId || "",
             });
             setEditing(false);
         }
@@ -181,6 +183,21 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         window.addEventListener("agenda:create", handler);
         return () => window.removeEventListener("agenda:create", handler);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Listener para abrir evento a partir da lista de Próximos Eventos
+    useEffect(() => {
+        function handleOpenEvent(e: Event) {
+            const customEvent = e as CustomEvent<{ eventId: string }>;
+            const evt = allEvents.find((ev) => ev.id === customEvent.detail.eventId);
+            if (evt) {
+                setModalMode("view");
+                setSelectedEvent(evt);
+                setModalOpen(true);
+            }
+        }
+        window.addEventListener("agenda:open-event", handleOpenEvent);
+        return () => window.removeEventListener("agenda:open-event", handleOpenEvent);
+    }, [allEvents]);
 
     function handleDateClick(info: DateClickArg) {
         setModalMode("create");
@@ -256,6 +273,8 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         }
         setDateError(null);
 
+        const cliente = clientes.find((c) => c.telefone === editForm.clienteTelefone);
+
         startTransition(async () => {
             try {
                 await updateAgendamento(selectedEvent.extendedProps.googleEventId, {
@@ -264,6 +283,8 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                     horaInicio: editForm.horaInicio,
                     dataFim: editForm.dataFim,
                     horaFim: editForm.horaFim,
+                    leadId: editForm.clienteTelefone || undefined,
+                    nomeEscola: cliente?.nome || editForm.titulo,
                 });
                 setEditing(false);
                 setModalOpen(false);
@@ -637,6 +658,28 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                                     onChange={(e) => setEditForm(f => ({ ...f, horaFim: e.target.value }))}
                                                     className="bg-slate-900 border-slate-600 text-white rounded-xl" />
                                             </div>
+                                        </div>
+                                        {/* Cliente select */}
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                                <School className="w-3 h-3" />
+                                                Vincular a um Cliente
+                                            </Label>
+                                            <Select
+                                                value={editForm.clienteTelefone}
+                                                onValueChange={(v) => setEditForm((f) => ({ ...f, clienteTelefone: v }))}
+                                            >
+                                                <SelectTrigger className="bg-slate-900 border-slate-600 text-white rounded-xl">
+                                                    <SelectValue placeholder="Selecione um cliente..." />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-800 border-slate-700">
+                                                    {clientes.map((cliente) => (
+                                                        <SelectItem key={cliente.telefone} value={cliente.telefone}>
+                                                            {cliente.nome || cliente.telefone}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                         {dateError && (
                                             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">

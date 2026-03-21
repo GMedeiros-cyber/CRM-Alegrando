@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     const { data: leads, error } = await supabase
         .from("Clientes _WhatsApp")
         .select(
-            "telefone, nome, ultimo_passeio, followup_dias, followup_enviado"
+            "telefone, nome, ultimo_passeio, followup_dias, followup_enviado, followup_hora"
         )
         .eq("followup_ativo", true)
         .eq("followup_enviado", false)
@@ -63,6 +63,18 @@ export async function POST(req: Request) {
             const diffMs = hoje.getTime() - ultimoPasseio.getTime();
             const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
             const followupDias = lead.followup_dias ?? 45;
+
+            // Verificar se é a hora certa para este lead
+            const followupHora = lead.followup_hora || "09:00";
+            const [horaAlvo, minAlvo] = followupHora.split(":").map(Number);
+            const agora = new Date();
+            const horaAtual = agora.getHours();
+            const minAtual = agora.getMinutes();
+
+            // Só enviar se estiver dentro da janela de 59min do horário configurado
+            if (Math.abs((horaAtual * 60 + minAtual) - (horaAlvo * 60 + minAlvo)) > 59) {
+                continue;
+            }
 
             // D+1 — Avaliação Google
             if (diffDias === 1) {
