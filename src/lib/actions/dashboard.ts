@@ -140,6 +140,35 @@ export async function getEventosDoMes(): Promise<number> {
 /**
  * Conta passeios do mês atual via campo ultimo_passeio da Clientes _WhatsApp.
  */
+/**
+ * Lista leads que fizeram passeio no mês atual (para expandir no card).
+ */
+export async function getPasseiosDoMes(): Promise<{ nome: string; telefone: string; destino: string | null; data: string }[]> {
+    const supabase = createServerSupabaseClient();
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+
+    const { data, error } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("Nome, Telefone, destino, ultimo_passeio")
+        .gte("ultimo_passeio", firstDay)
+        .lte("ultimo_passeio", lastDay)
+        .order("ultimo_passeio", { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map((row: { Nome?: string; Telefone?: number; destino?: string; ultimo_passeio?: string }) => ({
+        nome: row.Nome || "Sem nome",
+        telefone: String(row.Telefone || ""),
+        destino: row.destino || null,
+        data: row.ultimo_passeio || "",
+    }));
+}
+
+/**
+ * Conta passeios do mês atual via campo ultimo_passeio da Clientes _WhatsApp.
+ */
 export async function getTotalPasseiosDoMes(): Promise<number> {
     const supabase = createServerSupabaseClient();
     const now = new Date();

@@ -9,6 +9,8 @@ import {
     Pencil,
     Check,
     Loader2,
+    ChevronDown,
+    ChevronUp,
 } from "lucide-react";
 import Link from "next/link";
 import { MetricCard } from "@/components/dashboard/metric-card";
@@ -16,7 +18,7 @@ import {
     LeadsPorMesChart,
     TopDestinosChart,
 } from "@/components/dashboard/charts";
-import { getTotalLeads, getEventosDoMes, getTotalPasseiosDoMes } from "@/lib/actions/dashboard";
+import { getTotalLeads, getEventosDoMes, getTotalPasseiosDoMes, getPasseiosDoMes } from "@/lib/actions/dashboard";
 import { getAgendamentos } from "@/lib/actions/agenda";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
 
@@ -28,6 +30,9 @@ function MetaPasseiosCard() {
     const [atual, setAtual] = useState<number>(0);
     const [editing, setEditing] = useState(false);
     const [inputValue, setInputValue] = useState("");
+    const [showPasseios, setShowPasseios] = useState(false);
+    const [passeios, setPasseios] = useState<{ nome: string; telefone: string; destino: string | null; data: string }[]>([]);
+    const [loadingPasseios, setLoadingPasseios] = useState(false);
 
     // Load meta from localStorage + passeios reais
     useEffect(() => {
@@ -43,6 +48,21 @@ function MetaPasseiosCard() {
             localStorage.setItem("alegrando_meta_passeios", String(val));
         }
         setEditing(false);
+    }
+
+    async function handleClickMeta() {
+        if (editing) return;
+        if (showPasseios) {
+            setShowPasseios(false);
+            return;
+        }
+        setShowPasseios(true);
+        if (passeios.length === 0) {
+            setLoadingPasseios(true);
+            const data = await getPasseiosDoMes();
+            setPasseios(data);
+            setLoadingPasseios(false);
+        }
     }
 
     const progress = meta > 0 ? Math.min((atual / meta) * 100, 100) : 0;
@@ -61,35 +81,40 @@ function MetaPasseiosCard() {
                     <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900/50 backdrop-blur-sm shadow-sm">
                         <Target className="w-5 h-5 text-emerald-500" />
                     </div>
-                    <button
-                        onClick={() => {
-                            if (editing) {
-                                handleSave();
-                            } else {
-                                setInputValue(String(meta));
-                                setEditing(true);
-                            }
-                        }}
-                        className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors flex items-center gap-1"
-                    >
-                        {editing ? (
-                            <>
-                                <Check className="w-3 h-3" />
-                                Salvar
-                            </>
-                        ) : (
-                            <>
-                                <Pencil className="w-3 h-3" />
-                                Editar Meta
-                            </>
-                        )}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            onClick={() => {
+                                if (editing) {
+                                    handleSave();
+                                } else {
+                                    setInputValue(String(meta));
+                                    setEditing(true);
+                                }
+                            }}
+                            className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors flex items-center gap-1"
+                        >
+                            {editing ? (
+                                <>
+                                    <Check className="w-3 h-3" />
+                                    Salvar
+                                </>
+                            ) : (
+                                <>
+                                    <Pencil className="w-3 h-3" />
+                                    Editar Meta
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
 
-                {/* Value */}
-                <div>
+                {/* Value — clickable to expand */}
+                <div
+                    onClick={handleClickMeta}
+                    className={!editing ? "cursor-pointer" : ""}
+                >
                     {editing ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             <input
                                 type="number"
                                 value={inputValue}
@@ -102,9 +127,16 @@ function MetaPasseiosCard() {
                             <span className="text-xl text-slate-400">passeios</span>
                         </div>
                     ) : (
-                        <p className="font-display text-3xl font-bold text-white tracking-tight">
-                            {atual} <span className="text-lg text-slate-400 font-normal">/ {meta}</span>
-                        </p>
+                        <div className="flex items-center justify-between">
+                            <p className="font-display text-3xl font-bold text-white tracking-tight">
+                                {atual} <span className="text-lg text-slate-400 font-normal">/ {meta}</span>
+                            </p>
+                            {atual > 0 && (
+                                showPasseios
+                                    ? <ChevronUp className="w-4 h-4 text-slate-400" />
+                                    : <ChevronDown className="w-4 h-4 text-slate-400" />
+                            )}
+                        </div>
                     )}
                     <p className="text-sm text-slate-400 mt-0.5">Meta de Passeios</p>
                     {/* Progress bar */}
@@ -115,6 +147,39 @@ function MetaPasseiosCard() {
                         />
                     </div>
                 </div>
+
+                {/* Expandable list of passeios */}
+                {showPasseios && (
+                    <div className="mt-1 space-y-1.5 max-h-[200px] overflow-y-auto">
+                        {loadingPasseios ? (
+                            <div className="flex items-center justify-center py-3">
+                                <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                            </div>
+                        ) : passeios.length > 0 ? (
+                            passeios.map((p, i) => (
+                                <Link
+                                    key={i}
+                                    href={`/conversas?telefone=${p.telefone}`}
+                                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-slate-900/60 hover:bg-slate-900 border border-slate-700/50 transition-colors group"
+                                >
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-medium text-slate-200 truncate group-hover:text-emerald-400 transition-colors">
+                                            {p.nome}
+                                        </p>
+                                        {p.destino && (
+                                            <p className="text-[10px] text-slate-500 truncate">{p.destino}</p>
+                                        )}
+                                    </div>
+                                    <span className="text-[10px] text-slate-500 shrink-0">
+                                        {p.data ? new Date(p.data + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) : ""}
+                                    </span>
+                                </Link>
+                            ))
+                        ) : (
+                            <p className="text-xs text-slate-500 text-center py-2">Nenhum passeio registrado.</p>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

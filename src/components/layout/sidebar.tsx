@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { UserButton } from "@clerk/nextjs";
 import {
     LayoutDashboard,
@@ -11,6 +11,8 @@ import {
     MessageSquare,
     CalendarDays,
     ClipboardCheck,
+    Menu,
+    X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,14 +27,24 @@ const navigation = [
 export function Sidebar() {
     const pathname = usePathname();
     const [expanded, setExpanded] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 768);
+        check();
+        window.addEventListener("resize", check);
+        return () => window.removeEventListener("resize", check);
+    }, []);
 
     return (
         <aside
-            onMouseEnter={() => setExpanded(true)}
-            onMouseLeave={() => setExpanded(false)}
+            onMouseEnter={() => { if (!isMobile) setExpanded(true); }}
+            onMouseLeave={() => { if (!isMobile) setExpanded(false); }}
             className={cn(
                 "fixed left-0 top-0 z-40 flex h-screen flex-col items-center bg-[#FFA832] border-r-2 border-orange-400 py-4 transition-all duration-300",
-                expanded ? "w-[176px]" : "w-[64px]"
+                isMobile
+                    ? expanded ? "w-[200px] shadow-2xl" : "w-[64px]"
+                    : expanded ? "w-[176px]" : "w-[64px]"
             )}
         >
             {/* Brand — Logo */}
@@ -47,6 +59,16 @@ export function Sidebar() {
                 />
             </div>
 
+            {/* Mobile toggle */}
+            {isMobile && (
+                <button
+                    onClick={() => setExpanded((e) => !e)}
+                    className="w-full flex items-center justify-center p-2 mb-2 rounded-lg text-slate-800 hover:bg-white/20 transition-colors"
+                >
+                    {expanded ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                </button>
+            )}
+
             {/* Navigation */}
             <nav className="flex flex-1 flex-col items-center gap-1 w-full px-2">
                 {navigation.map((item) => {
@@ -57,6 +79,7 @@ export function Sidebar() {
                         <Link
                             key={item.name}
                             href={item.href}
+                            onClick={() => { if (isMobile) setExpanded(false); }}
                             className={cn(
                                 "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 overflow-hidden",
                                 isActive

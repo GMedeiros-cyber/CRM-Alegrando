@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { KanbanLead } from "@/lib/actions/kanban";
@@ -38,7 +38,31 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
     const [checkItems, setCheckItems] = useState<CheckItem[]>(lead.tasks || []);
     const [newItemText, setNewItemText] = useState("");
     const [showChecklist, setShowChecklist] = useState(false);
-    const [collapsed, setCollapsed] = useState(false);
+    const [collapsed, setCollapsed] = useState(() => {
+        if (typeof window === "undefined") return false;
+        try {
+            const stored = localStorage.getItem("alegrando_kanban_collapsed");
+            if (stored) {
+                const ids: string[] = JSON.parse(stored);
+                return ids.includes(lead.id);
+            }
+        } catch {}
+        return false;
+    });
+
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem("alegrando_kanban_collapsed");
+            const ids: string[] = stored ? JSON.parse(stored) : [];
+            if (collapsed) {
+                if (!ids.includes(lead.id)) ids.push(lead.id);
+            } else {
+                const idx = ids.indexOf(lead.id);
+                if (idx !== -1) ids.splice(idx, 1);
+            }
+            localStorage.setItem("alegrando_kanban_collapsed", JSON.stringify(ids));
+        } catch {}
+    }, [collapsed, lead.id]);
 
     async function addCheckItem() {
         const text = newItemText.trim();
