@@ -108,7 +108,7 @@ export function LeadsPorMesChart() {
 // Top Destinos — dados reais
 // =========================================
 export function TopDestinosChart() {
-    const [data, setData] = useState<{ destino: string; total: number }[]>([]);
+    const [data, setData] = useState<{ destino: string; pedidos: number; fechados: number }[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -124,7 +124,7 @@ export function TopDestinosChart() {
                     Top Destinos & Passeios
                 </h3>
                 <p className="text-sm text-slate-400 mt-0.5">
-                    Destinos mais requisitados este mês
+                    Pedidos vs fechados este mês
                 </p>
             </div>
             {loading ? (
@@ -145,7 +145,8 @@ export function TopDestinosChart() {
                                 width={140}
                             />
                             <Tooltip content={<CustomTooltipContent />} cursor={{ fill: "transparent" }} />
-                            <Bar dataKey="total" name="Menções" radius={[0, 4, 4, 0]} fill="#fb923c" />
+                            <Bar dataKey="pedidos" name="Pedidos" radius={[0, 4, 4, 0]} fill="#fb923c" />
+                            <Bar dataKey="fechados" name="Fechados" radius={[0, 4, 4, 0]} fill="#22c55e" />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>

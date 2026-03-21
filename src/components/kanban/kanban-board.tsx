@@ -225,7 +225,10 @@ export function KanbanBoard({
                         const oldIdx = prev.findIndex((c) => c.id === fromColId);
                         const newIdx = prev.findIndex((c) => c.id === toColId);
                         if (oldIdx === -1 || newIdx === -1) return prev;
-                        const reordered = arrayMove(prev, oldIdx, newIdx);
+                        const reordered = arrayMove(prev, oldIdx, newIdx).map((c, i) => ({
+                            ...c,
+                            position: i,
+                        }));
                         pendingColumnOrder.current = reordered.map((c) => c.id);
                         return reordered;
                     });

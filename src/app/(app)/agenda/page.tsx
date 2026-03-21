@@ -1,13 +1,23 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { CalendarDays, Plus, MapPin, Users, MessageSquare, ArrowRight } from "lucide-react";
 import { AgendaCalendar } from "@/components/agenda/agenda-calendar";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
 import Link from "next/link";
 
 export default function AgendaPage() {
+    const searchParams = useSearchParams();
     const [events, setEvents] = useState<AgendamentoEvent[]>([]);
+
+    // Auto-open event from URL param (deep link from Conversas/Dashboard)
+    useEffect(() => {
+        const eventId = searchParams.get("eventId");
+        if (eventId && events.length > 0) {
+            window.dispatchEvent(new CustomEvent("agenda:open-event", { detail: { eventId } }));
+        }
+    }, [searchParams, events]);
 
     // Upcoming events: only future ones, sorted by date
     const upcomingEvents = useMemo(() => {
@@ -47,6 +57,10 @@ export default function AgendaPage() {
         if (diff === 0) return "Hoje";
         if (diff === 1) return "Amanhã";
         return `Em ${diff} dias`;
+    }
+
+    function handleEventCardClick(eventId: string) {
+        window.dispatchEvent(new CustomEvent("agenda:open-event", { detail: { eventId } }));
     }
 
     return (
@@ -95,7 +109,8 @@ export default function AgendaPage() {
                         {upcomingEvents.map((evt) => (
                             <div
                                 key={evt.id}
-                                className="flex items-center gap-4 p-3.5 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-700/50 transition-colors duration-200 group"
+                                onClick={() => handleEventCardClick(evt.id)}
+                                className="flex items-center gap-4 p-3.5 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-700/50 transition-colors duration-200 group cursor-pointer"
                             >
                                 {/* Color bar + date */}
                                 <div className="flex items-center gap-3 shrink-0">
