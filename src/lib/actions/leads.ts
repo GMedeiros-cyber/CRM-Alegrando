@@ -333,3 +333,106 @@ export async function getAvailableDestinations(): Promise<string[]> {
     )];
     return unique.sort();
 }
+
+// =============================================
+// HISTÓRICO DE PASSEIOS
+// =============================================
+
+export type PasseioHistorico = {
+    id: string;
+    telefone: string;
+    destino: string;
+    dataPaseio: string;
+    createdAt: string;
+};
+
+/**
+ * Lista passeios do histórico de um lead.
+ */
+export async function getPasseiosHistorico(telefone: string): Promise<PasseioHistorico[]> {
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+        .from("passeios_historico")
+        .select("*")
+        .eq("telefone", telefone)
+        .order("data_passeio", { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map(p => ({
+        id: p.id,
+        telefone: String(p.telefone),
+        destino: p.destino,
+        dataPaseio: p.data_passeio,
+        createdAt: p.created_at,
+    }));
+}
+
+/**
+ * Adiciona um passeio ao histórico e atualiza ultimo_passeio se for o mais recente.
+ */
+export async function addPasseioHistorico(
+    telefone: string,
+    destino: string,
+    dataPaseio: string
+): Promise<PasseioHistorico | null> {
+    const supabase = createServerSupabaseClient();
+
+    // 1. Inserir no histórico
+    const { data, error } = await supabase
+        .from("passeios_historico")
+        .insert({ telefone, destino, data_passeio: dataPaseio })
+        .select("*")
+        .single();
+
+    if (error || !data) return null;
+
+    // 2. Verificar se é o mais recente e atualizar ultimo_passeio
+    const { data: maisRecente } = await supabase
+        .from("passeios_historico")
+        .select("data_passeio")
+        .eq("telefone", telefone)
+        .order("data_passeio", { ascending: false })
+        .limit(1)
+        .single();
+
+    if (maisRecente) {
+        await supabase
+            .from("Clientes _WhatsApp")
+            .update({ ultimo_passeio: maisRecente.data_passeio })
+            .eq("telefone", telefone);
+    }
+
+    return {
+        id: data.id,
+        telefone: String(data.telefone),
+        destino: data.destino,
+        dataPaseio: data.data_passeio,
+        createdAt: data.created_at,
+    };
+}
+
+/**
+ * Remove um passeio do histórico e recalcula ultimo_passeio.
+ */
+export async function deletePasseioHistorico(id: string, telefone: string): Promise<{ success: boolean }> {
+    const supabase = createServerSupabaseClient();
+
+    await supabase.from("passeios_historico").delete().eq("id", id);
+
+    // Recalcular ultimo_passeio
+    const { data: maisRecente } = await supabase
+        .from("passeios_historico")
+        .select("data_passeio")
+        .eq("telefone", telefone)
+        .order("data_passeio", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    await supabase
+        .from("Clientes _WhatsApp")
+        .update({ ultimo_passeio: maisRecente?.data_passeio || null })
+        .eq("telefone", telefone);
+
+    return { success: true };
+}

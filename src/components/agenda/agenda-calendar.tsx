@@ -537,11 +537,23 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
 
                                 {/* Details grid */}
                                 <div className="grid grid-cols-2 gap-3">
-                                    <InfoCard
-                                        icon={<School className="w-4 h-4 text-brand-400" />}
-                                        label="Escola / Cliente"
-                                        value={selectedEvent.extendedProps.nomeEscola}
-                                    />
+                                    {selectedEvent.extendedProps.leadId ? (
+                                        <div className="bg-slate-900/60 rounded-xl p-3 border border-brand-500/30">
+                                            <div className="flex items-center gap-1.5 mb-1">
+                                                <School className="w-4 h-4 text-brand-400" />
+                                                <span className="text-[10px] font-semibold text-brand-400 uppercase tracking-wider">
+                                                    Lead Vinculado
+                                                </span>
+                                            </div>
+                                            <p className="text-sm font-medium text-brand-300">{selectedEvent.extendedProps.nomeEscola}</p>
+                                        </div>
+                                    ) : (
+                                        <InfoCard
+                                            icon={<School className="w-4 h-4 text-slate-400" />}
+                                            label="Título"
+                                            value={selectedEvent.extendedProps.nomeEscola || selectedEvent.title}
+                                        />
+                                    )}
                                     <InfoCard
                                         icon={<CalendarDays className="w-4 h-4 text-blue-400" />}
                                         label="Data"
