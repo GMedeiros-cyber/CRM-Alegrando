@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build)",
+      "Bash(npm install react-day-picker date-fns)",
+      "Bash(npm ls react-day-picker)",
+      "WebFetch(domain:daypicker.dev)"
+    ]
+  }
+}

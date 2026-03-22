@@ -218,6 +218,7 @@ export async function updateCliente(
         followupDias?: number;
         followupHora?: string;
         followupAtivo?: boolean;
+        followupEnviado?: boolean;
     }
 ) {
     const supabase = createServerSupabaseClient();
@@ -236,7 +237,12 @@ export async function updateCliente(
     if (data.ultimoPasseio !== undefined) updateData.ultimo_passeio = data.ultimoPasseio;
     if (data.followupDias !== undefined) updateData.followup_dias = data.followupDias;
     if (data.followupHora !== undefined) updateData.followup_hora = data.followupHora;
-    if (data.followupAtivo !== undefined) updateData.followup_ativo = data.followupAtivo;
+    if (data.followupAtivo !== undefined) {
+        updateData.followup_ativo = data.followupAtivo;
+        // ao desativar follow-up, reseta o flag de enviado
+        if (data.followupAtivo === false) updateData.followup_enviado = false;
+    }
+    if (data.followupEnviado !== undefined) updateData.followup_enviado = data.followupEnviado;
 
     await supabase
         .from("Clientes _WhatsApp")

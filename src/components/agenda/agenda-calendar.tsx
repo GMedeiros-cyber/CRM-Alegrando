@@ -270,7 +270,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 setModalOpen(false);
                 await loadEvents();
             } catch (err) {
-                setSaveError("Erro ao criar agendamento. Verifique as credenciais do Google Calendar.");
+                setSaveError(err instanceof Error ? err.message : String(err));
             }
         });
     }
@@ -308,7 +308,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 setModalOpen(false);
                 await loadEvents();
             } catch (err) {
-                setSaveError("Erro ao atualizar agendamento.");
+                setSaveError(err instanceof Error ? err.message : String(err));
             }
         });
     }
@@ -322,7 +322,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 setModalOpen(false);
                 await loadEvents();
             } catch (err) {
-                setSaveError("Erro ao excluir agendamento.");
+                setSaveError(err instanceof Error ? err.message : String(err));
             }
         });
     }
