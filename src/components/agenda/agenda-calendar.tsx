@@ -10,6 +10,8 @@ import type { EventClickArg } from "@fullcalendar/core";
 import type { DateClickArg } from "@fullcalendar/interaction";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
 import {
     Select,
     SelectContent,
@@ -73,6 +75,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     const [loadingEvents, setLoadingEvents] = useState(true);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [dateError, setDateError] = useState<string | null>(null);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     // Clientes list for the select
     const [clientes, setClientes] = useState<ClienteListItem[]>([]);
@@ -165,6 +168,8 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         const today = new Date().toISOString().split("T")[0];
         setModalMode("create");
         setSelectedEvent(null);
+        setSaveError(null);
+        setDateError(null);
         setForm({
             titulo: "",
             dataInicio: today,
@@ -218,6 +223,8 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         if (evt) {
             setModalMode("view");
             setSelectedEvent(evt);
+            setSaveError(null);
+            setDateError(null);
             setModalOpen(true);
         }
     }
@@ -229,10 +236,15 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     // 3️⃣ Save new event → Google Calendar + email convidado
     function handleSaveEvent() {
         if (!form.titulo || !form.dataInicio) return;
+        setSaveError(null);
 
-        // Validar data passada
         if (form.dataInicio < today) {
             setDateError("Não é possível criar eventos em datas passadas.");
+            return;
+        }
+
+        if (form.dataFim && form.dataFim < form.dataInicio) {
+            setDateError("Data fim não pode ser anterior à data de início.");
             return;
         }
         setDateError(null);
@@ -257,7 +269,8 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 });
                 setModalOpen(false);
                 await loadEvents();
-            } catch {
+            } catch (err) {
+                setSaveError("Erro ao criar agendamento. Verifique as credenciais do Google Calendar.");
             }
         });
     }
@@ -265,10 +278,15 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     // 2️⃣ Update event → Google Calendar
     async function handleUpdateEvent() {
         if (!selectedEvent) return;
+        setSaveError(null);
 
-        // Validar data passada
         if (editForm.dataInicio < today) {
             setDateError("Não é possível criar eventos em datas passadas.");
+            return;
+        }
+
+        if (editForm.dataFim && editForm.dataFim < editForm.dataInicio) {
+            setDateError("Data fim não pode ser anterior à data de início.");
             return;
         }
         setDateError(null);
@@ -289,7 +307,8 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 setEditing(false);
                 setModalOpen(false);
                 await loadEvents();
-            } catch {
+            } catch (err) {
+                setSaveError("Erro ao atualizar agendamento.");
             }
         });
     }
@@ -302,7 +321,8 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 setSelectedEvent(null);
                 setModalOpen(false);
                 await loadEvents();
-            } catch {
+            } catch (err) {
+                setSaveError("Erro ao excluir agendamento.");
             }
         });
     }
@@ -410,28 +430,24 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                                             Data Início
                                         </Label>
-                                        <Input
-                                            type="date"
+                                        <DatePicker
                                             value={form.dataInicio}
-                                            min={today}
-                                            onChange={(e) => {
+                                            onChange={(v) => {
                                                 setDateError(null);
-                                                setForm((f) => ({ ...f, dataInicio: e.target.value }));
+                                                setForm((f) => ({ ...f, dataInicio: v }));
                                             }}
-                                            className="bg-slate-900 border-slate-600 text-white rounded-xl"
+                                            minDate={new Date()}
+                                            className="w-full rounded-xl"
                                         />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                                             Hora Início
                                         </Label>
-                                        <Input
-                                            type="time"
+                                        <TimePicker
                                             value={form.horaInicio}
-                                            onChange={(e) =>
-                                                setForm((f) => ({ ...f, horaInicio: e.target.value }))
-                                            }
-                                            className="bg-slate-900 border-slate-600 text-white rounded-xl"
+                                            onChange={(v) => setForm((f) => ({ ...f, horaInicio: v }))}
+                                            className="w-full rounded-xl"
                                         />
                                     </div>
                                 </div>
@@ -441,28 +457,24 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                                             Data Fim
                                         </Label>
-                                        <Input
-                                            type="date"
+                                        <DatePicker
                                             value={form.dataFim}
-                                            min={today}
-                                            onChange={(e) => {
+                                            onChange={(v) => {
                                                 setDateError(null);
-                                                setForm((f) => ({ ...f, dataFim: e.target.value }));
+                                                setForm((f) => ({ ...f, dataFim: v }));
                                             }}
-                                            className="bg-slate-900 border-slate-600 text-white rounded-xl"
+                                            minDate={new Date()}
+                                            className="w-full rounded-xl"
                                         />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                                             Hora Fim
                                         </Label>
-                                        <Input
-                                            type="time"
+                                        <TimePicker
                                             value={form.horaFim}
-                                            onChange={(e) =>
-                                                setForm((f) => ({ ...f, horaFim: e.target.value }))
-                                            }
-                                            className="bg-slate-900 border-slate-600 text-white rounded-xl"
+                                            onChange={(v) => setForm((f) => ({ ...f, horaFim: v }))}
+                                            className="w-full rounded-xl"
                                         />
                                     </div>
                                 </div>
@@ -499,6 +511,13 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                 {dateError && (
                                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
                                         {dateError}
+                                    </div>
+                                )}
+
+                                {/* Erro de salvamento */}
+                                {saveError && (
+                                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
+                                        {saveError}
                                     </div>
                                 )}
 
@@ -644,31 +663,39 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Início</Label>
-                                                <Input type="date" value={editForm.dataInicio}
-                                                    min={today}
-                                                    onChange={(e) => { setDateError(null); setEditForm(f => ({ ...f, dataInicio: e.target.value })); }}
-                                                    className="bg-slate-900 border-slate-600 text-white rounded-xl" />
+                                                <DatePicker
+                                                    value={editForm.dataInicio}
+                                                    onChange={(v) => { setDateError(null); setEditForm(f => ({ ...f, dataInicio: v })); }}
+                                                    minDate={new Date()}
+                                                    className="w-full rounded-xl"
+                                                />
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hora Início</Label>
-                                                <Input type="time" value={editForm.horaInicio}
-                                                    onChange={(e) => setEditForm(f => ({ ...f, horaInicio: e.target.value }))}
-                                                    className="bg-slate-900 border-slate-600 text-white rounded-xl" />
+                                                <TimePicker
+                                                    value={editForm.horaInicio}
+                                                    onChange={(v) => setEditForm(f => ({ ...f, horaInicio: v }))}
+                                                    className="w-full rounded-xl"
+                                                />
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Fim</Label>
-                                                <Input type="date" value={editForm.dataFim}
-                                                    min={today}
-                                                    onChange={(e) => { setDateError(null); setEditForm(f => ({ ...f, dataFim: e.target.value })); }}
-                                                    className="bg-slate-900 border-slate-600 text-white rounded-xl" />
+                                                <DatePicker
+                                                    value={editForm.dataFim}
+                                                    onChange={(v) => { setDateError(null); setEditForm(f => ({ ...f, dataFim: v })); }}
+                                                    minDate={new Date()}
+                                                    className="w-full rounded-xl"
+                                                />
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hora Fim</Label>
-                                                <Input type="time" value={editForm.horaFim}
-                                                    onChange={(e) => setEditForm(f => ({ ...f, horaFim: e.target.value }))}
-                                                    className="bg-slate-900 border-slate-600 text-white rounded-xl" />
+                                                <TimePicker
+                                                    value={editForm.horaFim}
+                                                    onChange={(v) => setEditForm(f => ({ ...f, horaFim: v }))}
+                                                    className="w-full rounded-xl"
+                                                />
                                             </div>
                                         </div>
                                         {/* Cliente select */}
@@ -696,6 +723,11 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         {dateError && (
                                             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
                                                 {dateError}
+                                            </div>
+                                        )}
+                                        {saveError && (
+                                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
+                                                {saveError}
                                             </div>
                                         )}
                                         <div className="flex gap-2">
