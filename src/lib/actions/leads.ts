@@ -40,6 +40,7 @@ export type ClienteDetail = {
     followupHora: string;
     followupAtivo: boolean;
     followupEnviado: boolean;
+    followupEnviadoEm: string | null;
 };
 
 /** Mensagem individual do chat */
@@ -182,6 +183,7 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         followupHora: data.followup_hora || "09:00",
         followupAtivo: data.followup_ativo ?? false,
         followupEnviado: data.followup_enviado ?? false,
+        followupEnviadoEm: data.followup_enviado_em || null,
     };
 }
 
@@ -239,8 +241,11 @@ export async function updateCliente(
     if (data.followupHora !== undefined) updateData.followup_hora = data.followupHora;
     if (data.followupAtivo !== undefined) {
         updateData.followup_ativo = data.followupAtivo;
-        // ao desativar follow-up, reseta o flag de enviado
-        if (data.followupAtivo === false) updateData.followup_enviado = false;
+        // ao desativar follow-up, reseta o flag e o timestamp de enviado
+        if (data.followupAtivo === false) {
+            updateData.followup_enviado = false;
+            updateData.followup_enviado_em = null;
+        }
     }
     if (data.followupEnviado !== undefined) updateData.followup_enviado = data.followupEnviado;
 
@@ -309,12 +314,13 @@ export async function sendManualFollowup(telefone: string): Promise<{ success: b
         content: mensagem,
     });
 
-    if (tipo === "followup") {
-        await supabase
-            .from("Clientes _WhatsApp")
-            .update({ followup_enviado: true })
-            .eq("telefone", telefone);
-    }
+    await supabase
+        .from("Clientes _WhatsApp")
+        .update({
+            followup_enviado: true,
+            followup_enviado_em: new Date().toISOString(),
+        })
+        .eq("telefone", telefone);
 
     return { success: true, type: tipo };
 }
