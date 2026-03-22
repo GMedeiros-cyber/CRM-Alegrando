@@ -10,13 +10,100 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { MetricCard } from "@/components/dashboard/metric-card";
-import {
-    LeadsPorMesChart,
-    TopDestinosChart,
-} from "@/components/dashboard/charts";
+import { LeadsPorMesChart } from "@/components/dashboard/charts";
 import { getTotalLeads, getEventosDoMes, getFollowupsAtivos } from "@/lib/actions/dashboard";
+import { updateCliente } from "@/lib/actions/leads";
 import { getAgendamentos } from "@/lib/actions/agenda";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
+
+// =============================================
+// FOLLOW-UPS ATIVOS CARD
+// =============================================
+function FollowupsAtivosCard() {
+    const [followups, setFollowups] = useState<{
+        telefone: string; nome: string; ultimoPasseio: string | null;
+        followupDias: number; followupHora: string; followupEnviado: boolean;
+    }[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        getFollowupsAtivos().then(data => {
+            setFollowups(data);
+            setLoading(false);
+        });
+    }, []);
+
+    async function handleDesativar(telefone: string) {
+        await updateCliente(telefone, { followupAtivo: false });
+        setFollowups(prev => prev.filter(f => f.telefone !== telefone));
+    }
+
+    return (
+        <div className="bento-card-static p-6 bento-enter" style={{ animationDelay: "300ms" }}>
+            <div className="mb-4 flex items-center justify-between">
+                <div>
+                    <h3 className="font-display text-lg font-semibold text-foreground flex items-center gap-2">
+                        <Target className="w-5 h-5 text-emerald-400" />
+                        Follow-ups Ativos
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        Leads com follow-up programado
+                    </p>
+                </div>
+                <span className="text-xs font-bold bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full">
+                    {followups.length}
+                </span>
+            </div>
+
+            {loading ? (
+                <div className="flex justify-center py-8">
+                    <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+                </div>
+            ) : followups.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-2">
+                    <span className="text-3xl">✅</span>
+                    <p className="text-sm text-muted-foreground">Nenhum follow-up ativo.</p>
+                </div>
+            ) : (
+                <div className="space-y-2 max-h-[260px] overflow-y-auto">
+                    {followups.map(f => (
+                        <div key={f.telefone} className="flex items-center gap-3 p-3 rounded-xl bg-background/60 border border-border/50 hover:border-border transition-colors">
+                            <div className="flex-1 min-w-0">
+                                <Link
+                                    href={`/conversas?telefone=${f.telefone}`}
+                                    className="text-sm font-semibold text-foreground hover:text-brand-400 transition-colors truncate block"
+                                >
+                                    {f.nome}
+                                </Link>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    <span className="text-xs text-muted-foreground">
+                                        {f.ultimoPasseio
+                                            ? `Passeio: ${new Date(f.ultimoPasseio + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}`
+                                            : "Sem passeio"}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground/50">·</span>
+                                    <span className="text-xs text-muted-foreground">{f.followupDias}d · {f.followupHora}</span>
+                                    {f.followupEnviado && (
+                                        <>
+                                            <span className="text-xs text-muted-foreground/50">·</span>
+                                            <span className="text-[10px] font-bold text-emerald-400">✅ Enviado</span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => handleDesativar(f.telefone)}
+                                className="text-[10px] font-semibold px-2 py-1 rounded-full bg-red-500/15 text-red-400 hover:bg-red-500/25 border border-red-500/30 transition-colors shrink-0"
+                            >
+                                Desativar
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
 
 // =============================================
 // DASHBOARD PAGE
@@ -99,7 +186,7 @@ export default function DashboardPage() {
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <LeadsPorMesChart />
-                <TopDestinosChart />
+                <FollowupsAtivosCard />
             </div>
 
             {/* Próximos Eventos */}

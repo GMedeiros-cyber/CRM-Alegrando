@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
 import {
     Select,
     SelectContent,
@@ -626,11 +628,11 @@ export function ConversasLayout() {
                                     placeholder="Ex: Passeio Sítio do Carroção"
                                     className="rounded-lg h-8 text-sm bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
                                 />
-                                <Input
-                                    type="date"
+                                <DatePicker
                                     value={novoPasseioData}
-                                    onChange={(e) => setNovoPasseioData(e.target.value)}
-                                    className="rounded-lg h-8 text-sm bg-slate-900 border-slate-600 text-white"
+                                    onChange={(v) => setNovoPasseioData(v)}
+                                    placeholder="Data do passeio"
+                                    className="w-full rounded-lg"
                                 />
                                 <button
                                     onClick={handleAddPasseio}
@@ -707,12 +709,13 @@ export function ConversasLayout() {
                                     />
                                 </FieldGroup>
                                 <FieldGroup label="Horario de envio">
-                                    <Input
-                                        type="time"
+                                    <TimePicker
                                         value={form.followupHora}
-                                        onChange={(e) => setForm((f) => ({ ...f, followupHora: e.target.value }))}
-                                        onBlur={handleSave}
-                                        className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white"
+                                        onChange={(v) => {
+                                            setForm((f) => ({ ...f, followupHora: v }));
+                                            setTimeout(() => handleSave(), 0);
+                                        }}
+                                        className="w-full rounded-lg"
                                     />
                                 </FieldGroup>
                             </div>
