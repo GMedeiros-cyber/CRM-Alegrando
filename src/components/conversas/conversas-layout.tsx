@@ -721,8 +721,23 @@ export function ConversasLayout() {
                             </div>
 
                             {form.followupEnviado && (
-                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30">
-                                    <span className="text-xs font-medium text-emerald-400">Follow-up ja enviado</span>
+                                <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700">
+                                    <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                                        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                                        Follow-up enviado
+                                    </span>
+                                    <button
+                                        onClick={() => {
+                                            if (!selectedTelefone) return;
+                                            startTransition(async () => {
+                                                await updateCliente(selectedTelefone, { followupEnviado: false });
+                                                setForm(f => ({ ...f, followupEnviado: false }));
+                                            });
+                                        }}
+                                        className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors underline"
+                                    >
+                                        Resetar
+                                    </button>
                                 </div>
                             )}
                             {form.ultimoPasseio && !form.followupEnviado && (
@@ -1242,6 +1257,7 @@ export function ConversasLayout() {
                                 <Input
                                     value={chatMessage}
                                     onChange={(e) => setChatMessage(e.target.value)}
+                                    disabled={cliente.iaAtiva}
                                     placeholder={
                                         cliente.iaAtiva
                                             ? "Pause a IA para enviar manualmente..."
@@ -1249,7 +1265,7 @@ export function ConversasLayout() {
                                     }
                                     className="rounded-xl flex-1 h-10 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-brand-500 focus:ring-brand-500/20"
                                     onKeyDown={(e) => {
-                                        if (e.key === "Enter" && !e.shiftKey) {
+                                        if (e.key === "Enter" && !e.shiftKey && !cliente.iaAtiva) {
                                             e.preventDefault();
                                             handleSendMessage();
                                         }
@@ -1257,7 +1273,7 @@ export function ConversasLayout() {
                                 />
                                 <button
                                     onClick={handleSendMessage}
-                                    disabled={isPending || !chatMessage.trim()}
+                                    disabled={isPending || !chatMessage.trim() || cliente.iaAtiva}
                                     className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 shrink-0"
                                 >
                                     {isPending ? (
@@ -1268,7 +1284,9 @@ export function ConversasLayout() {
                                 </button>
                             </div>
                             <p className="text-[10px] text-slate-600 mt-1.5 text-center">
-                                Enter para enviar · Mensagens disparadas via n8n → WhatsApp
+                                {cliente.iaAtiva
+                                    ? "IA ativa — pause para enviar mensagens manualmente"
+                                    : "Enter para enviar · Mensagens disparadas via n8n → WhatsApp"}
                             </p>
                         </div>
                     </>

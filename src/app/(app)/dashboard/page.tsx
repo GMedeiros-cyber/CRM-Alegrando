@@ -19,7 +19,7 @@ import type { AgendamentoEvent } from "@/lib/actions/agenda";
 // =============================================
 // FOLLOW-UPS ATIVOS CARD
 // =============================================
-function FollowupsAtivosCard() {
+function FollowupsAtivosCard({ onDesativado }: { onDesativado?: () => void }) {
     const [followups, setFollowups] = useState<{
         telefone: string; nome: string; ultimoPasseio: string | null;
         followupDias: number; followupHora: string; followupEnviado: boolean;
@@ -36,6 +36,7 @@ function FollowupsAtivosCard() {
     async function handleDesativar(telefone: string) {
         await updateCliente(telefone, { followupAtivo: false });
         setFollowups(prev => prev.filter(f => f.telefone !== telefone));
+        onDesativado?.();
     }
 
     return (
@@ -186,7 +187,7 @@ export default function DashboardPage() {
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <LeadsPorMesChart />
-                <FollowupsAtivosCard />
+                <FollowupsAtivosCard onDesativado={() => setFollowupsAtivos(prev => (prev ?? 1) - 1)} />
             </div>
 
             {/* Próximos Eventos */}
