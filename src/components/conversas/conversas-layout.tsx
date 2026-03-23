@@ -121,6 +121,7 @@ export function ConversasLayout() {
         followupHora: "09:00",
         followupAtivo: false,
         followupEnviado: false,
+        followupEnviadoEm: "",
     });
 
     // Chat
@@ -268,6 +269,7 @@ export function ConversasLayout() {
                     followupHora: clienteData.followupHora || "09:00",
                     followupAtivo: clienteData.followupAtivo ?? false,
                     followupEnviado: clienteData.followupEnviado ?? false,
+                    followupEnviadoEm: clienteData.followupEnviadoEm || "",
                 });
 
                 // Tasks
@@ -721,20 +723,26 @@ export function ConversasLayout() {
                             </div>
 
                             {form.followupEnviado && (
-                                <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700">
-                                    <span className="flex items-center gap-1.5 text-xs text-slate-400">
-                                        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                                        Follow-up enviado
+                                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700">
+                                    <span className="text-xs text-slate-400">
+                                        ✅ Enviado {form.followupEnviadoEm
+                                            ? `em ${new Date(form.followupEnviadoEm).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${new Date(form.followupEnviadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                                            : ""}
                                     </span>
                                     <button
                                         onClick={() => {
                                             if (!selectedTelefone) return;
                                             startTransition(async () => {
-                                                await updateCliente(selectedTelefone, { followupEnviado: false });
-                                                setForm(f => ({ ...f, followupEnviado: false }));
+                                                try {
+                                                    await updateCliente(selectedTelefone, { followupAtivo: false });
+                                                    setForm(f => ({ ...f, followupAtivo: false, followupEnviado: false, followupEnviadoEm: "" }));
+                                                    setToast({ type: "success", text: "Follow-up resetado." });
+                                                    loadList();
+                                                } catch {}
                                             });
                                         }}
-                                        className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors underline"
+                                        disabled={isPending}
+                                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600 transition-colors"
                                     >
                                         Resetar
                                     </button>
