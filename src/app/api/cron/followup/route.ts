@@ -126,7 +126,10 @@ export async function POST(req: Request) {
                     // Marca como enviado no banco
                     await supabase
                         .from("Clientes _WhatsApp")
-                        .update({ followup_enviado: true })
+                        .update({
+                            followup_enviado: true,
+                            followup_enviado_em: new Date().toISOString(),
+                        })
                         .eq("telefone", lead.telefone);
                 } else {
                     erros++;
