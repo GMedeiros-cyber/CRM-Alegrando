@@ -1,6 +1,34 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth";
+import { z } from "zod";
+import { getSetting } from "@/lib/actions/settings";
+import { applyPlaceholders } from "@/lib/settings_helper";
+
+// =============================================
+// VALIDATION SCHEMAS
+// =============================================
+
+const updateClienteSchema = z.object({
+    nome: z.string().max(255).nullable().optional(),
+    status: z.string().max(50).nullable().optional(),
+    cpf: z.string().max(14).nullable().optional(),
+    email: z.string().max(255).nullable().optional(),
+    statusAtendimento: z.string().max(100).nullable().optional(),
+    linkedin: z.string().max(500).nullable().optional(),
+    facebook: z.string().max(500).nullable().optional(),
+    instagram: z.string().max(500).nullable().optional(),
+    kanbanColumnId: z.string().uuid().nullable().optional(),
+    kanbanPosition: z.number().int().min(0).optional(),
+    ultimoPasseio: z.string().max(20).nullable().optional(),
+    followupDias: z.number().int().min(1).max(365).optional(),
+    followupHora: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+    followupAtivo: z.boolean().optional(),
+    followupEnviado: z.boolean().optional(),
+    posPasseioAtivo: z.boolean().optional(),
+    posPasseioEnviado: z.boolean().optional(),
+}).strict();
 
 // =============================================
 // TYPES
@@ -41,6 +69,9 @@ export type ClienteDetail = {
     followupAtivo: boolean;
     followupEnviado: boolean;
     followupEnviadoEm: string | null;
+    posPasseioAtivo: boolean;
+    posPasseioEnviado: boolean;
+    posPasseioEnviadoEm: string | null;
 };
 
 /** Mensagem individual do chat */
@@ -66,6 +97,7 @@ export async function listClientes(params?: {
     page?: number;
     limit?: number;
 }): Promise<{ data: ClienteListItem[]; total: number }> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const search = params?.search?.trim();
     const page = params?.page ?? 1;
@@ -143,6 +175,7 @@ export async function listClientes(params?: {
  * Marca as mensagens de um cliente como lidas (atualiza lastSeenAt).
  */
 export async function markAsRead(telefone: string): Promise<void> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     await supabase
         .from("Clientes _WhatsApp")
@@ -154,6 +187,7 @@ export async function markAsRead(telefone: string): Promise<void> {
  * Busca um cliente pelo telefone.
  */
 export async function getClienteByTelefone(telefone: string): Promise<ClienteDetail | null> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("Clientes _WhatsApp")
@@ -184,6 +218,9 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         followupAtivo: data.followup_ativo ?? false,
         followupEnviado: data.followup_enviado ?? false,
         followupEnviadoEm: data.followup_enviado_em || null,
+        posPasseioAtivo: data.pos_passeio_ativo ?? false,
+        posPasseioEnviado: data.pos_passeio_enviado ?? false,
+        posPasseioEnviadoEm: data.pos_passeio_enviado_em || null,
     };
 }
 
@@ -191,6 +228,7 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
  * Atualiza ia_ativa do cliente.
  */
 export async function toggleIaAtiva(telefone: string, iaAtiva: boolean) {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     await supabase
         .from("Clientes _WhatsApp")
@@ -221,33 +259,46 @@ export async function updateCliente(
         followupHora?: string;
         followupAtivo?: boolean;
         followupEnviado?: boolean;
+        posPasseioAtivo?: boolean;
+        posPasseioEnviado?: boolean;
     }
 ) {
+    const userId = await requireAuth();
+    const parsed = updateClienteSchema.parse(data);
     const supabase = createServerSupabaseClient();
 
-    const updateData: Record<string, unknown> = {};
-    if (data.nome !== undefined) updateData.nome = data.nome;
-    if (data.status !== undefined) updateData.status = data.status;
-    if (data.cpf !== undefined) updateData.cpf = data.cpf;
-    if (data.email !== undefined) updateData.email = data.email;
-    if (data.statusAtendimento !== undefined) updateData.status_atendimento = data.statusAtendimento;
-    if (data.linkedin !== undefined) updateData.linkedin = data.linkedin;
-    if (data.facebook !== undefined) updateData.facebook = data.facebook;
-    if (data.instagram !== undefined) updateData.instagram = data.instagram;
-    if (data.kanbanColumnId !== undefined) updateData.kanban_column_id = data.kanbanColumnId;
-    if (data.kanbanPosition !== undefined) updateData.kanban_position = data.kanbanPosition;
-    if (data.ultimoPasseio !== undefined) updateData.ultimo_passeio = data.ultimoPasseio;
-    if (data.followupDias !== undefined) updateData.followup_dias = data.followupDias;
-    if (data.followupHora !== undefined) updateData.followup_hora = data.followupHora;
-    if (data.followupAtivo !== undefined) {
-        updateData.followup_ativo = data.followupAtivo;
+    const updateData: Record<string, unknown> = { updated_by: userId };
+    if (parsed.nome !== undefined) updateData.nome = parsed.nome;
+    if (parsed.status !== undefined) updateData.status = parsed.status;
+    if (parsed.cpf !== undefined) updateData.cpf = parsed.cpf;
+    if (parsed.email !== undefined) updateData.email = parsed.email;
+    if (parsed.statusAtendimento !== undefined) updateData.status_atendimento = parsed.statusAtendimento;
+    if (parsed.linkedin !== undefined) updateData.linkedin = parsed.linkedin;
+    if (parsed.facebook !== undefined) updateData.facebook = parsed.facebook;
+    if (parsed.instagram !== undefined) updateData.instagram = parsed.instagram;
+    if (parsed.kanbanColumnId !== undefined) updateData.kanban_column_id = parsed.kanbanColumnId;
+    if (parsed.kanbanPosition !== undefined) updateData.kanban_position = parsed.kanbanPosition;
+    if (parsed.ultimoPasseio !== undefined) updateData.ultimo_passeio = parsed.ultimoPasseio;
+    if (parsed.followupDias !== undefined) updateData.followup_dias = parsed.followupDias;
+    if (parsed.followupHora !== undefined) updateData.followup_hora = parsed.followupHora;
+    if (parsed.followupAtivo !== undefined) {
+        updateData.followup_ativo = parsed.followupAtivo;
         // ao desativar follow-up, reseta o flag e o timestamp de enviado
-        if (data.followupAtivo === false) {
+        if (parsed.followupAtivo === false) {
             updateData.followup_enviado = false;
             updateData.followup_enviado_em = null;
         }
     }
-    if (data.followupEnviado !== undefined) updateData.followup_enviado = data.followupEnviado;
+    if (parsed.followupEnviado !== undefined) updateData.followup_enviado = parsed.followupEnviado;
+
+    if (parsed.posPasseioAtivo !== undefined) {
+        updateData.pos_passeio_ativo = parsed.posPasseioAtivo;
+        if (parsed.posPasseioAtivo === false) {
+            updateData.pos_passeio_enviado = false;
+            updateData.pos_passeio_enviado_em = null;
+        }
+    }
+    if (parsed.posPasseioEnviado !== undefined) updateData.pos_passeio_enviado = parsed.posPasseioEnviado;
 
     await supabase
         .from("Clientes _WhatsApp")
@@ -261,6 +312,7 @@ export async function updateCliente(
  * Envia follow-up manual para um lead específico.
  */
 export async function sendManualFollowup(telefone: string): Promise<{ success: boolean; type: string; error?: string }> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
 
     const { data: lead, error } = await supabase
@@ -290,15 +342,16 @@ export async function sendManualFollowup(telefone: string): Promise<{ success: b
     const diffMs = hoje.getTime() - ultimoPasseio.getTime();
     const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    let mensagem: string;
     let tipo: string;
-
+    let mensagem: string;
     if (diffDias <= 1) {
         tipo = "avaliacao";
-        mensagem = `Olá ${nome}! 😊\n\nEsperamos que o passeio tenha sido incrível para todos!\n\nSe puder, deixa uma avaliação pra gente no Google — ajuda muito a Alegrando a levar mais crianças a experiências incríveis! 🌟\n\n${googleReviewLink}`;
+        const template = await getSetting("avaliacao_mensagem");
+        mensagem = applyPlaceholders(template, { nome, link_google: googleReviewLink });
     } else {
         tipo = "followup";
-        mensagem = `Olá ${nome}! 🌟\n\nO nosso último passeio foi incrível né? As crianças adoraram!\n\nQue tal já começarmos a planejar a próxima aventura? Temos destinos incríveis esperando pelos pequenos. 🚌\n\nSe quiser, a gente monta um novo roteiro — é só falar! 😊`;
+        const template = await getSetting("followup_mensagem");
+        mensagem = applyPlaceholders(template, { nome, link_google: googleReviewLink });
     }
 
     const result = await sendWhatsAppMessage(tel, mensagem);
@@ -329,6 +382,7 @@ export async function sendManualFollowup(telefone: string): Promise<{ success: b
  * Busca os destinos únicos disponíveis na tabela documents.
  */
 export async function getAvailableDestinations(): Promise<string[]> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("documents")
@@ -362,6 +416,7 @@ export type PasseioHistorico = {
  * Lista passeios do histórico de um lead.
  */
 export async function getPasseiosHistorico(telefone: string): Promise<PasseioHistorico[]> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("passeios_historico")
@@ -388,6 +443,7 @@ export async function addPasseioHistorico(
     destino: string,
     dataPaseio: string
 ): Promise<PasseioHistorico | null> {
+    const userId = await requireAuth();
     const supabase = createServerSupabaseClient();
 
     // 1. Inserir no histórico
@@ -428,6 +484,7 @@ export async function addPasseioHistorico(
  * Remove um passeio do histórico e recalcula ultimo_passeio.
  */
 export async function deletePasseioHistorico(id: string, telefone: string): Promise<{ success: boolean }> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
 
     await supabase.from("passeios_historico").delete().eq("id", id);
@@ -447,4 +504,53 @@ export async function deletePasseioHistorico(id: string, telefone: string): Prom
         .eq("telefone", telefone);
 
     return { success: true };
+}
+
+/**
+ * Envia mensagem manual de pós-passeio com link para as fotos e atualiza o flag.
+ */
+export async function sendPosPasseio(telefone: string, fotosUrl: string): Promise<{ success: boolean; error?: string }> {
+    await requireAuth();
+    const supabase = createServerSupabaseClient();
+
+    const { data: lead, error } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("*")
+        .eq("telefone", telefone)
+        .maybeSingle();
+
+    if (error || !lead) {
+        return { success: false, error: "Cliente não encontrado" };
+    }
+
+    const nome = lead.nome || "Olá";
+    const tel = String(lead.telefone);
+    const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
+
+    const mensagem = `Olá ${nome}, tudo bem? Aqui estão algumas fotos do nosso passeio incrível! 📸\n\nLink: ${fotosUrl}`;
+
+    const result = await sendWhatsAppMessage(tel, mensagem);
+
+    if (result.success) {
+        // Registrar na tabela messages
+        await supabase.from("messages").insert({
+            telefone: tel,
+            sender_type: "bot",
+            content: mensagem,
+            status: "sent",
+        });
+
+        // Atualizar flags de pós-passeio no lead
+        await supabase
+            .from("Clientes _WhatsApp")
+            .update({
+                pos_passeio_enviado: true,
+                pos_passeio_enviado_em: new Date().toISOString(),
+            })
+            .eq("telefone", tel);
+            
+        return { success: true };
+    }
+
+    return { success: false, error: result.error || "Erro ao enviar via WhatsApp" };
 }

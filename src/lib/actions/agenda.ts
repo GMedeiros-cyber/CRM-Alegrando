@@ -1,6 +1,7 @@
 "use server";
 
 import { getCalendarClient } from "@/lib/google/calendar";
+import { requireAuth } from "@/lib/auth";
 
 // =============================================
 // TYPES
@@ -20,6 +21,7 @@ export type AgendamentoEvent = {
         quantidadeAlunos: number | null;
         status: string;
         googleEventId: string;
+        description: string;
     };
 };
 
@@ -43,6 +45,7 @@ const DEFAULT_COLOR = "#ef5544";
 function eventToAgendamento(event: {
     id?: string | null;
     summary?: string | null;
+    description?: string | null;
     start?: { dateTime?: string | null; date?: string | null } | null;
     end?: { dateTime?: string | null; date?: string | null } | null;
     colorId?: string | null;
@@ -73,6 +76,7 @@ function eventToAgendamento(event: {
                 : null,
             status: priv.status || "confirmado",
             googleEventId: event.id || "",
+            description: event.description || "",
         },
     };
 }
@@ -85,24 +89,30 @@ function eventToAgendamento(event: {
  * Busca eventos do Google Calendar dos próximos 90 dias.
  */
 export async function getAgendamentos(): Promise<AgendamentoEvent[]> {
-    const calendar = getCalendarClient();
-    const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
+    await requireAuth();
+    try {
+        const calendar = getCalendarClient();
+        const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
 
-    const now = new Date();
-    const future = new Date();
-    future.setDate(future.getDate() + 90);
+        const now = new Date();
+        const future = new Date();
+        future.setDate(future.getDate() + 90);
 
-    const response = await calendar.events.list({
-        calendarId,
-        timeMin: now.toISOString(),
-        timeMax: future.toISOString(),
-        singleEvents: true,
-        orderBy: "startTime",
-        maxResults: 250,
-    });
+        const response = await calendar.events.list({
+            calendarId,
+            timeMin: now.toISOString(),
+            timeMax: future.toISOString(),
+            singleEvents: true,
+            orderBy: "startTime",
+            maxResults: 250,
+        });
 
-    const events = response.data.items || [];
-    return events.map(eventToAgendamento);
+        const events = response.data.items || [];
+        return events.map(eventToAgendamento);
+    } catch (err) {
+        console.error("[agenda] Erro ao buscar eventos:", err);
+        return [];
+    }
 }
 
 /**
@@ -110,6 +120,7 @@ export async function getAgendamentos(): Promise<AgendamentoEvent[]> {
  */
 export async function createAgendamento(data: {
     titulo: string;
+    descricao?: string;
     dataInicio: string;
     horaInicio: string;
     dataFim: string;
@@ -122,43 +133,52 @@ export async function createAgendamento(data: {
     emailConvidado?: string;
     nomeConvidado?: string;
 }): Promise<AgendamentoEvent> {
-    const calendar = getCalendarClient();
-    const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
+    await requireAuth();
+    try {
+        const calendar = getCalendarClient();
+        const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
 
-    const hasTime = data.horaInicio && data.horaInicio !== "00:00";
-    const timeZone = "America/Sao_Paulo";
+        const hasTime = data.horaInicio && data.horaInicio !== "00:00";
+        const timeZone = "America/Sao_Paulo";
 
-    const start = hasTime
-        ? { dateTime: `${data.dataInicio}T${data.horaInicio}:00`, timeZone }
-        : { date: data.dataInicio };
+        const start = hasTime
+            ? { dateTime: `${data.dataInicio}T${data.horaInicio}:00`, timeZone }
+            : { date: data.dataInicio };
 
-    const end = hasTime
-        ? { dateTime: `${data.dataFim || data.dataInicio}T${data.horaFim}:00`, timeZone }
-        : { date: data.dataFim || data.dataInicio };
+        const end = hasTime
+            ? { dateTime: `${data.dataFim || data.dataInicio}T${data.horaFim}:00`, timeZone }
+            : { date: data.dataFim || data.dataInicio };
 
-    const response = await calendar.events.insert({
-        calendarId,
-        requestBody: {
-            summary: data.titulo,
-            start,
-            end,
-            attendees: data.emailConvidado
-                ? [{ email: data.emailConvidado, displayName: data.nomeConvidado || "" }]
-                : undefined,
-            extendedProperties: {
-                private: {
-                    leadId: data.leadId || "",
-                    nomeEscola: data.nomeEscola || data.titulo,
-                    destino: data.destino || "",
-                    quantidadeAlunos: String(data.quantidadeAlunos || 0),
-                    status: data.status || "confirmado",
-                    emailConvidado: data.emailConvidado || "",
+        const response = await calendar.events.insert({
+            calendarId,
+            requestBody: {
+                summary: data.nomeEscola && data.nomeEscola !== data.titulo
+                    ? `Alegrando x ${data.nomeEscola}`
+                    : data.titulo,
+                description: data.descricao || "",
+                start,
+                end,
+                attendees: data.emailConvidado
+                    ? [{ email: data.emailConvidado, displayName: data.nomeConvidado || "" }]
+                    : undefined,
+                extendedProperties: {
+                    private: {
+                        leadId: data.leadId || "",
+                        nomeEscola: data.nomeEscola || data.titulo,
+                        destino: data.destino || "",
+                        quantidadeAlunos: String(data.quantidadeAlunos || 0),
+                        status: data.status || "confirmado",
+                        emailConvidado: data.emailConvidado || "",
+                    },
                 },
             },
-        },
-    });
+        });
 
-    return eventToAgendamento(response.data);
+        return eventToAgendamento(response.data);
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Erro ao criar agendamento: ${msg}`);
+    }
 }
 
 /**
@@ -168,6 +188,7 @@ export async function updateAgendamento(
     googleEventId: string,
     data: {
         titulo?: string;
+        descricao?: string;
         dataInicio?: string;
         horaInicio?: string;
         dataFim?: string;
@@ -179,69 +200,88 @@ export async function updateAgendamento(
         status?: string;
     }
 ): Promise<AgendamentoEvent> {
-    const calendar = getCalendarClient();
-    const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
-    const timeZone = "America/Sao_Paulo";
+    await requireAuth();
+    try {
+        const calendar = getCalendarClient();
+        const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
+        const timeZone = "America/Sao_Paulo";
 
-    interface CalendarEventPatch {
-        summary?: string;
-        description?: string;
-        start?: { dateTime?: string; date?: string; timeZone?: string };
-        end?: { dateTime?: string; date?: string; timeZone?: string };
-        extendedProperties?: { private: Record<string, string> };
+        interface CalendarEventPatch {
+            summary?: string;
+            description?: string;
+            start?: { dateTime?: string; date?: string; timeZone?: string };
+            end?: { dateTime?: string; date?: string; timeZone?: string };
+            extendedProperties?: { private: Record<string, string> };
+        }
+        const patch: CalendarEventPatch = {};
+
+        if (data.titulo) {
+            const clienteNome = data.nomeEscola;
+            patch.summary = clienteNome && clienteNome !== data.titulo
+                ? `Alegrando x ${clienteNome}`
+                : data.titulo;
+        }
+
+        if (data.descricao !== undefined) {
+            patch.description = data.descricao;
+        }
+
+        if (data.dataInicio) {
+            const hasTime = data.horaInicio && data.horaInicio !== "00:00";
+            patch.start = hasTime
+                ? { dateTime: `${data.dataInicio}T${data.horaInicio}:00`, timeZone }
+                : { date: data.dataInicio };
+        }
+
+        if (data.dataFim) {
+            const hasTime = data.horaFim && data.horaFim !== "00:00";
+            patch.end = hasTime
+                ? { dateTime: `${data.dataFim}T${data.horaFim}:00`, timeZone }
+                : { date: data.dataFim };
+        }
+
+        // Extended properties
+        const priv: Record<string, string> = {};
+        if (data.leadId !== undefined) priv.leadId = data.leadId;
+        if (data.nomeEscola !== undefined) priv.nomeEscola = data.nomeEscola;
+        if (data.destino !== undefined) priv.destino = data.destino;
+        if (data.quantidadeAlunos !== undefined) priv.quantidadeAlunos = String(data.quantidadeAlunos);
+        if (data.status !== undefined) priv.status = data.status;
+
+        if (Object.keys(priv).length > 0) {
+            patch.extendedProperties = { private: priv };
+        }
+
+        const response = await calendar.events.patch({
+            calendarId,
+            eventId: googleEventId,
+            requestBody: patch,
+        });
+
+        return eventToAgendamento(response.data);
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Erro ao atualizar agendamento: ${msg}`);
     }
-    const patch: CalendarEventPatch = {};
-
-    if (data.titulo) {
-        patch.summary = data.titulo;
-    }
-
-    if (data.dataInicio) {
-        const hasTime = data.horaInicio && data.horaInicio !== "00:00";
-        patch.start = hasTime
-            ? { dateTime: `${data.dataInicio}T${data.horaInicio}:00`, timeZone }
-            : { date: data.dataInicio };
-    }
-
-    if (data.dataFim) {
-        const hasTime = data.horaFim && data.horaFim !== "00:00";
-        patch.end = hasTime
-            ? { dateTime: `${data.dataFim}T${data.horaFim}:00`, timeZone }
-            : { date: data.dataFim };
-    }
-
-    // Extended properties
-    const priv: Record<string, string> = {};
-    if (data.leadId !== undefined) priv.leadId = data.leadId;
-    if (data.nomeEscola !== undefined) priv.nomeEscola = data.nomeEscola;
-    if (data.destino !== undefined) priv.destino = data.destino;
-    if (data.quantidadeAlunos !== undefined) priv.quantidadeAlunos = String(data.quantidadeAlunos);
-    if (data.status !== undefined) priv.status = data.status;
-
-    if (Object.keys(priv).length > 0) {
-        patch.extendedProperties = { private: priv };
-    }
-
-    const response = await calendar.events.patch({
-        calendarId,
-        eventId: googleEventId,
-        requestBody: patch,
-    });
-
-    return eventToAgendamento(response.data);
 }
 
 /**
  * Exclui um evento do Google Calendar.
  */
 export async function deleteAgendamento(googleEventId: string) {
-    const calendar = getCalendarClient();
-    const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
+    await requireAuth();
+    try {
+        const calendar = getCalendarClient();
+        const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
 
-    await calendar.events.delete({
-        calendarId,
-        eventId: googleEventId,
-    });
+        await calendar.events.delete({
+            calendarId,
+            eventId: googleEventId,
+        });
 
-    return { success: true };
+        return { success: true };
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Erro ao excluir agendamento: ${msg}`);
+    }
 }

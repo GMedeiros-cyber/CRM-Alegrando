@@ -34,8 +34,8 @@ import {
     Save,
     Trash2,
     Loader2,
-    Pencil,
     RefreshCw,
+    FileText,
 } from "lucide-react";
 import {
     getAgendamentos,
@@ -88,6 +88,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     // Form state (create)
     const [form, setForm] = useState({
         titulo: "",
+        descricao: "",
         dataInicio: "",
         horaInicio: "09:00",
         dataFim: "",
@@ -99,6 +100,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     const [editing, setEditing] = useState(false);
     const [editForm, setEditForm] = useState({
         titulo: "",
+        descricao: "",
         dataInicio: "",
         horaInicio: "",
         dataFim: "",
@@ -150,6 +152,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 : "17:00";
             setEditForm({
                 titulo: selectedEvent.title,
+                descricao: selectedEvent.extendedProps.description || "",
                 dataInicio: startDate,
                 horaInicio: startTime,
                 dataFim: endDate,
@@ -172,6 +175,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         setDateError(null);
         setForm({
             titulo: "",
+            descricao: "",
             dataInicio: today,
             horaInicio: "09:00",
             dataFim: today,
@@ -197,6 +201,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
             if (evt) {
                 setModalMode("view");
                 setSelectedEvent(evt);
+                setEditing(true);
                 setModalOpen(true);
             }
         }
@@ -209,6 +214,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         setSelectedEvent(null);
         setForm({
             titulo: "",
+            descricao: "",
             dataInicio: info.dateStr.split("T")[0],
             horaInicio: "09:00",
             dataFim: info.dateStr.split("T")[0],
@@ -225,6 +231,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
             setSelectedEvent(evt);
             setSaveError(null);
             setDateError(null);
+            setEditing(true);
             setModalOpen(true);
         }
     }
@@ -249,19 +256,21 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         }
         setDateError(null);
 
-        const cliente = clientes.find(
-            (c) => c.telefone === form.clienteTelefone
-        );
+        const efectivoTelefone = form.clienteTelefone === "__none__" ? "" : form.clienteTelefone;
+        const cliente = clientes.find((c) => c.telefone === efectivoTelefone);
+
+        const tituloFinal = cliente ? `Alegrando x ${cliente.nome}` : form.titulo;
 
         startTransition(async () => {
             try {
                 await createAgendamento({
-                    titulo: form.titulo,
+                    titulo: tituloFinal,
+                    descricao: form.descricao,
                     dataInicio: form.dataInicio,
                     horaInicio: form.horaInicio,
                     dataFim: form.dataFim || form.dataInicio,
                     horaFim: form.horaFim,
-                    leadId: form.clienteTelefone,
+                    leadId: efectivoTelefone,
                     nomeEscola: cliente?.nome || form.titulo,
                     status: "confirmado",
                     emailConvidado: cliente?.email || undefined,
@@ -291,17 +300,21 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         }
         setDateError(null);
 
-        const cliente = clientes.find((c) => c.telefone === editForm.clienteTelefone);
+        const efectivoTelefone = editForm.clienteTelefone === "__none__" ? "" : editForm.clienteTelefone;
+        const cliente = clientes.find((c) => c.telefone === efectivoTelefone);
+
+        const tituloFinal = cliente ? `Alegrando x ${cliente.nome}` : editForm.titulo;
 
         startTransition(async () => {
             try {
                 await updateAgendamento(selectedEvent.extendedProps.googleEventId, {
-                    titulo: editForm.titulo,
+                    titulo: tituloFinal,
+                    descricao: editForm.descricao,
                     dataInicio: editForm.dataInicio,
                     horaInicio: editForm.horaInicio,
                     dataFim: editForm.dataFim,
                     horaFim: editForm.horaFim,
-                    leadId: editForm.clienteTelefone || undefined,
+                    leadId: efectivoTelefone || undefined,
                     nomeEscola: cliente?.nome || editForm.titulo,
                 });
                 setEditing(false);
@@ -424,6 +437,20 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                     />
                                 </div>
 
+                                {/* Descrição */}
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        Descrição / Pauta
+                                    </Label>
+                                    <textarea
+                                        value={form.descricao}
+                                        onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))}
+                                        placeholder="Ex: Apresentação do roteiro Hopi Hari para 80 alunos do 5º ano"
+                                        rows={2}
+                                        className="w-full rounded-xl bg-slate-900 border border-slate-600 text-white placeholder:text-slate-500 px-3 py-2 text-sm resize-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 outline-none"
+                                    />
+                                </div>
+
                                 {/* Datas */}
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
@@ -503,6 +530,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                                     {cliente.nome || cliente.telefone}
                                                 </SelectItem>
                                             ))}
+                                            <SelectItem value="__none__">— Nenhum —</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -581,6 +609,19 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             selectedEvent.end
                                         )}
                                     />
+                                    {selectedEvent.extendedProps.description && (
+                                        <div className="col-span-2 bg-slate-900/60 rounded-xl p-3 border border-slate-700/50">
+                                            <div className="flex items-center gap-1.5 mb-1">
+                                                <FileText className="w-4 h-4 text-slate-400" />
+                                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                                                    Descrição
+                                                </span>
+                                            </div>
+                                            <p className="text-sm text-slate-300 whitespace-pre-line">
+                                                {selectedEvent.extendedProps.description}
+                                            </p>
+                                        </div>
+                                    )}
                                     {selectedEvent.extendedProps.destino && (
                                         <InfoCard
                                             icon={<MapPin className="w-4 h-4 text-emerald-400" />}
@@ -597,157 +638,126 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                     )}
                                 </div>
 
-                                {/* Status badge */}
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-semibold text-slate-400 uppercase">
-                                        Status:
-                                    </span>
-                                    <span
-                                        className={`text-xs font-bold uppercase px-2.5 py-1 rounded-full border ${statusStyles[selectedEvent.extendedProps.status] ||
-                                            statusStyles.confirmado
-                                            }`}
-                                    >
-                                        {selectedEvent.extendedProps.status}
-                                    </span>
-                                </div>
-
-                                {/* Action buttons */}
-                                <div className="flex gap-2 mt-2">
-                                    {!editing && (
-                                        <>
-                                            <button
-                                                onClick={() => setEditing(true)}
-                                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-600 transition-colors"
-                                            >
-                                                <Pencil className="w-3.5 h-3.5" />
-                                                Editar
-                                            </button>
-
-                                            {selectedEvent.extendedProps.leadId && (
-                                                <button
-                                                    onClick={() => goToConversas(selectedEvent.extendedProps.leadId)}
-                                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 transition-colors shadow-lg shadow-brand-500/25"
-                                                >
-                                                    💬 Abrir Conversa
-                                                </button>
-                                            )}
-                                            <button
-                                                onClick={() =>
-                                                    handleDeleteEvent(selectedEvent.extendedProps.googleEventId)
-                                                }
-                                                disabled={isPending}
-                                                className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-500/15 text-red-400 font-medium text-sm hover:bg-red-500/25 border border-red-500/30 transition-colors disabled:opacity-40"
-                                            >
-                                                {isPending ? (
-                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                ) : (
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                )}
-                                                Excluir
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-
-                                {/* Formulário de edição inline */}
-                                {editing && (
-                                    <div className="space-y-3 mt-2 pt-3 border-t border-slate-700">
+                                {/* Formulário de edição direto */}
+                                <div className="space-y-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Título</Label>
+                                        <Input
+                                            value={editForm.titulo}
+                                            onChange={(e) => setEditForm(f => ({ ...f, titulo: e.target.value }))}
+                                            className="bg-slate-900 border-slate-600 text-white rounded-xl"
+                                        />
+                                    </div>
+                                    {/* Descrição */}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                            Descrição / Pauta
+                                        </Label>
+                                        <textarea
+                                            value={editForm.descricao}
+                                            onChange={(e) => setEditForm((f) => ({ ...f, descricao: e.target.value }))}
+                                            placeholder="Descrição do evento..."
+                                            rows={2}
+                                            className="w-full rounded-xl bg-slate-900 border border-slate-600 text-white placeholder:text-slate-500 px-3 py-2 text-sm resize-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 outline-none"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Título</Label>
-                                            <Input
-                                                value={editForm.titulo}
-                                                onChange={(e) => setEditForm(f => ({ ...f, titulo: e.target.value }))}
-                                                className="bg-slate-900 border-slate-600 text-white rounded-xl"
+                                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Início</Label>
+                                            <DatePicker
+                                                value={editForm.dataInicio}
+                                                onChange={(v) => { setDateError(null); setEditForm(f => ({ ...f, dataInicio: v })); }}
+                                                minDate={new Date()}
+                                                className="w-full rounded-xl"
                                             />
                                         </div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1.5">
-                                                <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Início</Label>
-                                                <DatePicker
-                                                    value={editForm.dataInicio}
-                                                    onChange={(v) => { setDateError(null); setEditForm(f => ({ ...f, dataInicio: v })); }}
-                                                    minDate={new Date()}
-                                                    className="w-full rounded-xl"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hora Início</Label>
-                                                <TimePicker
-                                                    value={editForm.horaInicio}
-                                                    onChange={(v) => setEditForm(f => ({ ...f, horaInicio: v }))}
-                                                    className="w-full rounded-xl"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1.5">
-                                                <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Fim</Label>
-                                                <DatePicker
-                                                    value={editForm.dataFim}
-                                                    onChange={(v) => { setDateError(null); setEditForm(f => ({ ...f, dataFim: v })); }}
-                                                    minDate={new Date()}
-                                                    className="w-full rounded-xl"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hora Fim</Label>
-                                                <TimePicker
-                                                    value={editForm.horaFim}
-                                                    onChange={(v) => setEditForm(f => ({ ...f, horaFim: v }))}
-                                                    className="w-full rounded-xl"
-                                                />
-                                            </div>
-                                        </div>
-                                        {/* Cliente select */}
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                                                <School className="w-3 h-3" />
-                                                Vincular a um Cliente
-                                            </Label>
-                                            <Select
-                                                value={editForm.clienteTelefone}
-                                                onValueChange={(v) => setEditForm((f) => ({ ...f, clienteTelefone: v }))}
-                                            >
-                                                <SelectTrigger className="bg-slate-900 border-slate-600 text-white rounded-xl">
-                                                    <SelectValue placeholder="Selecione um cliente..." />
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-slate-800 border-slate-700">
-                                                    {clientes.map((cliente) => (
-                                                        <SelectItem key={cliente.telefone} value={cliente.telefone}>
-                                                            {cliente.nome || cliente.telefone}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        {dateError && (
-                                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
-                                                {dateError}
-                                            </div>
-                                        )}
-                                        {saveError && (
-                                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
-                                                {saveError}
-                                            </div>
-                                        )}
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={handleUpdateEvent}
-                                                disabled={isPending}
-                                                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 disabled:opacity-40 transition-colors shadow-lg shadow-brand-500/25"
-                                            >
-                                                {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                                Salvar Alterações
-                                            </button>
-                                            <button
-                                                onClick={() => setEditing(false)}
-                                                className="px-4 py-2.5 rounded-xl bg-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-600 transition-colors"
-                                            >
-                                                Cancelar
-                                            </button>
+                                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hora Início</Label>
+                                            <TimePicker
+                                                value={editForm.horaInicio}
+                                                onChange={(v) => setEditForm(f => ({ ...f, horaInicio: v }))}
+                                                className="w-full rounded-xl"
+                                            />
                                         </div>
                                     </div>
-                                )}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Fim</Label>
+                                            <DatePicker
+                                                value={editForm.dataFim}
+                                                onChange={(v) => { setDateError(null); setEditForm(f => ({ ...f, dataFim: v })); }}
+                                                minDate={new Date()}
+                                                className="w-full rounded-xl"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hora Fim</Label>
+                                            <TimePicker
+                                                value={editForm.horaFim}
+                                                onChange={(v) => setEditForm(f => ({ ...f, horaFim: v }))}
+                                                className="w-full rounded-xl"
+                                            />
+                                        </div>
+                                    </div>
+                                    {/* Cliente select */}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                            <School className="w-3 h-3" />
+                                            Vincular a um Cliente
+                                        </Label>
+                                        <Select
+                                            value={editForm.clienteTelefone}
+                                            onValueChange={(v) => setEditForm((f) => ({ ...f, clienteTelefone: v }))}
+                                        >
+                                            <SelectTrigger className="bg-slate-900 border-slate-600 text-white rounded-xl">
+                                                <SelectValue placeholder="Selecione um cliente..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-slate-800 border-slate-700">
+                                                {clientes.map((c) => (
+                                                    <SelectItem key={c.telefone} value={c.telefone}>
+                                                        {c.nome || c.telefone}
+                                                    </SelectItem>
+                                                ))}
+                                                <SelectItem value="__none__">— Nenhum —</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    {dateError && (
+                                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
+                                            {dateError}
+                                        </div>
+                                    )}
+                                    {saveError && (
+                                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
+                                            {saveError}
+                                        </div>
+                                    )}
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleUpdateEvent}
+                                            disabled={isPending}
+                                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 disabled:opacity-40 transition-colors shadow-lg shadow-brand-500/25"
+                                        >
+                                            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                            Salvar
+                                        </button>
+                                        {selectedEvent.extendedProps.leadId && (
+                                            <button
+                                                onClick={() => goToConversas(selectedEvent.extendedProps.leadId)}
+                                                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-700 text-slate-200 font-medium text-sm hover:bg-slate-600 transition-colors"
+                                            >
+                                                💬 Conversa
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => handleDeleteEvent(selectedEvent.extendedProps.googleEventId)}
+                                            disabled={isPending}
+                                            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-500/15 text-red-400 font-medium text-sm hover:bg-red-500/25 border border-red-500/30 transition-colors disabled:opacity-40"
+                                        >
+                                            {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </>
                     ) : null}
