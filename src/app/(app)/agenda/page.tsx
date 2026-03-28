@@ -2,8 +2,9 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { CalendarDays, Plus, MapPin, Users, MessageSquare, ArrowRight } from "lucide-react";
+import { CalendarDays, Plus, MapPin, Users, MessageSquare, ArrowRight, Trash2 } from "lucide-react";
 import { AgendaCalendar } from "@/components/agenda/agenda-calendar";
+import { deleteAgendamento } from "@/lib/actions/agenda";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
 import Link from "next/link";
 
@@ -61,6 +62,16 @@ export default function AgendaPage() {
 
     function handleEventCardClick(eventId: string) {
         window.dispatchEvent(new CustomEvent("agenda:open-event", { detail: { eventId } }));
+    }
+
+    async function handleDeleteEvent(eventId: string, googleEventId: string) {
+        if (!confirm("Tem certeza que deseja excluir este evento?")) return;
+        try {
+            await deleteAgendamento(googleEventId);
+            setEvents(prev => prev.filter(e => e.id !== eventId));
+        } catch (err) {
+            alert("Erro ao excluir: " + String(err));
+        }
     }
 
     return (
@@ -155,6 +166,11 @@ export default function AgendaPage() {
                                             </span>
                                         )}
                                     </div>
+                                    {evt.extendedProps.description && (
+                                        <p className="text-xs text-slate-500 mt-1 truncate max-w-[300px]" title={evt.extendedProps.description}>
+                                            {evt.extendedProps.description}
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* Days until badge */}
@@ -168,6 +184,18 @@ export default function AgendaPage() {
                                         {evt.extendedProps.nomeEscola}
                                     </span>
                                 )}
+
+                                {/* Delete button */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteEvent(evt.id, evt.extendedProps.googleEventId);
+                                    }}
+                                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 border border-red-500/30 transition-colors shrink-0"
+                                    title="Excluir evento"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
 
                                 {/* Link to conversas */}
                                 <Link

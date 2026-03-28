@@ -20,6 +20,14 @@ export default function RootLayout({
       localization={ptBR}
       signInFallbackRedirectUrl="/dashboard"
       signUpFallbackRedirectUrl="/dashboard"
+      appearance={{
+        elements: {
+          logoBox: {
+            transform: "scale(1.3)",
+            transformOrigin: "center",
+          },
+        },
+      }}
     >
       <html lang="pt-BR">
         <body className="antialiased">

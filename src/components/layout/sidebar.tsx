@@ -11,6 +11,7 @@ import {
     MessageSquare,
     CalendarDays,
     ClipboardCheck,
+    Settings,
     Menu,
     X,
 } from "lucide-react";
@@ -22,6 +23,7 @@ const navigation = [
     { name: "Conversas", href: "/conversas", icon: MessageSquare },
     { name: "Agenda", href: "/agenda", icon: CalendarDays },
     { name: "Tarefas", href: "/tarefas", icon: ClipboardCheck },
+    { name: "Configurações", href: "/configuracoes", icon: Settings },
 ];
 
 export function Sidebar() {

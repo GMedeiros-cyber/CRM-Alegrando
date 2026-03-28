@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
+import { getSetting } from "@/lib/actions/settings";
+import { applyPlaceholders } from "@/lib/settings_helper";
 
 export async function POST(req: Request) {
     // 1. Validar token
@@ -22,6 +24,12 @@ export async function POST(req: Request) {
     const supabase = createServerSupabaseClient();
     const googleReviewLink =
         process.env.GOOGLE_REVIEW_LINK || "https://g.page/alegrando";
+
+    // Buscar templates configuráveis
+    const [followupTemplate, avaliacaoTemplate] = await Promise.all([
+        getSetting("followup_mensagem"),
+        getSetting("avaliacao_mensagem"),
+    ]);
 
     // 2. Buscar leads elegíveis
     const { data: leads, error } = await supabase
@@ -76,9 +84,11 @@ export async function POST(req: Request) {
                 continue;
             }
 
-            // D+1 — Avaliação Google
             if (diffDias === 1) {
-                const mensagem = `Olá ${nome}! 😊\n\nEsperamos que o passeio tenha sido incrível para todos!\n\nSe puder, deixa uma avaliação pra gente no Google — ajuda muito a Alegrando a levar mais crianças a experiências incríveis! 🌟\n\n${googleReviewLink}`;
+                const mensagem = applyPlaceholders(avaliacaoTemplate, {
+                    nome,
+                    link_google: googleReviewLink,
+                });
 
                 const result = await sendWhatsAppMessage(telefone, mensagem);
 
@@ -103,9 +113,11 @@ export async function POST(req: Request) {
                 }
             }
 
-            // D+followup_dias — Follow-up
             if (diffDias === followupDias) {
-                const mensagem = `Olá ${nome}! 🌟\n\nO nosso último passeio foi incrível né? As crianças adoraram!\n\nQue tal já começarmos a planejar a próxima aventura? Temos destinos incríveis esperando pelos pequenos. 🚌\n\nSe quiser, a gente monta um novo roteiro — é só falar! 😊`;
+                const mensagem = applyPlaceholders(followupTemplate, {
+                    nome,
+                    link_google: googleReviewLink,
+                });
 
                 const result = await sendWhatsAppMessage(telefone, mensagem);
 

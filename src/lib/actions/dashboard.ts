@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth";
 import { getCalendarClient } from "@/lib/google/calendar";
 
 // =============================================
@@ -11,6 +12,7 @@ import { getCalendarClient } from "@/lib/google/calendar";
  * Conta total de leads (clientes) na tabela Clientes _WhatsApp.
  */
 export async function getTotalLeads(): Promise<number> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { count, error } = await supabase
         .from("Clientes _WhatsApp")
@@ -26,6 +28,7 @@ export async function getTotalLeads(): Promise<number> {
  * Leads agrupados por mês (últimos 6 meses).
  */
 export async function getLeadsPorMes(): Promise<{ mes: string; leads: number }[]> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase.rpc("get_leads_por_mes");
 
@@ -76,6 +79,7 @@ export async function getLeadsPorMes(): Promise<{ mes: string; leads: number }[]
  * Retorna pedidos (total) vs fechados (status = 'fechado').
  */
 export async function getTopDestinos(): Promise<{ destino: string; pedidos: number; fechados: number }[]> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -114,6 +118,7 @@ export async function getTopDestinos(): Promise<{ destino: string; pedidos: numb
  * Conta eventos do Google Calendar a partir de hoje.
  */
 export async function getEventosDoMes(): Promise<number> {
+    await requireAuth();
     try {
         const calendar = getCalendarClient();
         const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
@@ -144,6 +149,7 @@ export async function getEventosDoMes(): Promise<number> {
  * Lista leads que fizeram passeio no mês atual (para expandir no card).
  */
 export async function getPasseiosDoMes(): Promise<{ nome: string; telefone: string; destino: string | null; data: string }[]> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
@@ -170,6 +176,7 @@ export async function getPasseiosDoMes(): Promise<{ nome: string; telefone: stri
  * Conta passeios do mês atual via campo ultimo_passeio da Clientes _WhatsApp.
  */
 export async function getTotalPasseiosDoMes(): Promise<number> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
@@ -198,6 +205,7 @@ export async function getFollowupsAtivos(): Promise<{
     followupHora: string;
     followupEnviado: boolean;
 }[]> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("Clientes _WhatsApp")

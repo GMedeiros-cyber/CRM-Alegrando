@@ -1,6 +1,15 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth";
+import { z } from "zod";
+
+const sendMessageSchema = z.object({
+    telefone: z.string().min(8).max(20),
+    mensagem: z.string().min(1).max(5000),
+    sender_name: z.string().min(1).max(100),
+    iaAtiva: z.boolean(),
+});
 
 /**
  * Server Action: salva a mensagem no Supabase E dispara o webhook do n8n
@@ -20,7 +29,9 @@ export async function sendMessageToN8n(payload: {
         throw new Error("N8N_WEBHOOK_URL não configurada.");
     }
 
+    await requireAuth();
     const supabase = createServerSupabaseClient();
+    const webhookToken = process.env.N8N_WEBHOOK_TOKEN || "";
 
     // Dispara INSERT local + webhook n8n ao mesmo tempo
     const [insertResult] = await Promise.all([
@@ -35,7 +46,10 @@ export async function sendMessageToN8n(payload: {
         // 2. Dispara o n8n → envia via WhatsApp
         fetch(webhookUrl, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                ...(webhookToken ? { "Authorization": `Bearer ${webhookToken}` } : {}),
+            },
             body: JSON.stringify(payload),
         }),
     ]);
@@ -58,14 +72,16 @@ export async function sendMessage(payload: {
     sender_name: string;
     iaAtiva: boolean;
 }) {
+    await requireAuth();
+    const parsed = sendMessageSchema.parse(payload);
     const supabase = createServerSupabaseClient();
 
     // 1. Salvar no banco (Realtime detecta → balão aparece)
     const { error: insertError } = await supabase.from("messages").insert({
-        telefone: payload.telefone,
+        telefone: parsed.telefone,
         sender_type: "humano",
-        sender_name: payload.sender_name,
-        content: payload.mensagem,
+        sender_name: parsed.sender_name,
+        content: parsed.mensagem,
     });
 
     if (insertError) {
@@ -73,26 +89,34 @@ export async function sendMessage(payload: {
     }
 
     // 2. Enviar via WhatsApp
-    if (payload.iaAtiva) {
+    if (parsed.iaAtiva) {
         // IA ativa → n8n processa e envia
         const webhookUrl = process.env.N8N_WEBHOOK_URL;
-        if (webhookUrl) {
-            await fetch(webhookUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    telefone: payload.telefone,
-                    mensagem: payload.mensagem,
-                    sender_name: payload.sender_name,
-                }),
-            });
+        if (!webhookUrl) {
+            console.error("[sendMessage] N8N_WEBHOOK_URL não configurada — mensagem salva mas não enviada");
+            return { success: true, warning: "Mensagem salva mas não enviada (webhook não configurado)" };
+        }
+        const response = await fetch(webhookUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...(process.env.N8N_WEBHOOK_TOKEN ? { "Authorization": `Bearer ${process.env.N8N_WEBHOOK_TOKEN}` } : {}),
+            },
+            body: JSON.stringify({
+                telefone: parsed.telefone,
+                mensagem: parsed.mensagem,
+                sender_name: parsed.sender_name,
+            }),
+        });
+        if (!response.ok) {
+            console.error(`[sendMessage] n8n respondeu ${response.status}`);
         }
     } else {
         // Modo manual → direto via Evolution/Zapi
         const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
         const result = await sendWhatsAppMessage(
-            String(payload.telefone),
-            payload.mensagem
+            String(parsed.telefone),
+            parsed.mensagem
         );
         if (!result.success) {
             console.error(`[sendMessage] Falha no envio WhatsApp direto: ${result.error}`);

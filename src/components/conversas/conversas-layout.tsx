@@ -23,6 +23,7 @@ import {
     toggleIaAtiva,
     markAsRead,
     sendManualFollowup,
+    sendPosPasseio,
     getPasseiosHistorico,
     addPasseioHistorico,
     deletePasseioHistorico,
@@ -64,6 +65,8 @@ import {
     ArrowLeft,
     PanelRightOpen,
     Save,
+    Camera,
+    Image as ImageIcon,
 } from "lucide-react";
 import {
     Sheet,
@@ -122,7 +125,12 @@ export function ConversasLayout() {
         followupAtivo: false,
         followupEnviado: false,
         followupEnviadoEm: "",
+        posPasseioAtivo: false,
+        posPasseioEnviado: false,
+        posPasseioEnviadoEm: "",
     });
+
+    const [posPasseioLink, setPosPasseioLink] = useState("");
 
     // Chat
     const [chatMessage, setChatMessage] = useState("");
@@ -270,7 +278,12 @@ export function ConversasLayout() {
                     followupAtivo: clienteData.followupAtivo ?? false,
                     followupEnviado: clienteData.followupEnviado ?? false,
                     followupEnviadoEm: clienteData.followupEnviadoEm || "",
+                    posPasseioAtivo: clienteData.posPasseioAtivo ?? false,
+                    posPasseioEnviado: clienteData.posPasseioEnviado ?? false,
+                    posPasseioEnviadoEm: clienteData.posPasseioEnviadoEm || "",
                 });
+
+                setPosPasseioLink("");
 
                 // Tasks
                 setTasks(tasksData);
@@ -789,6 +802,106 @@ export function ConversasLayout() {
                                 </button>
                             )}
                         </>
+                    )}
+
+                    <div className="my-2 border-t border-slate-700/50" />
+
+                    {/* Pós-Passeio */}
+                    <FieldGroup label="Pós-Passeio (Fotos)">
+                        <div className="flex items-center h-8">
+                            <Switch
+                                checked={form.posPasseioAtivo}
+                                onCheckedChange={(checked) => {
+                                    setForm((f) => ({ ...f, posPasseioAtivo: checked }));
+                                    if (selectedTelefone) {
+                                        startTransition(async () => {
+                                            try {
+                                                await updateCliente(selectedTelefone, { posPasseioAtivo: checked });
+                                                setToast({ type: "success", text: checked ? "Pós-Passeio ativado!" : "Pós-Passeio desativado!" });
+                                                loadList();
+                                                if (!checked) setPosPasseioLink("");
+                                            } catch {}
+                                        });
+                                    }
+                                }}
+                                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-slate-600"
+                            />
+                        </div>
+                    </FieldGroup>
+
+                    {form.posPasseioAtivo && (
+                        <div className="flex flex-col gap-2 p-3 bg-slate-800/30 rounded-xl border border-slate-700/50 relative overflow-hidden">
+                            {/* Ícone de fundo */}
+                            <Camera className="absolute -right-4 -top-4 w-24 h-24 text-slate-800/50 pointer-events-none" />
+                            
+                            {!form.posPasseioEnviado ? (
+                                <>
+                                    <div className="flex flex-col gap-2 z-10">
+                                        <Label className="text-[10px] text-slate-400">Link do Drive / Fotos</Label>
+                                        <Input
+                                            type="url"
+                                            value={posPasseioLink}
+                                            onChange={(e) => setPosPasseioLink(e.target.value)}
+                                            placeholder="https://drive.google.com/..."
+                                            className="h-8 text-xs bg-slate-800 border-slate-600 focus:border-emerald-500/50 transition-colors"
+                                        />
+                                        <button
+                                            disabled={isPending || !posPasseioLink.trim()}
+                                            onClick={() => {
+                                                if (!selectedTelefone || !posPasseioLink.trim()) return;
+                                                startTransition(async () => {
+                                                    try {
+                                                        const result = await sendPosPasseio(selectedTelefone, posPasseioLink);
+                                                        if (result.success) {
+                                                            setToast({ type: "success", text: "Mensagem de fotos enviada!" });
+                                                            setForm(f => ({ ...f, posPasseioEnviado: true, posPasseioEnviadoEm: new Date().toISOString() }));
+                                                            loadList();
+                                                            // Trigger reload no Chat também se possível...
+                                                            // O real-time fará a listagem dar um fetch
+                                                        } else {
+                                                            setToast({ type: "error", text: result.error || "Erro ao enviar." });
+                                                        }
+                                                    } catch {}
+                                                });
+                                            }}
+                                            className="flex items-center justify-center gap-2 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-all disabled:opacity-50 disabled:hover:bg-emerald-600 text-xs shadow-sm mt-1"
+                                        >
+                                            <ImageIcon className="w-3.5 h-3.5" />
+                                            {isPending ? "Enviando..." : "Enviar Fotos"}
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex items-center justify-between z-10">
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-xs text-slate-300 font-medium flex items-center gap-1.5">
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                            Enviadas
+                                        </span>
+                                        <span className="text-[10px] text-slate-500">
+                                            {form.posPasseioEnviadoEm ? new Date(form.posPasseioEnviadoEm).toLocaleString("pt-BR") : "Data desconhecida"}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            if (!selectedTelefone) return;
+                                            startTransition(async () => {
+                                                try {
+                                                    await updateCliente(selectedTelefone, { posPasseioAtivo: false });
+                                                    setForm(f => ({ ...f, posPasseioAtivo: false, posPasseioEnviado: false, posPasseioEnviadoEm: "" }));
+                                                    setPosPasseioLink("");
+                                                    loadList();
+                                                } catch {}
+                                            });
+                                        }}
+                                        disabled={isPending}
+                                        className="text-[10px] font-medium px-2 py-1 rounded border border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+                                    >
+                                        Novo Envio
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     )}
 
                     {/* Redes Sociais */}

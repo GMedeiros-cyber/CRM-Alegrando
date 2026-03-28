@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth";
 
 // =============================================
 // TYPES
@@ -43,6 +44,7 @@ export type KanbanData = {
  * Busca todas as colunas e leads com kanban_column_id.
  */
 export async function getKanbanData(): Promise<KanbanData> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const [columnsRes, leadsRes] = await Promise.all([
         supabase
@@ -116,6 +118,7 @@ export async function getKanbanData(): Promise<KanbanData> {
  * Retorna as colunas kanban ordenadas por posição.
  */
 export async function getKanbanColumns(): Promise<KanbanColumn[]> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("kanban_columns")
@@ -140,6 +143,7 @@ export async function moveLeadInKanban(
     targetColumnId: string | null,
     newPosition: number
 ) {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { error } = await supabase
         .from("Clientes _WhatsApp")
@@ -162,6 +166,7 @@ export async function createKanbanColumn(
     name: string,
     color?: string
 ): Promise<KanbanColumn | null> {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { data: existing } = await supabase
         .from("kanban_columns")
@@ -193,6 +198,7 @@ export async function createKanbanColumn(
  * Renomeia uma coluna. Não altera slug.
  */
 export async function renameKanbanColumn(id: string, name: string) {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { error } = await supabase
         .from("kanban_columns")
@@ -209,6 +215,7 @@ export async function renameKanbanColumn(id: string, name: string) {
  * Deleta uma coluna (não protegida). Move leads para novo_lead antes.
  */
 export async function deleteKanbanColumn(id: string) {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     // Verificar se é protegida (tem slug)
     const { data: col } = await supabase
@@ -253,6 +260,7 @@ export async function deleteKanbanColumn(id: string) {
  * Seed colunas padrão se não existirem.
  */
 export async function seedDefaultColumns() {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { data: existing } = await supabase
         .from("kanban_columns")
@@ -285,6 +293,7 @@ export async function seedDefaultColumns() {
  * Reordena colunas kanban.
  */
 export async function reorderKanbanColumns(columnIds: string[]) {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const newPositions = columnIds.map((_, index) => index);
     const { error } = await supabase.rpc("reorder_kanban_columns", {
@@ -303,6 +312,7 @@ export async function reorderKanbanColumns(columnIds: string[]) {
 // =============================================
 
 export async function getLeadTasks(telefone: number) {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("lead_tasks")
@@ -322,6 +332,7 @@ export async function getLeadTasks(telefone: number) {
 }
 
 export async function addLeadTask(telefone: number, text: string) {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("lead_tasks")
@@ -341,6 +352,7 @@ export async function addLeadTask(telefone: number, text: string) {
 }
 
 export async function toggleLeadTask(id: string, done: boolean) {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { error } = await supabase
         .from("lead_tasks")
@@ -354,6 +366,7 @@ export async function toggleLeadTask(id: string, done: boolean) {
 }
 
 export async function deleteLeadTask(id: string) {
+    await requireAuth();
     const supabase = createServerSupabaseClient();
     const { error } = await supabase
         .from("lead_tasks")
