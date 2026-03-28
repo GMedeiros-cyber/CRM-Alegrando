@@ -66,7 +66,7 @@ import {
     PanelRightOpen,
     Save,
     Camera,
-    Image as ImageIcon,
+    Link2,
 } from "lucide-react";
 import {
     Sheet,
@@ -837,12 +837,12 @@ export function ConversasLayout() {
                             {!form.posPasseioEnviado ? (
                                 <>
                                     <div className="flex flex-col gap-2 z-10">
-                                        <Label className="text-[10px] text-slate-400">Link do Drive / Fotos</Label>
+                                        <Label className="text-[10px] text-slate-400">Link das Fotos</Label>
                                         <Input
                                             type="url"
                                             value={posPasseioLink}
                                             onChange={(e) => setPosPasseioLink(e.target.value)}
-                                            placeholder="https://drive.google.com/..."
+                                            placeholder="https://..."
                                             className="h-8 text-xs bg-slate-800 border-slate-600 focus:border-emerald-500/50 transition-colors"
                                         />
                                         <button
@@ -866,8 +866,8 @@ export function ConversasLayout() {
                                             }}
                                             className="flex items-center justify-center gap-2 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-all disabled:opacity-50 disabled:hover:bg-emerald-600 text-xs shadow-sm mt-1"
                                         >
-                                            <ImageIcon className="w-3.5 h-3.5" />
-                                            {isPending ? "Enviando..." : "Enviar Fotos"}
+                                            <Link2 className="w-3.5 h-3.5" />
+                                            {isPending ? "Enviando..." : "Enviar Link"}
                                         </button>
                                     </div>
                                 </>

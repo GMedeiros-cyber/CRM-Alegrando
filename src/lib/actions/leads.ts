@@ -535,9 +535,9 @@ export async function sendPosPasseio(telefone: string, fotosUrl: string): Promis
         // Registrar na tabela messages
         await supabase.from("messages").insert({
             telefone: tel,
-            sender_type: "bot",
+            sender_type: "humano",
+            sender_name: "Alegrando",
             content: mensagem,
-            status: "sent",
         });
 
         // Atualizar flags de pós-passeio no lead
