@@ -408,7 +408,13 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
 
             {/* =================== MODAL =================== */}
             <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-                <DialogContent className="bg-slate-800 border-2 border-slate-700 text-white max-w-md">
+                <DialogContent
+                    className={
+                        modalMode === "view"
+                            ? "bg-slate-800 border-2 border-slate-700 text-white max-w-md max-h-[90vh] overflow-y-auto"
+                            : "bg-slate-800 border-2 border-slate-700 text-white max-w-md"
+                    }
+                >
                     {modalMode === "create" ? (
                         <>
                             <DialogHeader>
