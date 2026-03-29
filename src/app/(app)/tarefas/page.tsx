@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -14,7 +14,7 @@ import {
     createTaskCard,
     updateTaskCard,
     deleteTaskCard,
-    assignTaskCard
+    assignMultipleTaskCard
 } from "@/lib/actions/tasks";
 
 // =============================================
@@ -35,6 +35,11 @@ export interface TaskCard {
         name: string;
         avatarUrl: string | null;
     } | null;
+    assignedUsers?: {
+        id: string;
+        name: string;
+        avatarUrl: string | null;
+    }[];
 }
 
 export interface TaskList {
@@ -65,13 +70,13 @@ function TrelloCard({
 }: { 
     card: TaskCard;
     users: UserDTO[];
-    onAssignUser: (cardId: string, userId: string | null) => void;
+    onAssignUser: (cardId: string, userId: string, action: "add" | "remove") => void;
     onUpdateTitle: (cardId: string, title: string) => void;
     onDeleteCard: (cardId: string) => void;
 }) {
     const [editing, setEditing] = useState(false);
     const [title, setTitle] = useState(card.title);
-    
+
     // popover for options
     const [menuOpen, setMenuOpen] = useState(false);
     // sub-popover for users
@@ -82,6 +87,8 @@ function TrelloCard({
     const menuRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+    const assignedUsers = card.assignedUsers || (card.assignedUser ? [card.assignedUser] : []);
+    const assignedUserIds = assignedUsers.map((user) => user.id);
 
     // save title
     function handleSaveTitle() {
@@ -154,27 +161,34 @@ function TrelloCard({
                         </div>
                     </div>
                 ) : (
-                    <div 
+                    <div
                         onClick={() => setEditing(true)}
                         className="cursor-pointer"
                     >
                         <p className="text-[13px] text-slate-200 leading-snug pr-6 break-words">
                             {card.title}
                         </p>
-                        {/* Assignment Avatar */}
-                        {card.assignedUser && (
+                        {assignedUsers.length > 0 && (
                             <div className="flex justify-end mt-2">
-                                <div
-                                    title={card.assignedUser.name}
-                                    className="w-5 h-5 rounded-full overflow-hidden border border-slate-500"
-                                >
-                                {card.assignedUser.avatarUrl ? (
-                                    <img src={card.assignedUser.avatarUrl} alt={card.assignedUser.name} className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-white font-bold">
-                                        {card.assignedUser.name.charAt(0).toUpperCase()}
-                                    </div>
-                                )}
+                                <div className="flex items-center">
+                                    {assignedUsers.map((assignedUser, idx) => (
+                                        <div
+                                            key={assignedUser.id}
+                                            title={assignedUser.name}
+                                            className={cn(
+                                                "w-5 h-5 rounded-full overflow-hidden border border-slate-500",
+                                                idx > 0 && "-ml-1"
+                                            )}
+                                        >
+                                            {assignedUser.avatarUrl ? (
+                                                <img src={assignedUser.avatarUrl} alt={assignedUser.name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-white font-bold">
+                                                    {assignedUser.name.charAt(0).toUpperCase()}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
@@ -207,7 +221,7 @@ function TrelloCard({
 
             {menuOpen && typeof window !== "undefined" && createPortal(
                 <>
-                    {/* Backdrop — fecha ao clicar fora */}
+                    {/* Backdrop - fecha ao clicar fora */}
                     <div
                         className="fixed inset-0 z-[99]"
                         onClick={() => {
@@ -227,7 +241,7 @@ function TrelloCard({
                             <div className="p-3">
                                 <p className="text-slate-200 font-medium mb-3 text-xs">Excluir este cartão?</p>
                                 <div className="flex gap-2">
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             onDeleteCard(card.id);
                                             setMenuOpen(false);
@@ -236,7 +250,7 @@ function TrelloCard({
                                     >
                                         Confirmar
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => setShowDeleteConfirm(false)}
                                         className="flex-1 px-2 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 rounded text-xs font-semibold transition-colors"
                                     >
@@ -245,9 +259,9 @@ function TrelloCard({
                                 </div>
                             </div>
                         ) : showUsers ? (
-                            <div className="p-2 space-y-1">
-                                <div className="flex items-center gap-2 mb-2 px-2">
-                                    <button 
+                            <div className="p-2 space-y-2">
+                                <div className="flex items-center gap-2 px-2">
+                                    <button
                                         onClick={() => setShowUsers(false)}
                                         className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700"
                                     >
@@ -256,47 +270,47 @@ function TrelloCard({
                                     <p className="text-slate-200 font-semibold text-xs border-b border-slate-700 flex-1 pb-1">Membros</p>
                                 </div>
                                 <div className="max-h-48 overflow-y-auto space-y-1">
+                                    {users.map((user) => {
+                                        const isAssigned = assignedUserIds.includes(user.id);
+
+                                        return (
+                                            <button
+                                                key={user.id}
+                                                onClick={() => onAssignUser(card.id, user.id, isAssigned ? "remove" : "add")}
+                                                className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700 text-slate-200 rounded text-xs transition-colors"
+                                            >
+                                                <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-slate-600">
+                                                    {user.avatarUrl ? (
+                                                        <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-white font-bold">
+                                                            {user.name.charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <span className="truncate">{user.name}</span>
+                                                {isAssigned && (
+                                                    <span className="ml-auto text-[10px] text-brand-400 font-bold">✓</span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <div className="border-t border-slate-700 pt-2 px-2">
                                     <button
                                         onClick={() => {
-                                            onAssignUser(card.id, null);
+                                            setShowUsers(false);
                                             setMenuOpen(false);
                                         }}
-                                        className="w-full text-left px-2 py-1.5 hover:bg-slate-700 text-slate-300 rounded text-xs transition-colors"
+                                        className="w-full px-2 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold transition-colors"
                                     >
-                                        Sem atribuição
+                                        Confirmar
                                     </button>
-                                    <div className="h-px bg-slate-700 my-1 mx-1" />
-                                    {users.map(user => (
-                                        <button
-                                            key={user.id}
-                                            onClick={() => {
-                                                if (card.assignedUser?.id !== user.id) {
-                                                    onAssignUser(card.id, user.id);
-                                                }
-                                                setMenuOpen(false);
-                                            }}
-                                            className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700 text-slate-200 rounded text-xs transition-colors"
-                                        >
-                                            <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-slate-600">
-                                                {user.avatarUrl ? (
-                                                    <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-white font-bold">
-                                                        {user.name.charAt(0).toUpperCase()}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <span className="truncate">{user.name}</span>
-                                            {card.assignedUser?.id === user.id && (
-                                                <span className="ml-auto text-[10px] text-brand-400 font-bold">✓</span>
-                                            )}
-                                        </button>
-                                    ))}
                                 </div>
                             </div>
                         ) : (
                             <div className="p-1.5 space-y-0.5">
-                                <button 
+                                <button
                                     onClick={() => setShowUsers(true)}
                                     className="w-full text-left px-2 py-1.5 hover:bg-slate-700 text-slate-200 rounded transition-colors text-xs font-medium flex items-center gap-2"
                                 >
@@ -304,7 +318,7 @@ function TrelloCard({
                                     Alterar Membros
                                 </button>
                                 <div className="h-px bg-slate-700 my-1 mx-2" />
-                                <button 
+                                <button
                                     onClick={() => setShowDeleteConfirm(true)}
                                     className="w-full text-left px-2 py-1.5 hover:bg-red-500/10 text-red-400 rounded transition-colors text-xs font-medium flex items-center gap-2"
                                 >
@@ -406,7 +420,7 @@ function TrelloList({
     onRenameList: (listId: string, name: string) => void;
     onDeleteList: (listId: string) => void;
     onMoveList: (listId: string, newIndex: number) => void;
-    onAssignUser: (cardId: string, userId: string | null) => void;
+    onAssignUser: (cardId: string, userId: string, action: "add" | "remove") => void;
     onUpdateCard: (cardId: string, title: string) => void;
     onDeleteCard: (cardId: string) => void;
 }) {
@@ -658,7 +672,7 @@ function AddListForm({
         if (trimmed) {
             onAdd(trimmed);
             setName("");
-            onCancel(); // Fecha após adição
+            onCancel(); // Fecha apÃ³s adiÃ§Ã£o
         }
     }
 
@@ -727,6 +741,7 @@ export default function TarefasPage() {
                     id: tempId,
                     title,
                     position: newPos,
+                    assignedUsers: [],
                 };
                 return { ...list, cards: [...list.cards, newCard] };
             })
@@ -787,17 +802,43 @@ export default function TarefasPage() {
         }
     }
 
-    async function handleAssignUser(cardId: string, userId: string | null) {
-        const user = users.find(u => u.id === userId) || null;
-        
-        // Optimistic
-        setLists((prev) => prev.map(list => ({
-            ...list,
-            cards: list.cards.map(c => c.id === cardId ? { ...c, assignedUser: user } : c)
-        })));
-        
+    async function handleAssignUser(cardId: string, userId: string, action: "add" | "remove") {
+        const currentCard = lists.flatMap((list) => list.cards).find((card) => card.id === cardId);
+        if (!currentCard) return;
+
+        const currentAssignedUsers = currentCard.assignedUsers || (currentCard.assignedUser ? [currentCard.assignedUser] : []);
+        const selectedUser = users.find((user) => user.id === userId);
+
+        let nextAssignedUsers = currentAssignedUsers;
+        if (action === "add" && selectedUser) {
+            const alreadyAssigned = currentAssignedUsers.some((user) => user.id === userId);
+            nextAssignedUsers = alreadyAssigned ? currentAssignedUsers : [...currentAssignedUsers, selectedUser];
+        }
+
+        if (action === "remove") {
+            nextAssignedUsers = currentAssignedUsers.filter((user) => user.id !== userId);
+        }
+
+        const nextAssignedUserIds = nextAssignedUsers.map((user) => user.id);
+
+        setLists((prev) =>
+            prev.map((list) => ({
+                ...list,
+                cards: list.cards.map((card) =>
+                    card.id === cardId
+                        ? {
+                            ...card,
+                            assignedUsers: nextAssignedUsers,
+                            assignedUser: nextAssignedUsers[0] || null,
+                            assignedUserId: nextAssignedUserIds[0] || null,
+                        }
+                        : card
+                ),
+            }))
+        );
+
         try {
-            await assignTaskCard(cardId, userId);
+            await assignMultipleTaskCard(cardId, nextAssignedUserIds);
         } catch {
         }
     }
@@ -904,3 +945,4 @@ export default function TarefasPage() {
         </div>
     );
 }
+

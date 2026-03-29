@@ -103,7 +103,9 @@ export function ConversasLayout() {
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(true);
     const [loadingCliente, setLoadingCliente] = useState(false);
-    const [isPending, startTransition] = useTransition();
+    const [isSendingMessage, startSendingMessage] = useTransition();
+    const [isSavingCliente, startSavingCliente] = useTransition();
+    const [isRunningAction, startRunningAction] = useTransition();
     const [toast, setToast] = useState<{
         type: "success" | "error";
         text: string;
@@ -357,7 +359,7 @@ export function ConversasLayout() {
             instagram: instagram || ""
         }));
 
-        startTransition(async () => {
+        startSavingCliente(async () => {
             try {
                 await updateCliente(selectedTelefone, {
                     nome: form.nome || null,
@@ -384,7 +386,7 @@ export function ConversasLayout() {
     function handleToggleIA() {
         if (!selectedTelefone || !cliente) return;
         const newVal = !cliente.iaAtiva;
-        startTransition(async () => {
+        startSavingCliente(async () => {
             try {
                 await toggleIaAtiva(selectedTelefone, newVal);
                 setCliente((prev) => (prev ? { ...prev, iaAtiva: newVal } : null));
@@ -412,7 +414,7 @@ export function ConversasLayout() {
         const text = chatMessage.trim();
         setChatMessage("");
 
-        startTransition(async () => {
+        startSendingMessage(async () => {
             try {
                 await sendMessage({
                     telefone: cliente.telefone,
@@ -576,7 +578,7 @@ export function ConversasLayout() {
                             onValueChange={(val) => {
                                 setForm((f) => ({ ...f, kanbanColumnId: val }));
                                 if (selectedTelefone) {
-                                    startTransition(async () => {
+                                    startSavingCliente(async () => {
                                         try {
                                             await updateCliente(selectedTelefone, {
                                                 kanbanColumnId: val || null,
@@ -651,7 +653,7 @@ export function ConversasLayout() {
                                 />
                                 <button
                                     onClick={handleAddPasseio}
-                                    disabled={!novoPasseioDestino || !novoPasseioData}
+                                    disabled={!novoPasseioDestino || !novoPasseioData || isSavingCliente}
                                     className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-semibold hover:bg-brand-600 disabled:opacity-40 transition-colors"
                                 >
                                     <Save className="w-3 h-3" />
@@ -696,7 +698,7 @@ export function ConversasLayout() {
                                 onCheckedChange={(checked) => {
                                     setForm((f) => ({ ...f, followupAtivo: checked }));
                                     if (selectedTelefone) {
-                                        startTransition(async () => {
+                                        startSavingCliente(async () => {
                                             try {
                                                 await updateCliente(selectedTelefone, { followupAtivo: checked });
                                                 setToast({ type: "success", text: checked ? "Follow-up ativado!" : "Follow-up desativado!" });
@@ -745,7 +747,7 @@ export function ConversasLayout() {
                                     <button
                                         onClick={() => {
                                             if (!selectedTelefone) return;
-                                            startTransition(async () => {
+                                            startRunningAction(async () => {
                                                 try {
                                                     await updateCliente(selectedTelefone, { followupAtivo: false });
                                                     setForm(f => ({ ...f, followupAtivo: false, followupEnviado: false, followupEnviadoEm: "" }));
@@ -754,7 +756,7 @@ export function ConversasLayout() {
                                                 } catch {}
                                             });
                                         }}
-                                        disabled={isPending}
+                                        disabled={isRunningAction}
                                         className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-700 text-slate-400 hover:text-white hover:bg-slate-600 transition-colors"
                                     >
                                         Resetar
@@ -771,7 +773,7 @@ export function ConversasLayout() {
                                 <button
                                     onClick={() => {
                                         if (!selectedTelefone) return;
-                                        startTransition(async () => {
+                                        startRunningAction(async () => {
                                             try {
                                                 const result = await sendManualFollowup(selectedTelefone);
                                                 if (result.success) {
@@ -790,10 +792,10 @@ export function ConversasLayout() {
                                             }
                                         });
                                     }}
-                                    disabled={isPending}
+                                    disabled={isRunningAction}
                                     className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-brand-500/15 text-brand-400 text-xs font-semibold hover:bg-brand-500/25 border border-brand-500/30 transition-colors disabled:opacity-40"
                                 >
-                                    {isPending ? (
+                                    {isRunningAction ? (
                                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                     ) : (
                                         <Send className="w-3.5 h-3.5" />
@@ -814,7 +816,7 @@ export function ConversasLayout() {
                                 onCheckedChange={(checked) => {
                                     setForm((f) => ({ ...f, posPasseioAtivo: checked }));
                                     if (selectedTelefone) {
-                                        startTransition(async () => {
+                                        startSavingCliente(async () => {
                                             try {
                                                 await updateCliente(selectedTelefone, { posPasseioAtivo: checked });
                                                 setToast({ type: "success", text: checked ? "Pós-Passeio ativado!" : "Pós-Passeio desativado!" });
@@ -846,10 +848,10 @@ export function ConversasLayout() {
                                             className="h-8 text-xs bg-slate-800 border-slate-600 focus:border-emerald-500/50 transition-colors"
                                         />
                                         <button
-                                            disabled={isPending || !posPasseioLink.trim()}
+                                            disabled={isRunningAction || !posPasseioLink.trim()}
                                             onClick={() => {
                                                 if (!selectedTelefone || !posPasseioLink.trim()) return;
-                                                startTransition(async () => {
+                                                startRunningAction(async () => {
                                                     try {
                                                         const result = await sendPosPasseio(selectedTelefone, posPasseioLink);
                                                         if (result.success) {
@@ -867,7 +869,7 @@ export function ConversasLayout() {
                                             className="flex items-center justify-center gap-2 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-all disabled:opacity-50 disabled:hover:bg-emerald-600 text-xs shadow-sm mt-1"
                                         >
                                             <Link2 className="w-3.5 h-3.5" />
-                                            {isPending ? "Enviando..." : "Enviar Link"}
+                                            {isRunningAction ? "Enviando..." : "Enviar Link"}
                                         </button>
                                     </div>
                                 </>
@@ -885,7 +887,7 @@ export function ConversasLayout() {
                                     <button
                                         onClick={() => {
                                             if (!selectedTelefone) return;
-                                            startTransition(async () => {
+                                            startRunningAction(async () => {
                                                 try {
                                                     await updateCliente(selectedTelefone, { posPasseioAtivo: false });
                                                     setForm(f => ({ ...f, posPasseioAtivo: false, posPasseioEnviado: false, posPasseioEnviadoEm: "" }));
@@ -894,7 +896,7 @@ export function ConversasLayout() {
                                                 } catch {}
                                             });
                                         }}
-                                        disabled={isPending}
+                                        disabled={isRunningAction}
                                         className="text-[10px] font-medium px-2 py-1 rounded border border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
                                     >
                                         Novo Envio
@@ -1394,10 +1396,10 @@ export function ConversasLayout() {
                                 />
                                 <button
                                     onClick={handleSendMessage}
-                                    disabled={isPending || !chatMessage.trim() || cliente.iaAtiva}
+                                    disabled={isSendingMessage || !chatMessage.trim() || cliente.iaAtiva}
                                     className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 shrink-0"
                                 >
-                                    {isPending ? (
+                                    {isSendingMessage ? (
                                         <Loader2 className="w-4 h-4 animate-spin" />
                                     ) : (
                                         <Send className="w-4 h-4" />
