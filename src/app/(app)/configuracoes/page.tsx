@@ -4,8 +4,12 @@ import { useState, useEffect, useTransition } from "react";
 import { getSetting, updateSetting } from "@/lib/actions/settings";
 import { SETTING_DEFAULTS } from "@/lib/settings_helper";
 
+const POS_PASSEIO_DEFAULT =
+    "Olá {nome}! 🎉 Foi um prazer ter você no passeio! Caso queira ver as fotos ou deixar uma avaliação, o link está aqui: {link}";
+
 export default function ConfiguracoesPage() {
     const [followupMsg, setFollowupMsg] = useState("");
+    const [posPasseioMsg, setPosPasseioMsg] = useState("");
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState("");
     const [isPending, startTransition] = useTransition();
@@ -13,8 +17,12 @@ export default function ConfiguracoesPage() {
     useEffect(() => {
         async function load() {
             try {
-                const followup = await getSetting("followup_mensagem");
+                const [followup, posPasseio] = await Promise.all([
+                    getSetting("followup_mensagem"),
+                    getSetting("pos_passeio_mensagem"),
+                ]);
                 setFollowupMsg(followup);
+                setPosPasseioMsg(posPasseio || POS_PASSEIO_DEFAULT);
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Erro ao carregar configurações");
             }
@@ -29,7 +37,10 @@ export default function ConfiguracoesPage() {
 
         startTransition(async () => {
             try {
-                await updateSetting("followup_mensagem", followupMsg);
+                await Promise.all([
+                    updateSetting("followup_mensagem", followupMsg),
+                    updateSetting("pos_passeio_mensagem", posPasseioMsg),
+                ]);
                 setSaved(true);
                 setTimeout(() => setSaved(false), 3000);
             } catch (err) {
@@ -38,9 +49,13 @@ export default function ConfiguracoesPage() {
         });
     }
 
-    function handleReset() {
+    function handleResetFollowup() {
         const defaultValue = SETTING_DEFAULTS.followup_mensagem || "";
         setFollowupMsg(defaultValue);
+    }
+
+    function handleResetPosPasseio() {
+        setPosPasseioMsg(POS_PASSEIO_DEFAULT);
     }
 
     return (
@@ -54,6 +69,7 @@ export default function ConfiguracoesPage() {
                 </p>
             </div>
 
+            {/* Bloco Follow-up */}
             <div className="rounded-xl border bg-card p-6 space-y-4">
                 <div className="flex items-center justify-between">
                     <div>
@@ -65,7 +81,7 @@ export default function ConfiguracoesPage() {
                         </p>
                     </div>
                     <button
-                        onClick={handleReset}
+                        onClick={handleResetFollowup}
                         className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
                     >
                         Restaurar padrão
@@ -89,6 +105,53 @@ export default function ConfiguracoesPage() {
                         {"{{nome}}"}
                     </code>
                     <span className="text-muted-foreground">→ Nome do cliente</span>
+                </div>
+            </div>
+
+            {/* Bloco Pós-Passeio */}
+            <div className="rounded-xl border bg-card p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-lg font-semibold text-white">
+                            Mensagem de Pós-Passeio
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                            Enviada manualmente após cada passeio. Escreva o texto livremente — inclua o link das fotos ou de avaliação diretamente no texto onde quiser.
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleResetPosPasseio}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
+                    >
+                        Restaurar padrão
+                    </button>
+                </div>
+                <textarea
+                    value={posPasseioMsg}
+                    onChange={(e) => setPosPasseioMsg(e.target.value)}
+                    rows={7}
+                    className="w-full rounded-lg border bg-background px-4 py-3 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-primary/50 text-white"
+                    placeholder="Mensagem de pós-passeio..."
+                />
+            </div>
+
+            <div className="rounded-xl border border-dashed bg-muted/30 p-5">
+                <h3 className="text-sm font-semibold mb-2 text-white">
+                    Variáveis disponíveis
+                </h3>
+                <div className="flex flex-wrap gap-3 text-sm">
+                    <div className="flex items-center gap-1.5">
+                        <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
+                            {"{nome}"}
+                        </code>
+                        <span className="text-muted-foreground">→ Nome do cliente</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
+                            {"{link}"}
+                        </code>
+                        <span className="text-muted-foreground">→ Link que será colado na hora do envio (fotos, Drive, avaliação etc.)</span>
+                    </div>
                 </div>
             </div>
 
