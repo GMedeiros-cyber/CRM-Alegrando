@@ -509,30 +509,36 @@ export async function deletePasseioHistorico(id: string, telefone: string): Prom
 /**
  * Envia mensagem manual de pós-passeio com link para as fotos e atualiza o flag.
  */
-export async function sendPosPasseio(telefone: string, fotosUrl: string): Promise<{ success: boolean; error?: string }> {
+export async function sendPosPasseio(
+    leadId: string,
+    link: string
+): Promise<{ success: boolean; error?: string }> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
 
     const { data: lead, error } = await supabase
         .from("Clientes _WhatsApp")
         .select("*")
-        .eq("telefone", telefone)
+        .eq("telefone", leadId)
         .maybeSingle();
 
     if (error || !lead) {
         return { success: false, error: "Cliente não encontrado" };
     }
 
-    const nome = lead.nome || "Olá";
+    const template = await getSetting("pos_passeio_mensagem") ??
+        "Olá {nome}! 🎉 Foi um prazer ter você no passeio! {link}";
+
+    const mensagem = template
+        .replace("{nome}", lead.nome ?? "")
+        .replace("{link}", link);
+
     const tel = String(lead.telefone);
     const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
-
-    const mensagem = `Olá ${nome}, tudo bem? Aqui estão algumas fotos do nosso passeio incrível! 📸\n\nLink: ${fotosUrl}`;
 
     const result = await sendWhatsAppMessage(tel, mensagem);
 
     if (result.success) {
-        // Registrar na tabela messages
         await supabase.from("messages").insert({
             telefone: tel,
             sender_type: "humano",
@@ -540,7 +546,6 @@ export async function sendPosPasseio(telefone: string, fotosUrl: string): Promis
             content: mensagem,
         });
 
-        // Atualizar flags de pós-passeio no lead
         await supabase
             .from("Clientes _WhatsApp")
             .update({
@@ -548,7 +553,7 @@ export async function sendPosPasseio(telefone: string, fotosUrl: string): Promis
                 pos_passeio_enviado_em: new Date().toISOString(),
             })
             .eq("telefone", tel);
-            
+
         return { success: true };
     }
 
