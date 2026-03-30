@@ -13,28 +13,6 @@ type UserRow = {
     avatar_url: string | null;
 };
 
-let assignedUsersMigrationChecked = false;
-
-async function ensureAssignedUsersColumn(supabase: ReturnType<typeof createServerSupabaseClient>) {
-    if (assignedUsersMigrationChecked) return;
-    assignedUsersMigrationChecked = true;
-
-    const sql = "ALTER TABLE task_cards ADD COLUMN IF NOT EXISTS assigned_user_ids text[] DEFAULT '{}';";
-
-    const attempts: Array<{ fn: string; payload: Record<string, string> }> = [
-        { fn: "exec_sql", payload: { sql } },
-        { fn: "exec_sql", payload: { query: sql } },
-        { fn: "execute_sql", payload: { sql } },
-        { fn: "execute_sql", payload: { query: sql } },
-    ];
-
-    for (const attempt of attempts) {
-        const { error } = await supabase.rpc(attempt.fn as any, attempt.payload as any);
-        if (!error) return;
-    }
-
-    console.warn("[tasks] Nao foi possivel executar migration inline de assigned_user_ids.");
-}
 
 function clerkUserName(user: any): string {
     return [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || "Sem nome";
@@ -127,7 +105,6 @@ export async function getTaskBoard() {
         await requireAuth();
         const supabase = createServerSupabaseClient();
 
-        await ensureAssignedUsersColumn(supabase);
 
         const [listsRes, cardsRes] = await Promise.all([
             supabase.from("task_lists").select("*").order("position", { ascending: true }),
@@ -256,7 +233,6 @@ export async function createTaskCard(listId: string, title: string, position: nu
         const userId = await requireAuth();
         const supabase = createServerSupabaseClient();
 
-        await ensureAssignedUsersColumn(supabase);
 
         const { data: newCard } = await supabase
             .from("task_cards")
@@ -329,7 +305,6 @@ export async function assignMultipleTaskCard(cardId: string, userIds: string[]):
         await requireAuth();
         const supabase = createServerSupabaseClient();
 
-        await ensureAssignedUsersColumn(supabase);
 
         const normalizedUserIds = [...new Set(userIds.filter(Boolean))];
 

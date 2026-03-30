@@ -559,3 +559,30 @@ export async function sendPosPasseio(
 
     return { success: false, error: result.error || "Erro ao enviar via WhatsApp" };
 }
+
+export async function deleteCliente(telefone: string): Promise<{ success: boolean; error?: string }> {
+    await requireAuth();
+    const supabase = createServerSupabaseClient();
+
+    try {
+        await supabase.from("lead_tasks").delete().eq("telefone", telefone);
+        await supabase.from("passeios_historico").delete().eq("telefone", telefone);
+        await supabase.from("messages").delete().eq("telefone", telefone);
+        await supabase.from("Clientes _WhatsApp").delete().eq("telefone", telefone);
+        return { success: true };
+    } catch (err) {
+        return { success: false, error: String(err) };
+    }
+}
+
+export async function clearClienteMessages(telefone: string): Promise<{ success: boolean; error?: string }> {
+    await requireAuth();
+    const supabase = createServerSupabaseClient();
+
+    try {
+        await supabase.from("messages").delete().eq("telefone", telefone);
+        return { success: true };
+    } catch (err) {
+        return { success: false, error: String(err) };
+    }
+}

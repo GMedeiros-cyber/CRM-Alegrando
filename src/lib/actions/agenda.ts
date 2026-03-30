@@ -153,9 +153,7 @@ export async function createAgendamento(data: {
         const response = await calendar.events.insert({
             calendarId,
             requestBody: {
-                summary: data.nomeEscola && data.nomeEscola !== data.titulo
-                    ? `Alegrando x ${data.nomeEscola}`
-                    : data.titulo,
+                summary: data.titulo,
                 description: data.descricao || "",
                 start,
                 end,
@@ -217,10 +215,7 @@ export async function updateAgendamento(
         const patch: CalendarEventPatch = {};
 
         if (data.titulo) {
-            const clienteNome = data.nomeEscola;
-            patch.summary = clienteNome && clienteNome !== data.titulo
-                ? `Alegrando x ${clienteNome}`
-                : data.titulo;
+            patch.summary = data.titulo;
         }
 
         if (data.descricao !== undefined) {
