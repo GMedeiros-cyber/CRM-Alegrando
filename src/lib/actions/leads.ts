@@ -82,6 +82,8 @@ export type LeadMessage = {
     content: string;
     mediaType: "text" | "audio" | "image" | null;
     createdAt: Date | null;
+    createdBy?: string | null;
+    _optimistic?: boolean;
 };
 
 // =============================================

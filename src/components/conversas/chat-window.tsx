@@ -118,16 +118,25 @@ export function ChatWindow({ telefone, onReady }: ChatWindowProps) {
                             )}
                         >
                             {!isClient && (
-                                <p
-                                    className={cn(
-                                        "text-[10px] font-bold mb-0.5",
-                                        msg.senderType === "ia"
-                                            ? "text-violet-400"
-                                            : "text-green-300"
+                                <div className="flex items-center gap-1 mb-0.5">
+                                    <span
+                                        className={cn(
+                                            "text-[10px] font-bold",
+                                            msg.senderType === "ia"
+                                                ? "text-violet-400"
+                                                : "text-green-300"
+                                        )}
+                                    >
+                                        {msg.senderType === "ia"
+                                            ? "🤖 IA"
+                                            : (msg.senderName || "Alegrando")}
+                                    </span>
+                                    {msg.senderType === "humano" && msg.createdBy == null && (
+                                        <span className="text-[9px] text-slate-400 bg-slate-700/60 px-1 py-px rounded">
+                                            📱 WhatsApp
+                                        </span>
                                     )}
-                                >
-                                    {msg.senderType === "ia" ? "🤖 IA" : "Alegrando"}
-                                </p>
+                                </div>
                             )}
 
                             {isClient && msg.senderName && (
