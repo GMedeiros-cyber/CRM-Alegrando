@@ -27,7 +27,8 @@ import {
     getPasseiosHistorico,
     addPasseioHistorico,
     deletePasseioHistorico,
-
+    deleteCliente,
+    clearClienteMessages,
 } from "@/lib/actions/leads";
 import type { PasseioHistorico } from "@/lib/actions/leads";
 import { sendMessage } from "@/lib/actions/messages";
@@ -136,6 +137,7 @@ export function ConversasLayout() {
 
     // Chat
     const [chatMessage, setChatMessage] = useState("");
+    const addOptimisticRef = useRef<((content: string) => void) | null>(null);
 
     // Tasks
     const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -162,6 +164,10 @@ export function ConversasLayout() {
     const [addingPasseio, setAddingPasseio] = useState(false);
     const [novoPasseioDestino, setNovoPasseioDestino] = useState("");
     const [novoPasseioData, setNovoPasseioData] = useState("");
+
+    // Danger zone confirmations
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const [confirmingClearMessages, setConfirmingClearMessages] = useState(false);
 
     // Auto-hide toast
     useEffect(() => {
@@ -413,6 +419,7 @@ export function ConversasLayout() {
         if (!cliente?.telefone || !chatMessage.trim()) return;
         const text = chatMessage.trim();
         setChatMessage("");
+        addOptimisticRef.current?.(text);
 
         startSendingMessage(async () => {
             try {
@@ -484,6 +491,36 @@ export function ConversasLayout() {
         setPaseiosHistorico(prev => prev.filter(p => p.id !== id));
         loadCliente(selectedTelefone);
         setToast({ type: "success", text: "Passeio removido." });
+    }
+
+    async function handleDeleteCliente() {
+        if (!selectedTelefone) return;
+        startRunningAction(async () => {
+            const result = await deleteCliente(selectedTelefone);
+            if (result.success) {
+                setSelectedTelefone(null);
+                setCliente(null);
+                setMobileView("list");
+                setConfirmingDelete(false);
+                loadList();
+                setToast({ type: "success", text: "Cliente excluído." });
+            } else {
+                setToast({ type: "error", text: result.error || "Erro ao excluir." });
+            }
+        });
+    }
+
+    async function handleClearMessages() {
+        if (!selectedTelefone) return;
+        startRunningAction(async () => {
+            const result = await clearClienteMessages(selectedTelefone);
+            if (result.success) {
+                setConfirmingClearMessages(false);
+                setToast({ type: "success", text: "Conversas apagadas." });
+            } else {
+                setToast({ type: "error", text: result.error || "Erro ao limpar." });
+            }
+        });
     }
 
     // =============================================
@@ -1134,6 +1171,59 @@ export function ConversasLayout() {
                         </p>
                     )}
                 </div>
+
+                {/* Zona de Perigo */}
+                <div className="pt-4 border-t border-red-500/20">
+                    <h4 className="text-[10px] font-semibold text-red-400/70 uppercase tracking-wider mb-3">
+                        Zona de Perigo
+                    </h4>
+
+                    {/* Limpar conversas */}
+                    {confirmingClearMessages ? (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 mb-2">
+                            <p className="text-xs text-amber-400 font-medium mb-2">Apagar todo o histórico de mensagens?</p>
+                            <div className="flex gap-2">
+                                <button onClick={handleClearMessages} disabled={isRunningAction}
+                                    className="flex-1 px-2 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors disabled:opacity-40">
+                                    Confirmar
+                                </button>
+                                <button onClick={() => setConfirmingClearMessages(false)}
+                                    className="flex-1 px-2 py-1.5 rounded-lg bg-slate-700 text-slate-200 text-xs font-semibold hover:bg-slate-600 transition-colors">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <button onClick={() => setConfirmingClearMessages(true)}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 text-amber-400 text-xs font-semibold hover:bg-amber-500/20 border border-amber-500/20 transition-colors mb-2">
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Limpar histórico de conversas
+                        </button>
+                    )}
+
+                    {/* Excluir cliente */}
+                    {confirmingDelete ? (
+                        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30">
+                            <p className="text-xs text-red-400 font-medium mb-2">Excluir cliente permanentemente? Isso apaga todos os dados.</p>
+                            <div className="flex gap-2">
+                                <button onClick={handleDeleteCliente} disabled={isRunningAction}
+                                    className="flex-1 px-2 py-1.5 rounded-lg bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition-colors disabled:opacity-40">
+                                    {isRunningAction ? "Excluindo..." : "Confirmar exclusão"}
+                                </button>
+                                <button onClick={() => setConfirmingDelete(false)}
+                                    className="flex-1 px-2 py-1.5 rounded-lg bg-slate-700 text-slate-200 text-xs font-semibold hover:bg-slate-600 transition-colors">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <button onClick={() => setConfirmingDelete(true)}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 text-red-400 text-xs font-semibold hover:bg-red-500/20 border border-red-500/20 transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Excluir cliente
+                        </button>
+                    )}
+                </div>
             </div>
         );
     }
@@ -1145,7 +1235,7 @@ export function ConversasLayout() {
         <div className="flex h-[calc(100vh-2rem)] -m-6 lg:-m-8 rounded-2xl overflow-hidden bg-background max-w-[1800px] mx-auto">
             {/* =================== LEFT: CLIENTE LIST =================== */}
             <div className={cn(
-                "w-full md:w-[350px] md:min-w-[350px] border-r-0 md:border-r-2 border-border flex-col bg-background",
+                "w-full md:w-[350px] md:min-w-[350px] border-r-0 md:border-r-2 border-border flex-col bg-background bento-enter",
                 mobileView === "list" ? "flex" : "hidden md:flex"
             )}>
                 {/* Header */}
@@ -1271,7 +1361,7 @@ export function ConversasLayout() {
 
             {/* =================== CENTER: CHAT =================== */}
             <div className={cn(
-                "flex-1 flex-col min-w-0 bg-background overflow-x-hidden",
+                "flex-1 flex-col min-w-0 bg-background overflow-x-hidden bento-enter [animation-delay:150ms]",
                 mobileView === "chat" ? "flex" : "hidden md:flex"
             )}>
                 {!selectedTelefone ? (
@@ -1372,7 +1462,10 @@ export function ConversasLayout() {
                         )}
 
                         {/* Messages — Realtime via Supabase */}
-                        <ChatWindow telefone={cliente.telefone} />
+                        <ChatWindow
+                            telefone={cliente.telefone}
+                            onReady={(fn) => { addOptimisticRef.current = fn; }}
+                        />
 
                         {/* Input */}
                         <div className="px-5 py-3 border-t-2 border-border shrink-0 bg-background/80">
@@ -1417,7 +1510,7 @@ export function ConversasLayout() {
             </div>
 
             {/* =================== RIGHT: DETAILS (desktop) =================== */}
-            <div className="hidden md:block w-[300px] min-w-[300px] border-l-2 border-border overflow-y-auto bg-background">
+            <div className="hidden md:block w-[300px] min-w-[300px] border-l-2 border-border overflow-y-auto bg-background bento-enter [animation-delay:300ms]">
                 {selectedTelefone && cliente ? (
                     renderClienteDetails()
                 ) : (

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { LeadMessage } from "@/lib/actions/leads";
 
@@ -51,7 +51,20 @@ export function useLeadMessages(telefone: string) {
                     if (isMounted) {
                         setMessages((prev) => {
                             if (prev.some(m => m.id === formattedMsg.id)) return prev;
-                            const next = [...prev, formattedMsg].sort((a, b) => {
+
+                            // Remove optimistic placeholder when the real humano message arrives
+                            let base = prev;
+                            if (formattedMsg.senderType === "humano") {
+                                const fiveSecondsAgo = Date.now() - 5000;
+                                base = prev.filter(m => {
+                                    if (!m.id.startsWith("optimistic-")) return true;
+                                    if (m.content !== formattedMsg.content) return true;
+                                    const ts = parseInt(m.id.replace("optimistic-", ""), 10);
+                                    return ts < fiveSecondsAgo;
+                                });
+                            }
+
+                            const next = [...base, formattedMsg].sort((a, b) => {
                                 const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
                                 const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
                                 return dateA - dateB;
@@ -69,7 +82,19 @@ export function useLeadMessages(telefone: string) {
         };
     }, [telefone]);
 
-    return { messages, loading };
+    const addOptimisticMessage = useCallback((content: string) => {
+        const optimistic: LeadMessage = {
+            id: `optimistic-${Date.now()}`,
+            senderType: "humano",
+            senderName: "Alegrando",
+            content,
+            mediaType: "text",
+            createdAt: new Date(),
+        };
+        setMessages((prev) => [...prev, optimistic]);
+    }, []);
+
+    return { messages, loading, addOptimisticMessage };
 }
 
 /**

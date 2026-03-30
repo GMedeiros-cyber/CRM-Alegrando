@@ -105,6 +105,7 @@ export async function getAgendamentos(): Promise<AgendamentoEvent[]> {
             singleEvents: true,
             orderBy: "startTime",
             maxResults: 250,
+            fields: "items(id,summary,description,start,end,colorId,extendedProperties)",
         });
 
         const events = response.data.items || [];
