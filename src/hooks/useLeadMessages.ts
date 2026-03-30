@@ -46,6 +46,7 @@ export function useLeadMessages(telefone: string) {
                         content: newMsg.content,
                         mediaType: newMsg.media_type || "text",
                         createdAt: newMsg.created_at ? new Date(newMsg.created_at) : null,
+                        createdBy: newMsg.created_by ?? null,
                     };
 
                     if (isMounted) {
@@ -90,6 +91,8 @@ export function useLeadMessages(telefone: string) {
             content,
             mediaType: "text",
             createdAt: new Date(),
+            createdBy: "optimistic",
+            _optimistic: true,
         };
         setMessages((prev) => [...prev, optimistic]);
     }, []);
@@ -103,7 +106,7 @@ export function useLeadMessages(telefone: string) {
 async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> {
     const { data, error } = await supabase
         .from("messages")
-        .select("id, sender_type, sender_name, content, media_type, created_at")
+        .select("id, sender_type, sender_name, content, media_type, created_at, created_by")
         .eq("telefone", telefone)
         .order("created_at", { ascending: true });
 
@@ -118,5 +121,6 @@ async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> 
         content: row.content as string,
         mediaType: (row.media_type as "text" | "audio" | "image") || "text",
         createdAt: row.created_at ? new Date(row.created_at as string) : null,
+        createdBy: (row.created_by as string) ?? null,
     }));
 }
