@@ -11,6 +11,7 @@ import Link from "next/link";
 export default function AgendaPage() {
     const searchParams = useSearchParams();
     const [events, setEvents] = useState<AgendamentoEvent[]>([]);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     // Auto-open event from URL param (deep link from Conversas/Dashboard)
     useEffect(() => {
@@ -64,20 +65,17 @@ export default function AgendaPage() {
         window.dispatchEvent(new CustomEvent("agenda:open-event", { detail: { eventId } }));
     }
 
-    async function handleDeleteEvent(eventId: string, googleEventId: string) {
-        if (!confirm("Tem certeza que deseja excluir este evento?")) return;
-        try {
-            await deleteAgendamento(googleEventId);
-            setEvents(prev => prev.filter(e => e.id !== eventId));
-        } catch (err) {
-            alert("Erro ao excluir: " + String(err));
-        }
+    function handleDeleteEventConfirm(eventId: string, googleEventId: string) {
+        setDeletingId(null);
+        deleteAgendamento(googleEventId)
+            .then(() => setEvents(prev => prev.filter(e => e.id !== eventId)))
+            .catch(err => alert("Erro ao excluir: " + String(err)));
     }
 
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between bento-enter pl-4 pr-4 lg:px-0">
                 <div>
                     <h1 className="font-display text-3xl font-bold text-white tracking-tight">
                         Agenda
@@ -99,13 +97,13 @@ export default function AgendaPage() {
             </div>
 
             {/* Calendar */}
-            <div className="bento-card p-4">
+            <div className="bento-card p-4 bento-enter [animation-delay:150ms] mx-4 lg:mx-0">
                 <AgendaCalendar onEventsChange={setEvents} />
             </div>
 
             {/* Upcoming Events List */}
             {upcomingEvents.length > 0 && (
-                <div className="bento-card p-6">
+                <div className="bento-card p-6 bento-enter [animation-delay:300ms] mx-4 lg:mx-0">
                     <div className="mb-4">
                         <h3 className="font-display text-lg font-semibold text-white flex items-center gap-2">
                             <CalendarDays className="w-5 h-5 text-brand-400" />
@@ -185,17 +183,35 @@ export default function AgendaPage() {
                                     </span>
                                 )}
 
-                                {/* Delete button */}
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteEvent(evt.id, evt.extendedProps.googleEventId);
-                                    }}
-                                    className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 border border-red-500/30 transition-colors shrink-0"
-                                    title="Excluir evento"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                {/* Ações: Excluir ou Confirmar */}
+                                {deletingId === evt.id ? (
+                                    <div className="flex items-center gap-2 shrink-0 bg-red-500/10 rounded-lg p-1 pr-2 border border-red-500/20">
+                                        <span className="text-[10px] uppercase font-bold text-red-400 px-1">Excluir?</span>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}
+                                            className="px-2 py-1 bg-slate-700 text-slate-300 text-xs rounded hover:bg-slate-600 transition-colors"
+                                        >
+                                            Não
+                                        </button>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteEventConfirm(evt.id, evt.extendedProps.googleEventId); }}
+                                            className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors font-medium"
+                                        >
+                                            Sim
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDeletingId(evt.id);
+                                        }}
+                                        className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 border border-red-500/30 transition-colors shrink-0"
+                                        title="Excluir evento"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
 
                                 {/* Link to conversas */}
                                 <Link

@@ -59,7 +59,7 @@ export default function KanbanPage() {
     return (
         <div className="space-y-4">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between bento-enter">
                 <div>
                     <h1 className="font-display text-3xl font-bold text-foreground tracking-tight">
                         Kanban
@@ -107,11 +107,11 @@ export default function KanbanPage() {
 
             {/* Board */}
             {loading ? (
-                <div className="flex items-center justify-center py-32">
+                <div className="flex items-center justify-center py-32 bento-enter [animation-delay:150ms]">
                     <Loader2 className="w-8 h-8 animate-spin text-brand-400" />
                 </div>
             ) : columns.length === 0 ? (
-                <div className="bento-card-static flex flex-col items-center justify-center py-24 gap-4">
+                <div className="bento-card-static flex flex-col items-center justify-center py-24 gap-4 bento-enter [animation-delay:150ms]">
                     <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-500/15">
                         <Kanban className="w-8 h-8 text-brand-400" />
                     </div>
@@ -126,11 +126,13 @@ export default function KanbanPage() {
                     </div>
                 </div>
             ) : (
-                <KanbanBoard
-                    initialColumns={columns}
-                    initialLeads={leads}
-                    onDataChanged={loadData}
-                />
+                <div className="bento-enter [animation-delay:150ms]">
+                    <KanbanBoard
+                        initialColumns={columns}
+                        initialLeads={leads}
+                        onDataChanged={loadData}
+                    />
+                </div>
             )}
         </div>
     );

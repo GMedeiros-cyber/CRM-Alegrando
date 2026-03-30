@@ -4,7 +4,11 @@
       "Bash(npm run build)",
       "Bash(npm install react-day-picker date-fns)",
       "Bash(npm ls react-day-picker)",
-      "WebFetch(domain:daypicker.dev)"
+      "WebFetch(domain:daypicker.dev)",
+      "mcp__claude_ai_n8n__search_workflows",
+      "mcp__claude_ai_n8n__get_workflow_details",
+      "Bash(python3:*)",
+      "Bash(find /c/Users/gabri/OneDrive/Desktop/alegrando-crm -type f -name *.sql)"
     ]
   }
 }

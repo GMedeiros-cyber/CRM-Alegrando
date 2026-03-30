@@ -60,7 +60,7 @@ export default function ConfiguracoesPage() {
 
     return (
         <div className="space-y-8 max-w-4xl">
-            <div>
+            <div className="bento-enter">
                 <h1 className="text-2xl font-bold tracking-tight text-white">
                     Configurações
                 </h1>
@@ -70,7 +70,7 @@ export default function ConfiguracoesPage() {
             </div>
 
             {/* Bloco Follow-up */}
-            <div className="rounded-xl border bg-card p-6 space-y-4">
+            <div className="rounded-xl border bg-card p-6 space-y-4 bento-enter [animation-delay:150ms]">
                 <div className="flex items-center justify-between">
                     <div>
                         <h2 className="text-lg font-semibold text-white">
@@ -96,7 +96,7 @@ export default function ConfiguracoesPage() {
                 />
             </div>
 
-            <div className="rounded-xl border border-dashed bg-muted/30 p-5">
+            <div className="rounded-xl border border-dashed bg-muted/30 p-5 bento-enter [animation-delay:200ms]">
                 <h3 className="text-sm font-semibold mb-2 text-white">
                     Variáveis disponíveis
                 </h3>
@@ -109,7 +109,7 @@ export default function ConfiguracoesPage() {
             </div>
 
             {/* Bloco Pós-Passeio */}
-            <div className="rounded-xl border bg-card p-6 space-y-4">
+            <div className="rounded-xl border bg-card p-6 space-y-4 bento-enter [animation-delay:250ms]">
                 <div className="flex items-center justify-between">
                     <div>
                         <h2 className="text-lg font-semibold text-white">
@@ -135,7 +135,7 @@ export default function ConfiguracoesPage() {
                 />
             </div>
 
-            <div className="rounded-xl border border-dashed bg-muted/30 p-5">
+            <div className="rounded-xl border border-dashed bg-muted/30 p-5 bento-enter [animation-delay:300ms]">
                 <h3 className="text-sm font-semibold mb-2 text-white">
                     Variáveis disponíveis
                 </h3>
@@ -155,7 +155,7 @@ export default function ConfiguracoesPage() {
                 </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 bento-enter [animation-delay:350ms]">
                 <button
                     onClick={handleSave}
                     disabled={isPending}
