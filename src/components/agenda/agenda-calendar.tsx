@@ -46,6 +46,7 @@ import {
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
 import { listClientes } from "@/lib/actions/leads";
 import type { ClienteListItem } from "@/lib/actions/leads";
+import { format } from "date-fns";
 
 // =============================================
 // STATUS STYLES
@@ -68,7 +69,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     const [isPending, startTransition] = useTransition();
 
     // Data mínima = hoje
-    const today = new Date().toISOString().split("T")[0];
+    const today = format(new Date(), "yyyy-MM-dd");
 
     // Events from Google Calendar
     const [allEvents, setAllEvents] = useState<AgendamentoEvent[]>([]);
@@ -98,6 +99,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
 
     // Edit state (inline edit)
     const [editing, setEditing] = useState(false);
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [editForm, setEditForm] = useState({
         titulo: "",
         descricao: "",
@@ -139,6 +141,11 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         loadClientes();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Reset confirmingDelete when modal closes or event changes
+    useEffect(() => {
+        if (!modalOpen) setConfirmingDelete(false);
+    }, [modalOpen]);
+
     // Inicializa editForm quando evento selecionado
     useEffect(() => {
         if (selectedEvent && modalMode === "view") {
@@ -168,7 +175,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     // =============================================
 
     function openCreateModal() {
-        const today = new Date().toISOString().split("T")[0];
+        const todayStr = format(new Date(), "yyyy-MM-dd");
         setModalMode("create");
         setSelectedEvent(null);
         setSaveError(null);
@@ -176,9 +183,9 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         setForm({
             titulo: "",
             descricao: "",
-            dataInicio: today,
+            dataInicio: todayStr,
             horaInicio: "09:00",
-            dataFim: today,
+            dataFim: todayStr,
             horaFim: "17:00",
             clienteTelefone: "",
         });
@@ -259,7 +266,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         const efectivoTelefone = form.clienteTelefone === "__none__" ? "" : form.clienteTelefone;
         const cliente = clientes.find((c) => c.telefone === efectivoTelefone);
 
-        const tituloFinal = cliente ? `Alegrando x ${cliente.nome}` : form.titulo;
+        const tituloFinal = form.titulo || (cliente ? `Alegrando x ${cliente.nome}` : "Sem título");
 
         startTransition(async () => {
             try {
@@ -303,7 +310,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         const efectivoTelefone = editForm.clienteTelefone === "__none__" ? "" : editForm.clienteTelefone;
         const cliente = clientes.find((c) => c.telefone === efectivoTelefone);
 
-        const tituloFinal = cliente ? `Alegrando x ${cliente.nome}` : editForm.titulo;
+        const tituloFinal = editForm.titulo || (cliente ? `Alegrando x ${cliente.nome}` : "Sem título");
 
         startTransition(async () => {
             try {
@@ -635,7 +642,8 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             value={selectedEvent.extendedProps.destino}
                                         />
                                     )}
-                                    {selectedEvent.extendedProps.quantidadeAlunos && (
+                                    {selectedEvent.extendedProps.quantidadeAlunos != null &&
+                                     selectedEvent.extendedProps.quantidadeAlunos > 0 && (
                                         <InfoCard
                                             icon={<Users className="w-4 h-4 text-violet-400" />}
                                             label="Alunos"
@@ -738,31 +746,59 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             {saveError}
                                         </div>
                                     )}
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={handleUpdateEvent}
-                                            disabled={isPending}
-                                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 disabled:opacity-40 transition-colors shadow-lg shadow-brand-500/25"
-                                        >
-                                            {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                            Salvar
-                                        </button>
-                                        {selectedEvent.extendedProps.leadId && (
+                                    {confirmingDelete ? (
+                                        <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 space-y-2">
+                                            <p className="text-sm text-red-300 font-medium text-center">
+                                                Excluir este evento?
+                                            </p>
+                                            <p className="text-xs text-red-400/70 text-center">
+                                                Esta ação removerá o evento do Google Calendar.
+                                            </p>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => setConfirmingDelete(false)}
+                                                    disabled={isPending}
+                                                    className="flex-1 px-3 py-2 rounded-lg bg-slate-700 text-slate-200 text-sm font-medium hover:bg-slate-600 transition-colors disabled:opacity-40"
+                                                >
+                                                    Cancelar
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteEvent(selectedEvent.extendedProps.googleEventId)}
+                                                    disabled={isPending}
+                                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors disabled:opacity-40"
+                                                >
+                                                    {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                                    Excluir
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex gap-2">
                                             <button
-                                                onClick={() => goToConversas(selectedEvent.extendedProps.leadId)}
-                                                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-700 text-slate-200 font-medium text-sm hover:bg-slate-600 transition-colors"
+                                                onClick={handleUpdateEvent}
+                                                disabled={isPending}
+                                                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 disabled:opacity-40 transition-colors shadow-lg shadow-brand-500/25"
                                             >
-                                                💬 Conversa
+                                                {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                                Salvar
                                             </button>
-                                        )}
-                                        <button
-                                            onClick={() => handleDeleteEvent(selectedEvent.extendedProps.googleEventId)}
-                                            disabled={isPending}
-                                            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-500/15 text-red-400 font-medium text-sm hover:bg-red-500/25 border border-red-500/30 transition-colors disabled:opacity-40"
-                                        >
-                                            {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                                        </button>
-                                    </div>
+                                            {selectedEvent.extendedProps.leadId && (
+                                                <button
+                                                    onClick={() => goToConversas(selectedEvent.extendedProps.leadId)}
+                                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-700 text-slate-200 font-medium text-sm hover:bg-slate-600 transition-colors"
+                                                >
+                                                    💬 Conversa
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => setConfirmingDelete(true)}
+                                                disabled={isPending}
+                                                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-500/15 text-red-400 font-medium text-sm hover:bg-red-500/25 border border-red-500/30 transition-colors disabled:opacity-40"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </>

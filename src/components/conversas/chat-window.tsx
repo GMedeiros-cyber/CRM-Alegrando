@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 interface ChatWindowProps {
     telefone: string;
+    onReady?: (addOptimisticMessage: (content: string) => void) => void;
 }
 
 // =============================================
@@ -55,9 +56,14 @@ function MessageContent({ message, isSelf }: { message: LeadMessage; isSelf: boo
 // =============================================
 // CHAT WINDOW
 // =============================================
-export function ChatWindow({ telefone }: ChatWindowProps) {
-    const { messages, loading } = useLeadMessages(telefone);
+export function ChatWindow({ telefone, onReady }: ChatWindowProps) {
+    const { messages, loading, addOptimisticMessage } = useLeadMessages(telefone);
     const chatEndRef = useRef<HTMLDivElement>(null);
+
+    // Expose addOptimisticMessage to parent
+    useEffect(() => {
+        onReady?.(addOptimisticMessage);
+    }, [onReady, addOptimisticMessage]);
 
     // Scroll to bottom
     useEffect(() => {
@@ -97,7 +103,8 @@ export function ChatWindow({ telefone }: ChatWindowProps) {
                         key={msg.id}
                         className={cn(
                             "flex",
-                            isClient ? "justify-start" : "justify-end"
+                            isClient ? "justify-start" : "justify-end",
+                            msg.id.startsWith("optimistic-") && "opacity-70"
                         )}
                     >
                         <div
