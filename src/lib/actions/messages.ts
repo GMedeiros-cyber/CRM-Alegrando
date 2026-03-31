@@ -1,6 +1,5 @@
 "use server";
 
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth";
 import { z } from "zod";
 
@@ -30,7 +29,7 @@ export async function sendMessageToN8n(payload: {
     await requireAuth();
     const webhookToken = process.env.N8N_WEBHOOK_TOKEN || "";
 
-    await fetch(webhookUrl, {
+    const response = await fetch(webhookUrl, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -38,6 +37,11 @@ export async function sendMessageToN8n(payload: {
         },
         body: JSON.stringify(payload),
     });
+
+    if (!response.ok) {
+        console.error(`[sendMessageToN8n] n8n respondeu ${response.status}`);
+        throw new Error("Falha ao enviar mensagem via n8n");
+    }
 
     return { success: true };
 }

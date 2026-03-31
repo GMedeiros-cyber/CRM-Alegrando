@@ -18,7 +18,8 @@ export function useLeadMessages(telefone: string) {
                 if (isMounted) {
                     setMessages(data);
                 }
-            } catch {
+            } catch (err) {
+                console.error("[messages] Erro ao carregar mensagens:", err);
             } finally {
                 if (isMounted) setLoading(false);
             }

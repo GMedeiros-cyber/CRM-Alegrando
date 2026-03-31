@@ -23,7 +23,7 @@ export default function KanbanPage() {
         type: "success" | "error";
         text: string;
     } | null>(null);
-    const [isPending, startTransition] = useTransition();
+    const [isPending] = useTransition();
 
     async function loadData() {
         try {

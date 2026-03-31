@@ -43,10 +43,8 @@ import {
     AlertCircle,
     Phone,
     User,
-    Mail,
     Trash2,
     Plus,
-    CheckSquare,
     ListTodo,
     ExternalLink,
 } from "lucide-react";
@@ -157,7 +155,7 @@ export function LeadDetailSheet({
     // Handlers
     const formatUrl = (val: string | null) => {
         if (!val) return null;
-        let url = val.trim();
+        const url = val.trim();
         if (!url) return null;
         if (!url.startsWith('http')) return `https://${url}`;
         return url;

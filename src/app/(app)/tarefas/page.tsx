@@ -755,7 +755,8 @@ export default function TarefasPage() {
                     return { ...list, cards: list.cards.map(c => c.id === tempId ? newCard : c) };
                 })
             );
-        } catch {
+        } catch (err) {
+            console.error("[tarefas] Erro ao criar card:", err);
         }
     }
 
@@ -774,7 +775,8 @@ export default function TarefasPage() {
         try {
             const created = await createTaskList(name, newPos);
             setLists((prev) => prev.map(l => l.id === tempId ? created : l));
-        } catch {
+        } catch (err) {
+            console.error("[tarefas] Erro ao criar lista:", err);
         }
     }
 
@@ -786,7 +788,8 @@ export default function TarefasPage() {
         );
         try {
             await renameTaskList(listId, newName);
-        } catch {
+        } catch (err) {
+            console.error("[tarefas] Erro ao renomear lista:", err);
         }
     }
 
@@ -798,7 +801,8 @@ export default function TarefasPage() {
         
         try {
             await updateTaskCard(cardId, { title });
-        } catch {
+        } catch (err) {
+            console.error("[tarefas] Erro ao atualizar card:", err);
         }
     }
 
@@ -839,7 +843,8 @@ export default function TarefasPage() {
 
         try {
             await assignMultipleTaskCard(cardId, nextAssignedUserIds);
-        } catch {
+        } catch (err) {
+            console.error("[tarefas] Erro ao atribuir usuario:", err);
         }
     }
 
@@ -851,7 +856,8 @@ export default function TarefasPage() {
         
         try {
             await deleteTaskCard(cardId);
-        } catch {
+        } catch (err) {
+            console.error("[tarefas] Erro ao deletar card:", err);
         }
     }
     
@@ -865,7 +871,8 @@ export default function TarefasPage() {
             await deleteTaskList(listId);
             // Reordenar no banco as que ficaram
             await reorderTaskLists(lists.filter(l => l.id !== listId).map(l => l.id));
-        } catch {
+        } catch (err) {
+            console.error("[tarefas] Erro ao deletar lista:", err);
         }
     }
     
@@ -883,7 +890,8 @@ export default function TarefasPage() {
         try {
             const orderedIds = normalized.map(l => l.id);
             await reorderTaskLists(orderedIds);
-        } catch {
+        } catch (err) {
+            console.error("[tarefas] Erro ao reordenar listas:", err);
         }
     }
 

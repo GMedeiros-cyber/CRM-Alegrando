@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useTransition, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -204,7 +203,8 @@ export function ConversasLayout() {
             const result = await listClientes({ search: searchTerm || undefined, page: 1, limit: CLIENTES_LIMIT });
             setClientesList(result.data);
             setTotalClientes(result.total);
-        } catch {
+        } catch (err) {
+            console.error("[conversas] Erro ao carregar lista:", err);
         } finally {
             setLoading(false);
         }
@@ -218,7 +218,8 @@ export function ConversasLayout() {
             const result = await listClientes({ search: searchTerm || undefined, page: nextPage, limit: CLIENTES_LIMIT });
             setClientesList(prev => [...prev, ...result.data]);
             setTotalClientes(result.total);
-        } catch {
+        } catch (err) {
+            console.error("[conversas] Erro ao carregar mais:", err);
         } finally {
             setLoadingMore(false);
         }
@@ -331,7 +332,8 @@ export function ConversasLayout() {
                         String(c.telefone) === String(telefone) ? { ...c, unreadCount: 0 } : c
                     )
                 );
-            } catch {
+            } catch (err) {
+                console.error("[conversas] Erro ao marcar como lida:", err);
             }
         },
         [router]
@@ -345,7 +347,7 @@ export function ConversasLayout() {
 
     const formatUrl = (val: string | null) => {
         if (!val) return null;
-        let url = val.trim();
+        const url = val.trim();
         if (!url) return null;
         if (!url.startsWith('http')) return `https://${url}`;
         return url;
@@ -740,7 +742,9 @@ export function ConversasLayout() {
                                                 await updateCliente(selectedTelefone, { followupAtivo: checked });
                                                 setToast({ type: "success", text: checked ? "Follow-up ativado!" : "Follow-up desativado!" });
                                                 loadList();
-                                            } catch {}
+                                            } catch {
+                                                setToast({ type: "error", text: "Erro ao atualizar follow-up" });
+                                            }
                                         });
                                     }
                                 }}
@@ -790,7 +794,9 @@ export function ConversasLayout() {
                                                     setForm(f => ({ ...f, followupAtivo: false, followupEnviado: false, followupEnviadoEm: "" }));
                                                     setToast({ type: "success", text: "Follow-up resetado." });
                                                     loadList();
-                                                } catch {}
+                                                } catch {
+                                                    setToast({ type: "error", text: "Erro ao resetar follow-up" });
+                                                }
                                             });
                                         }}
                                         disabled={isRunningAction}
@@ -859,7 +865,9 @@ export function ConversasLayout() {
                                                 setToast({ type: "success", text: checked ? "Pós-Passeio ativado!" : "Pós-Passeio desativado!" });
                                                 loadList();
                                                 if (!checked) setPosPasseioLink("");
-                                            } catch {}
+                                            } catch {
+                                                setToast({ type: "error", text: "Erro ao atualizar pós-passeio" });
+                                            }
                                         });
                                     }
                                 }}
@@ -930,7 +938,9 @@ export function ConversasLayout() {
                                                     setForm(f => ({ ...f, posPasseioAtivo: false, posPasseioEnviado: false, posPasseioEnviadoEm: "" }));
                                                     setPosPasseioLink("");
                                                     loadList();
-                                                } catch {}
+                                                } catch {
+                                                    setToast({ type: "error", text: "Erro ao resetar pós-passeio" });
+                                                }
                                             });
                                         }}
                                         disabled={isRunningAction}

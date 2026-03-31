@@ -60,6 +60,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
     const isProtected = column.slug === "novo_lead";
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- sync local editable name with prop changes
         setName(column.name);
     }, [column.name]);
 
@@ -81,7 +82,8 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
             try {
                 await renameKanbanColumn(column.id, trimmed);
                 onColumnRenamed?.(column.id, trimmed);
-            } catch {
+            } catch (err) {
+                console.error("[kanban] Erro ao renomear coluna:", err);
                 setName(column.name);
             }
         }
@@ -102,7 +104,8 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
             if (res.success) {
                 onColumnDeleted?.(column.id);
             }
-        } catch {
+        } catch (err) {
+            console.error("[kanban] Erro ao deletar coluna:", err);
         }
         setConfirmingDelete(false);
     }

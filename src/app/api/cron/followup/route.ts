@@ -43,7 +43,7 @@ export async function POST(req: Request) {
 
     if (error) {
         console.error("[followup] Erro ao buscar leads:", error.message);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: "Falha ao buscar leads" }, { status: 500 });
     }
 
     if (!leads || leads.length === 0) {

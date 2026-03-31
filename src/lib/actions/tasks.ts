@@ -14,15 +14,15 @@ type UserRow = {
 };
 
 
-function clerkUserName(user: any): string {
+function clerkUserName(user: { firstName?: string | null; lastName?: string | null }): string {
     return [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || "Sem nome";
 }
 
-function clerkUserEmail(user: any): string {
+function clerkUserEmail(user: { primaryEmailAddress?: { emailAddress: string } | null; emailAddresses?: { emailAddress: string }[] }): string {
     return user.primaryEmailAddress?.emailAddress || user.emailAddresses?.[0]?.emailAddress || "";
 }
 
-function normalizeAssignedUserIds(card: any): string[] {
+function normalizeAssignedUserIds(card: { assigned_user_ids?: unknown; assigned_user_id?: string }): string[] {
     if (Array.isArray(card.assigned_user_ids)) {
         return card.assigned_user_ids.filter((id: unknown): id is string => typeof id === "string" && id.length > 0);
     }
@@ -42,7 +42,7 @@ export async function getUsers() {
         const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
         const clerkUsers = await clerk.users.getUserList({ limit: 100 });
 
-        const validClerkIds = clerkUsers.data.map((user: any) => user.id).filter(Boolean);
+        const validClerkIds = clerkUsers.data.map((user) => user.id).filter(Boolean);
 
         if (validClerkIds.length > 0) {
             const notInFilter = `(${validClerkIds.map((id: string) => `"${id}"`).join(",")})`;
@@ -51,7 +51,7 @@ export async function getUsers() {
             await supabase.from("users").delete().not("clerk_id", "is", null);
         }
 
-        const upsertRows = clerkUsers.data.map((user: any) => ({
+        const upsertRows = clerkUsers.data.map((user) => ({
             clerk_id: user.id,
             name: clerkUserName(user),
             email: clerkUserEmail(user),
@@ -89,10 +89,10 @@ export async function getUsers() {
             .from("users")
             .select("id, name, avatar_url");
 
-        return (data || []).map((user: any) => ({
-            id: user.id,
-            name: user.name,
-            avatarUrl: user.avatar_url,
+        return (data || []).map((user) => ({
+            id: user.id as string,
+            name: (user.name as string) || "Sem nome",
+            avatarUrl: user.avatar_url as string | null,
         }));
     }
 }

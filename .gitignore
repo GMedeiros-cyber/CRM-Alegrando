@@ -43,3 +43,11 @@ next-env.d.ts
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# build/lint/debug logs
+build_err.log
+build_log.txt
+lint_output.txt
+log.txt
+commits.txt
+history.json

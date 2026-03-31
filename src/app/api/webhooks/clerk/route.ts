@@ -43,31 +43,45 @@ export async function POST(req: Request) {
     const supabase = createServerSupabaseClient();
     const eventType = evt.type;
 
-    if (eventType === "user.created" || eventType === "user.updated") {
-        const { id, email_addresses, first_name, last_name, image_url } = evt.data;
+    try {
+        if (eventType === "user.created" || eventType === "user.updated") {
+            const { id, email_addresses, first_name, last_name, image_url } = evt.data;
 
-        const fullName = [first_name, last_name].filter(Boolean).join(" ") || "Sem nome";
-        const primaryEmail = email_addresses?.[0]?.email_address || "";
+            const fullName = [first_name, last_name].filter(Boolean).join(" ") || "Sem nome";
+            const primaryEmail = email_addresses?.[0]?.email_address || "";
 
-        await supabase
-            .from("users")
-            .upsert(
-                {
-                    clerk_id: id,
-                    name: fullName,
-                    email: primaryEmail,
-                    avatar_url: image_url || null,
-                    updated_at: new Date().toISOString(),
-                },
-                { onConflict: "clerk_id" }
-            );
-    }
+            const { error } = await supabase
+                .from("users")
+                .upsert(
+                    {
+                        clerk_id: id,
+                        name: fullName,
+                        email: primaryEmail,
+                        avatar_url: image_url || null,
+                        updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: "clerk_id" }
+                );
 
-    if (eventType === "user.deleted") {
-        const clerkId = evt.data.id;
-        if (clerkId) {
-            await supabase.from("users").delete().eq("clerk_id", clerkId);
+            if (error) {
+                console.error("Erro ao sincronizar usuário no Supabase:", error.message);
+                return new Response("Erro ao sincronizar usuário", { status: 500 });
+            }
         }
+
+        if (eventType === "user.deleted") {
+            const clerkId = evt.data.id;
+            if (clerkId) {
+                const { error } = await supabase.from("users").delete().eq("clerk_id", clerkId);
+                if (error) {
+                    console.error("Erro ao deletar usuário no Supabase:", error.message);
+                    return new Response("Erro ao deletar usuário", { status: 500 });
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Erro inesperado no webhook Clerk:", err);
+        return new Response("Erro interno", { status: 500 });
     }
 
     return new Response("OK", { status: 200 });
