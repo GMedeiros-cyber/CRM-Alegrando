@@ -30,7 +30,6 @@ import type {
     KanbanLead,
 } from "@/lib/actions/kanban";
 import { Plus } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface KanbanBoardProps {
     initialColumns: KanbanColumnType[];
@@ -89,7 +88,8 @@ export function KanbanBoard({
             setLeadsMap((prev) => ({ ...prev, [created.id]: [] }));
             setNewColName("");
             setAddingColumn(false);
-        } catch {
+        } catch (err) {
+            console.error("[kanban] Erro ao criar coluna:", err);
         }
     }
 

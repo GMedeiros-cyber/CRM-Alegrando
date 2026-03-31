@@ -49,15 +49,6 @@ import type { ClienteListItem } from "@/lib/actions/leads";
 import { format } from "date-fns";
 
 // =============================================
-// STATUS STYLES
-// =============================================
-const statusStyles: Record<string, string> = {
-    confirmado: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    pendente: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-    cancelado: "bg-red-500/20 text-red-400 border-red-500/30",
-};
-
-// =============================================
 // COMPONENT
 // =============================================
 interface AgendaCalendarProps {
@@ -131,7 +122,8 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         try {
             const result = await listClientes({ limit: 1000 });
             setClientes(result.data);
-        } catch {
+        } catch (err) {
+            console.error("[agenda] Erro ao carregar clientes:", err);
         }
     }
 

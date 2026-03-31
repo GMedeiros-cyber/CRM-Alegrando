@@ -445,7 +445,7 @@ export async function addPasseioHistorico(
     destino: string,
     dataPaseio: string
 ): Promise<PasseioHistorico | null> {
-    const userId = await requireAuth();
+    await requireAuth();
     const supabase = createServerSupabaseClient();
 
     // 1. Inserir no histórico

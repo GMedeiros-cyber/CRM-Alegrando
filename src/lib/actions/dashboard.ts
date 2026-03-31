@@ -137,7 +137,8 @@ export async function getEventosDoMes(): Promise<number> {
         });
 
         return response.data.items?.length || 0;
-    } catch {
+    } catch (err) {
+        console.error("[dashboard] Erro ao buscar eventos Google:", err);
         return 0;
     }
 }
