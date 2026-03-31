@@ -33,7 +33,7 @@ export async function sendMessageToN8n(payload: {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            ...(webhookToken ? { "Authorization": `Bearer ${webhookToken}` } : {}),
+            "X-Webhook-Token": webhookToken,
         },
         body: JSON.stringify(payload),
     });
@@ -78,9 +78,7 @@ export async function sendMessage(payload: {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                ...(process.env.N8N_WEBHOOK_TOKEN
-                    ? { "Authorization": `Bearer ${process.env.N8N_WEBHOOK_TOKEN}` }
-                    : {}),
+                "X-Webhook-Token": process.env.N8N_WEBHOOK_TOKEN || "",
             },
             body: JSON.stringify({
                 telefone: parsed.telefone,
