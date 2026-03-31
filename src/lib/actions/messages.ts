@@ -27,13 +27,11 @@ export async function sendMessageToN8n(payload: {
     }
 
     await requireAuth();
-    const webhookToken = process.env.N8N_WEBHOOK_TOKEN || "";
 
     const response = await fetch(webhookUrl, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            "X-Webhook-Token": webhookToken,
         },
         body: JSON.stringify(payload),
     });
@@ -78,7 +76,6 @@ export async function sendMessage(payload: {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "X-Webhook-Token": process.env.N8N_WEBHOOK_TOKEN || "",
             },
             body: JSON.stringify({
                 telefone: parsed.telefone,
