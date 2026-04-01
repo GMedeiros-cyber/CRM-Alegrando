@@ -47,6 +47,7 @@ import {
     Plus,
     ListTodo,
     ExternalLink,
+    Share2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -416,9 +417,12 @@ export function LeadDetailSheet({
 
                             {/* Redes Sociais */}
                             <div className="pt-3 border-t border-border/30">
-                                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                    Redes Sociais
-                                </h4>
+                                <div className="flex items-center gap-1.5 mb-2">
+                                    <Share2 className="w-3.5 h-3.5 text-brand-400/70" />
+                                    <h4 className="text-xs font-semibold text-slate-300 tracking-tight">
+                                        Redes Sociais
+                                    </h4>
+                                </div>
                                 <div className="space-y-2">
                                     <div className="relative">
                                         <Input
@@ -494,15 +498,17 @@ export function LeadDetailSheet({
 
                             {/* =================== TAREFAS =================== */}
                             <div className="pt-4 border-t border-border/30">
-                                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5 mb-3">
-                                    <ListTodo className="w-3.5 h-3.5" />
-                                    Tarefas
+                                <div className="flex items-center gap-1.5 mb-3">
+                                    <ListTodo className="w-3.5 h-3.5 text-brand-400/70" />
+                                    <h4 className="text-xs font-semibold text-slate-300 tracking-tight flex-1">
+                                        Tarefas
+                                    </h4>
                                     {tasks.length > 0 && (
-                                        <span className="ml-auto text-[10px] bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-full font-medium">
-                                            {pendingTasks.length}
+                                        <span className="text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded-full font-medium">
+                                            {pendingTasks.length} pendentes
                                         </span>
                                     )}
-                                </h4>
+                                </div>
 
                                 {/* Badge todas concluídas */}
                                 {allTasksDone && (
