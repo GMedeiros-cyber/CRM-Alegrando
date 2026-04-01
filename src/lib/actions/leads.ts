@@ -45,6 +45,7 @@ export type ClienteListItem = {
     unreadCount: number;
     lastMessageAt: Date | null;
     createdAt: Date | null;
+    fotoUrl: string | null;
 };
 
 /** Detalhe completo do cliente selecionado */
@@ -80,7 +81,7 @@ export type LeadMessage = {
     senderType: string;
     senderName: string | null;
     content: string;
-    mediaType: "text" | "audio" | "image" | null;
+    mediaType: "text" | "audio" | "image" | "document" | null;
     createdAt: Date | null;
     createdBy?: string | null;
     _optimistic?: boolean;
@@ -110,7 +111,7 @@ export async function listClientes(params?: {
     // 1. Buscar clientes com contagem total
     let query = supabase
         .from("Clientes _WhatsApp")
-        .select("telefone, nome, email, status, status_atendimento, ia_ativa, last_seen_at, created_at", { count: "exact" })
+        .select("telefone, nome, email, status, status_atendimento, ia_ativa, last_seen_at, created_at, foto_url", { count: "exact" })
         .order("created_at", { ascending: false });
 
     if (search) {
@@ -168,6 +169,7 @@ export async function listClientes(params?: {
         unreadCount: unreadCountMap.get(String(c.telefone)) || 0,
         lastMessageAt: lastMessageMap.get(String(c.telefone)) || null,
         createdAt: c.created_at ? new Date(c.created_at) : null,
+        fotoUrl: (c.foto_url as string) || null,
     }));
 
     return { data: mapped, total: count || 0 };
@@ -560,6 +562,48 @@ export async function sendPosPasseio(
     }
 
     return { success: false, error: result.error || "Erro ao enviar via WhatsApp" };
+}
+
+/**
+ * Cria um novo lead na tabela Clientes_WhatsApp.
+ */
+export async function createCliente(data: {
+    telefone: string;
+    nome: string | null;
+    fotoUrl?: string | null;
+}): Promise<{ success: boolean }> {
+    await requireAuth();
+    const supabase = createServerSupabaseClient();
+
+    const telefone = data.telefone.replace(/\D/g, "").trim();
+    if (!telefone || telefone.length < 8) {
+        throw new Error("Telefone inválido");
+    }
+
+    // Check if already exists
+    const { data: existing } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("telefone")
+        .eq("telefone", telefone)
+        .maybeSingle();
+
+    if (existing) {
+        throw new Error("Lead já existe com este telefone");
+    }
+
+    const { error } = await supabase.from("Clientes _WhatsApp").insert({
+        telefone,
+        nome: data.nome || null,
+        ia_ativa: true,
+        status_atendimento: "novo",
+        foto_url: data.fotoUrl || null,
+    });
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    return { success: true };
 }
 
 export async function deleteCliente(telefone: string): Promise<{ success: boolean; error?: string }> {
