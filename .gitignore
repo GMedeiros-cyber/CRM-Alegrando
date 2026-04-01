@@ -51,3 +51,13 @@ lint_output.txt
 log.txt
 commits.txt
 history.json
+
+# MCP config (contains API keys — never commit)
+.mcp.json
+
+# n8n MCP local tooling (not part of the app)
+.n8n-mcp/
+.n8n-skills/
+
+# internal reports/notes
+relatorio-jade-testes.md
