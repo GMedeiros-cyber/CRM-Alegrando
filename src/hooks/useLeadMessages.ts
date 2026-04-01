@@ -57,7 +57,21 @@ export function useLeadMessages(telefone: string) {
                             // Remove optimistic placeholder when the real humano message arrives
                             let base = prev;
                             if (formattedMsg.senderType === "humano") {
+                                const sixtySecondsAgo = Date.now() - 60000;
                                 const fiveSecondsAgo = Date.now() - 5000;
+
+                                // Evita duplicata: CRM salva direto (created_by != null) e o
+                                // webhook fromMe do ZAPI pode chegar logo depois (created_by = null).
+                                // Se já existe "humano" com mesmo conteúdo nos últimos 60s, descarta.
+                                const isDuplicate = prev.some(m => {
+                                    if (m.id.startsWith("optimistic-")) return false;
+                                    if (m.senderType !== "humano") return false;
+                                    if (m.content !== formattedMsg.content) return false;
+                                    const msgTime = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+                                    return msgTime > sixtySecondsAgo;
+                                });
+                                if (isDuplicate) return prev;
+
                                 base = prev.filter(m => {
                                     if (!m.id.startsWith("optimistic-")) return true;
                                     if (m.content !== formattedMsg.content) return true;
@@ -120,7 +134,7 @@ async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> 
         senderType: row.sender_type as string,
         senderName: (row.sender_name as string) || null,
         content: row.content as string,
-        mediaType: (row.media_type as "text" | "audio" | "image") || "text",
+        mediaType: (row.media_type as "text" | "audio" | "image" | "document") || "text",
         createdAt: row.created_at ? new Date(row.created_at as string) : null,
         createdBy: (row.created_by as string) ?? null,
     }));
