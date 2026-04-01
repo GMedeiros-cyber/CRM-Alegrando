@@ -28,9 +28,10 @@ import {
     deletePasseioHistorico,
     deleteCliente,
     clearClienteMessages,
+    createCliente,
 } from "@/lib/actions/leads";
 import type { PasseioHistorico } from "@/lib/actions/leads";
-import { sendMessage } from "@/lib/actions/messages";
+import { sendMessage, sendFileMessage, uploadContactPhoto } from "@/lib/actions/messages";
 import {
     getKanbanColumns,
     getLeadTasks,
@@ -67,6 +68,12 @@ import {
     Save,
     Camera,
     Link2,
+    Paperclip,
+    UserPlus,
+    X,
+    FileText,
+    Share2,
+    MapPin,
 } from "lucide-react";
 import {
     Sheet,
@@ -85,6 +92,14 @@ const statusStyles: Record<string, string> = {
     inativo: "bg-slate-500/20 text-slate-300 border-slate-500/40",
     novo: "bg-blue-500/20 text-blue-300 border-blue-500/40",
 };
+
+// =============================================
+// HELPERS
+// =============================================
+function isRecentlyCreated(createdAt: Date | null): boolean {
+    if (!createdAt) return false;
+    return Date.now() - new Date(createdAt).getTime() < 60_000;
+}
 
 // =============================================
 // MAIN COMPONENT
@@ -168,6 +183,26 @@ export function ConversasLayout() {
     const [confirmingDelete, setConfirmingDelete] = useState(false);
     const [confirmingClearMessages, setConfirmingClearMessages] = useState(false);
 
+    // New lead modal
+    const [showNewLeadModal, setShowNewLeadModal] = useState(false);
+    const [newLeadForm, setNewLeadForm] = useState({ telefone: "", nome: "" });
+    const [newLeadPhoto, setNewLeadPhoto] = useState<{ file: File; preview: string } | null>(null);
+    const newLeadPhotoRef = useRef<HTMLInputElement>(null);
+    const [isCreatingLead, startCreatingLead] = useTransition();
+
+    // File attachments (preview before send)
+    const [attachments, setAttachments] = useState<Array<{
+        file: File;
+        preview: string | null;
+        caption: string;
+        id: string;
+    }>>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const firstCaptionRef = useRef<HTMLTextAreaElement>(null);
+
+    // NOVO badge ticker
+    const [tick, setTick] = useState(0);
+
     // Auto-hide toast
     useEffect(() => {
         if (toast) {
@@ -175,6 +210,16 @@ export function ConversasLayout() {
             return () => clearTimeout(t);
         }
     }, [toast]);
+
+    // Ticker for NOVO badge auto-dismiss
+    useEffect(() => {
+        const hasRecent = clientesList.some(
+            c => c.statusAtendimento === "novo" && isRecentlyCreated(c.createdAt)
+        );
+        if (!hasRecent) return;
+        const interval = setInterval(() => setTick(t => t + 1), 10_000);
+        return () => clearInterval(interval);
+    }, [clientesList, tick]);
 
     // Ordenação client-side
     const sortedLeads = [...clientesList].sort((a, b) => {
@@ -525,6 +570,92 @@ export function ConversasLayout() {
         });
     }
 
+    // ========= New Lead handler =========
+    function handleCreateLead() {
+        const tel = newLeadForm.telefone.replace(/\D/g, "").trim();
+        if (!tel || tel.length < 8) {
+            setToast({ type: "error", text: "Telefone inválido." });
+            return;
+        }
+        startCreatingLead(async () => {
+            try {
+                let fotoUrl: string | null = null;
+
+                // Upload photo via server action if selected
+                if (newLeadPhoto) {
+                    const fd = new FormData();
+                    fd.append("file", newLeadPhoto.file);
+                    fd.append("telefone", tel);
+                    const uploadResult = await uploadContactPhoto(fd);
+                    if (uploadResult.success && uploadResult.url) {
+                        fotoUrl = uploadResult.url;
+                    } else {
+                        setToast({ type: "error", text: `Foto não salva: ${uploadResult.error || "erro desconhecido"}` });
+                    }
+                }
+
+                await createCliente({
+                    telefone: tel,
+                    nome: newLeadForm.nome.trim() || null,
+                    fotoUrl,
+                });
+                setShowNewLeadModal(false);
+                setNewLeadForm({ telefone: "", nome: "" });
+                setNewLeadPhoto(null);
+                setToast({ type: "success", text: "Lead criado com sucesso!" });
+                loadList();
+                handleSelectCliente(tel);
+            } catch (err) {
+                setToast({ type: "error", text: `Erro ao criar lead: ${err}` });
+            }
+        });
+    }
+
+    // ========= File select handler (preview before send) =========
+    function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+        const files = Array.from(e.target.files || []);
+        const maxSize = 10 * 1024 * 1024;
+        for (const file of files) {
+            if (file.size > maxSize) {
+                setToast({ type: "error", text: `"${file.name}" é muito grande. Máximo 10MB.` });
+                return;
+            }
+        }
+        const newAttachments = files.map(file => ({
+            file,
+            preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+            caption: "",
+            id: Date.now().toString() + Math.random().toString(36).slice(2),
+        }));
+        setAttachments(prev => [...prev, ...newAttachments]);
+        e.target.value = "";
+        // Auto-focus the caption of the first new attachment
+        setTimeout(() => firstCaptionRef.current?.focus(), 50);
+    }
+
+    // ========= Send attachments handler =========
+    function handleSendAttachments() {
+        if (!cliente?.telefone || attachments.length === 0) return;
+        startSendingMessage(async () => {
+            for (const att of attachments) {
+                try {
+                    const formData = new FormData();
+                    formData.append("file", att.file);
+                    formData.append("telefone", cliente.telefone);
+                    formData.append("sender_name", "Equipe");
+                    formData.append("caption", att.caption);
+                    const res = await sendFileMessage(formData);
+                    if (!res.success) {
+                        setToast({ type: "error", text: res.error || "Erro ao enviar arquivo." });
+                    }
+                } catch (err) {
+                    setToast({ type: "error", text: `Erro ao enviar arquivo: ${err}` });
+                }
+            }
+            setAttachments([]);
+        });
+    }
+
     // =============================================
     // SHARED DETAILS PANEL (desktop + mobile sheet)
     // =============================================
@@ -533,10 +664,13 @@ export function ConversasLayout() {
         return (
             <div className="p-4 space-y-4">
                 {/* Section title */}
-                <div className="pb-3 mb-1 border-b-2 border-border">
-                    <h3 className="font-display text-sm font-bold text-foreground uppercase tracking-wide">
-                        Detalhes do Cliente
-                    </h3>
+                <div className="pb-3 mb-1 border-b border-slate-700/70">
+                    <div className="flex items-center gap-2">
+                        <div className="w-1 h-5 rounded-full bg-brand-500" />
+                        <h3 className="text-sm font-bold text-white tracking-tight">
+                            Detalhes do Cliente
+                        </h3>
+                    </div>
                 </div>
 
                 {/* AI Toggle */}
@@ -657,16 +791,19 @@ export function ConversasLayout() {
                     </FieldGroup>
 
                     {/* Histórico de Passeios */}
-                    <div className="pt-2 border-t border-slate-700">
+                    <div className="pt-2 border-t border-slate-700/60">
                         <div className="flex items-center justify-between mb-2">
-                            <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                                Histórico de Passeios
+                            <div className="flex items-center gap-1.5">
+                                <MapPin className="w-3.5 h-3.5 text-brand-400/70" />
+                                <h4 className="text-xs font-semibold text-slate-300 tracking-tight">
+                                    Histórico de Passeios
+                                </h4>
                                 {passeiosHistorico.length > 0 && (
-                                    <span className="ml-1 text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full">
+                                    <span className="text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded-full font-medium">
                                         {passeiosHistorico.length}
                                     </span>
                                 )}
-                            </h4>
+                            </div>
                             <button
                                 onClick={() => setAddingPasseio(!addingPasseio)}
                                 className="text-[10px] font-semibold text-brand-400 hover:text-brand-300 transition-colors"
@@ -955,9 +1092,12 @@ export function ConversasLayout() {
 
                     {/* Redes Sociais */}
                     <div className="pt-2">
-                        <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                            Redes Sociais
-                        </h4>
+                        <div className="flex items-center gap-1.5 mb-2">
+                            <Share2 className="w-3.5 h-3.5 text-brand-400/70" />
+                            <h4 className="text-xs font-semibold text-slate-300 tracking-tight">
+                                Redes Sociais
+                            </h4>
+                        </div>
                         <div className="space-y-2">
                             <div className="relative">
                                 <Input
@@ -1021,16 +1161,18 @@ export function ConversasLayout() {
                 </div>
 
                 {/* Agendamentos */}
-                <div className="pt-4 border-t border-slate-700">
-                    <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1.5 mb-3">
-                        <CalendarDays className="w-3.5 h-3.5" />
-                        Agendamentos
+                <div className="pt-4 border-t border-slate-700/60">
+                    <div className="flex items-center gap-1.5 mb-3">
+                        <CalendarDays className="w-3.5 h-3.5 text-brand-400/70" />
+                        <h4 className="text-xs font-semibold text-slate-300 tracking-tight flex-1">
+                            Agendamentos
+                        </h4>
                         {agendamentos.length > 0 && (
-                            <span className="ml-auto text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full font-medium">
+                            <span className="text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded-full font-medium">
                                 {agendamentos.length}
                             </span>
                         )}
-                    </h4>
+                    </div>
 
                     {loadingAgendamentos ? (
                         <div className="flex justify-center py-3">
@@ -1093,21 +1235,23 @@ export function ConversasLayout() {
                 </div>
 
                 {/* Tarefas */}
-                <div className="pt-4 border-t border-slate-700">
-                    <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1.5 mb-3">
-                        <ListTodo className="w-3.5 h-3.5" />
-                        Tarefas
+                <div className="pt-4 border-t border-slate-700/60">
+                    <div className="flex items-center gap-1.5 mb-3">
+                        <ListTodo className="w-3.5 h-3.5 text-brand-400/70" />
+                        <h4 className="text-xs font-semibold text-slate-300 tracking-tight flex-1">
+                            Tarefas
+                        </h4>
                         {pendingTasks.length > 0 && (
-                            <span className="ml-auto text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full font-medium">
+                            <span className="text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded-full font-medium">
                                 {pendingTasks.length} pendentes
                             </span>
                         )}
                         {allTasksDone && (
-                            <span className="ml-auto text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-medium">
-                                Todas concluidas
+                            <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-medium">
+                                Todas concluídas
                             </span>
                         )}
-                    </h4>
+                    </div>
 
                     {tasks.length > 0 && (
                         <div className="flex items-center gap-2 mb-3">
@@ -1184,9 +1328,12 @@ export function ConversasLayout() {
 
                 {/* Zona de Perigo */}
                 <div className="pt-4 border-t border-red-500/20">
-                    <h4 className="text-[10px] font-semibold text-red-400/70 uppercase tracking-wider mb-3">
-                        Zona de Perigo
-                    </h4>
+                    <div className="flex items-center gap-1.5 mb-3">
+                        <div className="w-1 h-4 rounded-full bg-red-500/50" />
+                        <h4 className="text-xs font-semibold text-red-400/80 tracking-tight">
+                            Zona de Perigo
+                        </h4>
+                    </div>
 
                     {/* Limpar conversas */}
                     {confirmingClearMessages ? (
@@ -1250,9 +1397,18 @@ export function ConversasLayout() {
             )}>
                 {/* Header */}
                 <div className="px-4 pt-5 pb-3 shrink-0 border-b-2 border-border">
-                    <h2 className="font-display text-lg font-bold text-foreground tracking-tight">
-                        Conversas
-                    </h2>
+                    <div className="flex items-center justify-between">
+                        <h2 className="font-display text-lg font-bold text-foreground tracking-tight">
+                            Conversas
+                        </h2>
+                        <button
+                            onClick={() => setShowNewLeadModal(true)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-brand-500/20 text-brand-400 border border-brand-500/30 hover:bg-brand-500/30 transition-colors"
+                        >
+                            <UserPlus className="w-3.5 h-3.5" />
+                            Novo Lead
+                        </button>
+                    </div>
                     <div className="relative mt-3">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <Input
@@ -1303,43 +1459,51 @@ export function ConversasLayout() {
                                             : "bg-card/60 border-border/50 hover:bg-card hover:border-muted-foreground/40"
                                     )}
                                 >
-                                    <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-3">
+                                        {/* Avatar */}
+                                        <div className="w-9 h-9 rounded-full bg-slate-700 shrink-0 border border-slate-600 overflow-hidden flex items-center justify-center text-sm font-bold text-slate-200">
+                                            {item.fotoUrl ? (
+                                                <img
+                                                    src={item.fotoUrl}
+                                                    alt={item.nome || "avatar"}
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                                                        const fallback = e.currentTarget.parentElement;
+                                                        if (fallback) fallback.textContent = (item.nome || String(item.telefone)).charAt(0).toUpperCase();
+                                                    }}
+                                                />
+                                            ) : (
+                                                (item.nome || String(item.telefone)).charAt(0).toUpperCase()
+                                            )}
+                                        </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <p
-                                                    className={cn(
-                                                        "text-sm font-semibold truncate",
-                                                        selectedTelefone === item.telefone.toString()
-                                                            ? "text-brand-400"
-                                                            : "text-slate-200"
-                                                    )}
-                                                >
+                                            <div className="flex items-center justify-between gap-1">
+                                                <p className={cn(
+                                                    "text-sm font-bold truncate",
+                                                    selectedTelefone === item.telefone.toString()
+                                                        ? "text-brand-400"
+                                                        : "text-slate-100"
+                                                )}>
                                                     {item.nome || item.telefone}
                                                 </p>
                                                 {item.unreadCount > 0 && (
-                                                    <span className="ml-auto min-w-[18px] h-4.5 px-1 rounded-full bg-brand-500 text-white text-[10px] font-bold flex items-center justify-center animate-in zoom-in-50">
-                                                        {item.unreadCount > 99 ? '99+' : item.unreadCount}
+                                                    <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 animate-in zoom-in-50">
+                                                        {item.unreadCount > 99 ? "99+" : item.unreadCount}
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <span className="text-[11px] text-slate-400 truncate flex-1">
-                                                    {item.telefone}
-                                                </span>
-                                                {item.statusAtendimento && (
-                                                    <span
-                                                        className={cn(
-                                                            "text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full shrink-0 border",
-                                                            statusStyles[item.statusAtendimento] || "bg-slate-500/20 text-slate-300 border-slate-500/40"
-                                                        )}
-                                                    >
-                                                        {item.statusAtendimento}
-                                                    </span>
-                                                )}
-                                            </div>
+                                            <p className="text-[11px] font-mono text-slate-500 truncate mt-0.5">
+                                                {item.telefone}
+                                            </p>
                                         </div>
                                     </div>
-                                    <div className="mt-2 flex justify-end h-5">
+                                    <div className="mt-2 flex justify-end gap-1.5 min-h-[20px]">
+                                        {item.statusAtendimento === "novo" && isRecentlyCreated(item.createdAt) && (
+                                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                                                NOVO
+                                            </span>
+                                        )}
                                         {!item.iaAtiva && (
                                             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
                                                 Manual
@@ -1403,14 +1567,25 @@ export function ConversasLayout() {
                                     <ArrowLeft className="w-5 h-5" />
                                 </button>
                                 <div className="min-w-0">
-                                    <h3 className="font-display text-base font-bold text-white truncate">
+                                    <h3 className="font-display text-lg font-bold text-white leading-tight truncate tracking-tight">
                                         {cliente.nome || "Sem nome"}
                                     </h3>
-                                    <p className="text-xs text-slate-400">{cliente.telefone}</p>
+                                    <p className="text-xs text-slate-400 font-mono tracking-wide mt-0.5">
+                                        {cliente.telefone}
+                                    </p>
                                 </div>
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0">
+                                {/* Search in conversation */}
+                                <button
+                                    onClick={() => window.dispatchEvent(new Event("chat-search-open"))}
+                                    className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                                    title="Buscar na conversa"
+                                >
+                                    <Search className="w-4 h-4" />
+                                </button>
+
                                 {/* Mobile: details button */}
                                 <button
                                     onClick={() => setMobileDetailsOpen(true)}
@@ -1477,29 +1652,106 @@ export function ConversasLayout() {
                             onReady={(fn) => { addOptimisticRef.current = fn; }}
                         />
 
+                        {/* Attachment preview area */}
+                        {attachments.length > 0 && (
+                            <div className="px-5 py-3 border-t border-border/50 bg-slate-900/80">
+                                <div className="flex gap-3 overflow-x-auto pb-2">
+                                    {attachments.map((att, idx) => (
+                                        <div key={att.id}
+                                            className="relative shrink-0 w-52 rounded-xl border border-slate-700 bg-slate-800/80 overflow-hidden flex flex-col">
+                                            <button
+                                                onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))}
+                                                className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors">
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                            {att.preview ? (
+                                                <img src={att.preview} alt={att.file.name}
+                                                    className="w-full h-28 object-cover" />
+                                            ) : (
+                                                <div className="w-full h-28 flex flex-col items-center justify-center gap-1 bg-slate-900/60">
+                                                    <FileText className="w-8 h-8 text-brand-400" />
+                                                    <p className="text-[10px] text-slate-400 px-2 text-center truncate w-full">{att.file.name}</p>
+                                                </div>
+                                            )}
+                                            <textarea
+                                                ref={idx === 0 ? firstCaptionRef : undefined}
+                                                rows={2}
+                                                value={att.caption}
+                                                onChange={(e) => {
+                                                    const el = e.currentTarget;
+                                                    el.style.height = "auto";
+                                                    el.style.height = el.scrollHeight + "px";
+                                                    setAttachments(prev =>
+                                                        prev.map(a => a.id === att.id ? { ...a, caption: e.target.value } : a));
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter" && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        handleSendAttachments();
+                                                    }
+                                                }}
+                                                placeholder="Adicionar legenda... (Enter para enviar)"
+                                                className="w-full px-2 py-1.5 text-xs bg-transparent text-slate-300 placeholder:text-slate-500 outline-none border-t border-slate-700/50 resize-none leading-relaxed" />
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-1">
+                                    {attachments.length} arquivo{attachments.length !== 1 ? "s" : ""} — Enter na legenda ou clique em enviar
+                                </p>
+                            </div>
+                        )}
+
                         {/* Input */}
                         <div className="px-5 py-3 border-t-2 border-border shrink-0 bg-background/80">
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 items-center">
+                                {/* File attachment */}
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    multiple
+                                    accept="image/*,application/pdf,.doc,.docx"
+                                    className="hidden"
+                                    onChange={handleFileSelect}
+                                />
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={cliente.iaAtiva}
+                                    className={cn(
+                                        "flex items-center justify-center w-10 h-10 rounded-xl transition-colors shrink-0 border",
+                                        attachments.length > 0
+                                            ? "bg-brand-500/20 border-brand-500/50 text-brand-400"
+                                            : "hover:bg-slate-800 border-slate-700/50 text-slate-400 hover:text-white disabled:opacity-30"
+                                    )}
+                                    title="Anexar arquivo"
+                                >
+                                    <Paperclip className="w-4 h-4" />
+                                </button>
                                 <Input
                                     value={chatMessage}
                                     onChange={(e) => setChatMessage(e.target.value)}
-                                    disabled={cliente.iaAtiva}
+                                    disabled={cliente.iaAtiva || attachments.length > 0}
                                     placeholder={
                                         cliente.iaAtiva
                                             ? "Pause a IA para enviar manualmente..."
-                                            : "Digite uma mensagem..."
+                                            : attachments.length > 0
+                                                ? "Adicione legenda nos arquivos acima ou clique em enviar"
+                                                : "Digite uma mensagem..."
                                     }
                                     className="rounded-xl flex-1 h-10 bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 focus:border-brand-500 focus:ring-brand-500/20"
                                     onKeyDown={(e) => {
-                                        if (e.key === "Enter" && !e.shiftKey && !cliente.iaAtiva) {
+                                        if (e.key === "Enter" && !e.shiftKey && !cliente.iaAtiva && attachments.length === 0) {
                                             e.preventDefault();
                                             handleSendMessage();
                                         }
                                     }}
                                 />
                                 <button
-                                    onClick={handleSendMessage}
-                                    disabled={isSendingMessage || !chatMessage.trim() || cliente.iaAtiva}
+                                    onClick={attachments.length > 0 ? handleSendAttachments : handleSendMessage}
+                                    disabled={
+                                        isSendingMessage ||
+                                        cliente.iaAtiva ||
+                                        (attachments.length === 0 && !chatMessage.trim())
+                                    }
                                     className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 shrink-0"
                                 >
                                     {isSendingMessage ? (
@@ -1512,7 +1764,7 @@ export function ConversasLayout() {
                             <p className="text-[10px] text-slate-600 mt-1.5 text-center">
                                 {cliente.iaAtiva
                                     ? "IA ativa — pause para enviar mensagens manualmente"
-                                    : "Enter para enviar · Mensagens disparadas via n8n → WhatsApp"}
+                                    : "Enter para enviar · Clique 📎 para anexar arquivos"}
                             </p>
                         </div>
                     </>
@@ -1546,6 +1798,119 @@ export function ConversasLayout() {
                     )}
                 </SheetContent>
             </Sheet>
+
+            {/* =================== NEW LEAD MODAL =================== */}
+            {showNewLeadModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-slate-900 border-2 border-slate-700 rounded-2xl shadow-2xl w-[380px] max-w-[90vw] p-6 animate-in zoom-in-95">
+                        <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-brand-500/20 flex items-center justify-center">
+                                    <UserPlus className="w-4 h-4 text-brand-400" />
+                                </div>
+                                <h3 className="font-display text-base font-bold text-white">
+                                    Novo Lead
+                                </h3>
+                            </div>
+                            <button
+                                onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); }}
+                                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Avatar picker */}
+                        <div className="flex justify-center mb-4">
+                            <input
+                                ref={newLeadPhotoRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) setNewLeadPhoto({ file, preview: URL.createObjectURL(file) });
+                                    e.target.value = "";
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => newLeadPhotoRef.current?.click()}
+                                className="relative w-20 h-20 rounded-full border-2 border-dashed border-slate-600 hover:border-brand-500 bg-slate-800/60 hover:bg-slate-800 transition-colors overflow-hidden group"
+                                title="Adicionar foto"
+                            >
+                                {newLeadPhoto ? (
+                                    <>
+                                        <img src={newLeadPhoto.preview} alt="foto" className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <Plus className="w-5 h-5 text-white" />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center gap-1 h-full text-slate-500 group-hover:text-brand-400 transition-colors">
+                                        <Plus className="w-6 h-6" />
+                                        <span className="text-[10px] font-medium">Foto</span>
+                                    </div>
+                                )}
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                    <Phone className="w-3 h-3" />
+                                    Telefone *
+                                </Label>
+                                <Input
+                                    value={newLeadForm.telefone}
+                                    onChange={(e) => setNewLeadForm((f) => ({ ...f, telefone: e.target.value }))}
+                                    placeholder="5511999999999"
+                                    className="rounded-lg h-9 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                    <User className="w-3 h-3" />
+                                    Nome
+                                </Label>
+                                <Input
+                                    value={newLeadForm.nome}
+                                    onChange={(e) => setNewLeadForm((f) => ({ ...f, nome: e.target.value }))}
+                                    placeholder="Nome do contato (opcional)"
+                                    className="rounded-lg h-9 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") handleCreateLead();
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 mt-5">
+                            <button
+                                onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); }}
+                                className="flex-1 h-9 rounded-lg border border-slate-600 text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleCreateLead}
+                                disabled={isCreatingLead || !newLeadForm.telefone.trim()}
+                                className="flex-1 h-9 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 flex items-center justify-center gap-1.5"
+                            >
+                                {isCreatingLead ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <>
+                                        <Plus className="w-3.5 h-3.5" />
+                                        Criar Lead
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
