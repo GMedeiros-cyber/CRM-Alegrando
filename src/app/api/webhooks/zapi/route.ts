@@ -4,11 +4,14 @@
  * Fluxo:
  *  1. Recebe todos os eventos da Z-API.
  *  2. Ignora eventos que não são mensagens reais (status callbacks).
- *  3. Se fromMe=true (mensagem enviada pela equipe pelo celular físico):
+ *  3. Se fromMe=false (mensagem do cliente) e o phone é um número real (não LID):
+ *     - Atualiza o campo chat_lid no lead para mapear LID → telefone real.
+ *  4. Se fromMe=true, fromApi=false (celular físico da equipe):
+ *     - Se phone é um LID, resolve o telefone real via chat_lid do lead.
  *     - Checa idempotência pelo messageId no campo metadata JSONB.
  *     - Salva no banco com sender_type='equipe'.
- *  4. Repassa o payload original ao n8n de forma assíncrona (fire-and-forget).
- *     O n8n recebe a mensagem e decide se aciona a IA (Jade) ou não.
+ *  5. Se fromMe=true, fromApi=true (enviado pelo CRM via API): ignora (já salvo).
+ *  6. Repassa o payload original ao n8n de forma assíncrona (fire-and-forget).
  */
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -40,23 +43,21 @@ interface ZApiWebhookPayload {
   instanceId?: string;
   messageId?: string;
   phone?: string;
+  chatLid?: string;
   fromMe?: boolean;
+  fromApi?: boolean;
   momment?: number;       // timestamp em ms (typo proposital da Z-API)
   status?: string;
   chatName?: string;
   senderName?: string;
   senderPhoto?: string;
   type?: string;
-  fromApi?: boolean;
   text?: ZApiTextPayload;
   image?: ZApiImagePayload;
   document?: ZApiDocumentPayload;
-  [key: string]: unknown; // permite repassar o payload inteiro ao n8n
+  [key: string]: unknown;
 }
 
-/**
- * Extrai o conteúdo e o media_type do payload Z-API.
- */
 function extractMessageContent(payload: ZApiWebhookPayload): {
   content: string;
   media_type: "text" | "image" | "document" | "audio" | "video";
@@ -67,37 +68,27 @@ function extractMessageContent(payload: ZApiWebhookPayload): {
   if (payload.image) {
     const url = payload.image.imageUrl || "";
     const caption = payload.image.caption || "";
-    return {
-      content: caption ? `${url}|||${caption}` : url,
-      media_type: "image",
-    };
+    return { content: caption ? `${url}|||${caption}` : url, media_type: "image" };
   }
   if (payload.document) {
     const url = payload.document.documentUrl || "";
     const caption = payload.document.caption || "";
-    return {
-      content: caption ? `${url}|||${caption}` : url,
-      media_type: "document",
-    };
+    return { content: caption ? `${url}|||${caption}` : url, media_type: "document" };
   }
-  // Fallback: serializa o payload para não perder dados
   return { content: JSON.stringify(payload), media_type: "text" };
 }
 
-/**
- * Normaliza o telefone: remove tudo que não é dígito,
- * garante que começa com 55 (Brasil).
- */
+/** Retorna true se o valor é um LID do WhatsApp (ex: "219279655968887@lid") */
+function isLid(phone: string): boolean {
+  return phone.includes("@lid");
+}
+
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   if (digits.startsWith("55") && digits.length >= 12) return digits;
   return `55${digits}`;
 }
 
-/**
- * Repassa o payload ao n8n de forma assíncrona (fire-and-forget).
- * Não aguardamos a resposta para não prender o tempo de resposta ao webhook.
- */
 function forwardToN8n(payload: ZApiWebhookPayload, n8nUrl: string): void {
   fetch(n8nUrl, {
     method: "POST",
@@ -122,78 +113,99 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // --- 1. Filtro: apenas eventos de mensagem real ---
   const eventType = payload.type || "";
   if (!MESSAGE_EVENT_TYPES.has(eventType)) {
-    // É um callback de status (entrega, leitura, etc.) — ignora silenciosamente.
-    // Repassa ao n8n assim mesmo caso ele use esses eventos para algo.
     if (n8nWebhookUrl) forwardToN8n(payload, n8nWebhookUrl);
     return NextResponse.json({ status: "skipped", reason: "non-message event" });
   }
 
-  const messageId = payload.messageId;
-  const phoneRaw = payload.phone ? normalizePhone(payload.phone) : null;
+  const rawPhone = payload.phone ?? "";
+  const chatLid = payload.chatLid ?? (isLid(rawPhone) ? rawPhone : null);
   const isFromMe = payload.fromMe === true;
-  // fromApi=true significa que a mensagem foi enviada via API (pelo CRM).
-  // Nesses casos o CRM já salvou a mensagem — o proxy deve ignorar para evitar duplicata.
+  // fromApi=true = enviado pelo CRM via API → já salvo pela action, ignorar.
   const isFromApi = payload.fromApi === true;
 
-  // --- 2. Mensagens da equipe (fromMe=true, fromApi=false): salvar no banco ---
-  // fromApi=true = enviado pelo CRM via Z-API API → já salvo, ignorar.
-  // fromApi=false = enviado pelo celular físico → precisa salvar aqui.
-  if (isFromMe && !isFromApi && phoneRaw && messageId) {
+  const supabase = createServerSupabaseClient();
+
+  // --- 2. Mensagens do cliente (fromMe=false) com número real: atualiza chat_lid no lead ---
+  // Isso cria o mapeamento LID → telefone que usaremos para mensagens do celular físico.
+  if (!isFromMe && !isLid(rawPhone) && chatLid && rawPhone) {
+    const realPhone = normalizePhone(rawPhone);
+    const phoneWithout55 = realPhone.startsWith("55") ? realPhone.slice(2) : realPhone;
+
+    supabase
+      .from("Clientes _WhatsApp")
+      .update({ chat_lid: chatLid })
+      .or(`telefone.eq.${realPhone},telefone.eq.${phoneWithout55}`)
+      .then(({ error }) => {
+        if (error) console.error("[ZAPI-PROXY] Falha ao atualizar chat_lid:", error.message);
+      });
+  }
+
+  // --- 3. Mensagens da equipe (fromMe=true, fromApi=false): salvar no banco ---
+  if (isFromMe && !isFromApi && payload.messageId) {
     try {
-      const supabase = createServerSupabaseClient();
+      let phone: string | null = null;
 
-      // Resolve o telefone no formato exato em que está armazenado no CRM.
-      // A Z-API envia com prefixo 55, mas o CRM pode armazenar sem ele.
-      // Buscamos em "Clientes _WhatsApp" pelo número normalizado OU sem o 55.
-      const phoneWithout55 = phoneRaw.startsWith("55") ? phoneRaw.slice(2) : phoneRaw;
-      const { data: leadRow } = await supabase
-        .from("Clientes _WhatsApp")
-        .select("telefone")
-        .or(`telefone.eq.${phoneRaw},telefone.eq.${phoneWithout55}`)
-        .maybeSingle();
+      if (!isLid(rawPhone) && rawPhone) {
+        // Número real: resolve o telefone no formato exato do CRM
+        const normalizedPhone = normalizePhone(rawPhone);
+        const phoneWithout55 = normalizedPhone.startsWith("55") ? normalizedPhone.slice(2) : normalizedPhone;
+        const { data: leadRow } = await supabase
+          .from("Clientes _WhatsApp")
+          .select("telefone")
+          .or(`telefone.eq.${normalizedPhone},telefone.eq.${phoneWithout55}`)
+          .maybeSingle();
+        phone = leadRow?.telefone ?? normalizedPhone;
 
-      // Usa o telefone do CRM se encontrado; caso contrário, usa o normalizado
-      const phone = leadRow?.telefone ?? phoneRaw;
+      } else if (chatLid) {
+        // Phone é um LID: resolve usando o mapeamento chat_lid → telefone do lead
+        const { data: leadRow } = await supabase
+          .from("Clientes _WhatsApp")
+          .select("telefone")
+          .eq("chat_lid", chatLid)
+          .maybeSingle();
 
-      // Idempotência: verifica se o messageId já foi processado
-      const { data: existing, error: lookupErr } = await supabase
-        .from("messages")
-        .select("id")
-        .eq("telefone", phone)
-        .eq("metadata->>messageId", messageId)
-        .maybeSingle();
-
-      if (lookupErr) {
-        console.error("[ZAPI-PROXY] Erro ao checar idempotência:", lookupErr.message);
-        // Continua — é melhor tentar salvar e pegar um erro de duplicata
-        // do que perder a mensagem por um erro de leitura.
+        if (leadRow?.telefone) {
+          phone = leadRow.telefone;
+        } else {
+          console.warn(`[ZAPI-PROXY] Lead não encontrado para chatLid=${chatLid}. Aguardando mapeamento.`);
+        }
       }
 
-      if (existing) {
-        console.log(`[ZAPI-PROXY] Mensagem ${messageId} já registrada. Ignorando duplicata.`);
+      if (!phone) {
+        // Sem telefone resolvido, não conseguimos salvar com segurança
+        console.warn(`[ZAPI-PROXY] Telefone não resolvido para mensagem ${payload.messageId}. Skipping save.`);
       } else {
-        const { content, media_type } = extractMessageContent(payload);
-        const senderName = payload.senderName || "Equipe";
-        const sentAt = payload.momment
-          ? new Date(payload.momment).toISOString()
-          : new Date().toISOString();
+        // Idempotência: verifica se o messageId já foi processado
+        const { data: existing } = await supabase
+          .from("messages")
+          .select("id")
+          .eq("telefone", phone)
+          .eq("metadata->>messageId", payload.messageId)
+          .maybeSingle();
 
-        const { error: insertErr } = await supabase.from("messages").insert({
-          telefone: phone,
-          sender_type: "equipe",
-          sender_name: senderName,
-          content,
-          media_type,
-          created_at: sentAt,
-          metadata: { messageId, raw: payload },
-        });
-
-        if (insertErr) {
-          console.error("[ZAPI-PROXY] Falha ao salvar mensagem da equipe:", insertErr.message);
-          // Não retorna 500 para não fazer a Z-API retentar em loop —
-          // apenas loga e deixa o n8n receber o evento normalmente.
+        if (existing) {
+          console.log(`[ZAPI-PROXY] Mensagem ${payload.messageId} já registrada. Ignorando duplicata.`);
         } else {
-          console.log(`[ZAPI-PROXY] Mensagem da equipe salva: ${messageId} de ${phone}`);
+          const { content, media_type } = extractMessageContent(payload);
+          const sentAt = payload.momment
+            ? new Date(payload.momment).toISOString()
+            : new Date().toISOString();
+
+          const { error: insertErr } = await supabase.from("messages").insert({
+            telefone: phone,
+            sender_type: "equipe",
+            sender_name: payload.senderName || "Equipe",
+            content,
+            media_type,
+            created_at: sentAt,
+            metadata: { messageId: payload.messageId, chatLid, raw: payload },
+          });
+
+          if (insertErr) {
+            console.error("[ZAPI-PROXY] Falha ao salvar mensagem da equipe:", insertErr.message);
+          } else {
+            console.log(`[ZAPI-PROXY] Mensagem da equipe salva: ${payload.messageId} para ${phone}`);
+          }
         }
       }
     } catch (err) {
@@ -201,16 +213,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // --- 3. Repasse ao n8n (fire-and-forget, para todos os eventos de mensagem) ---
-  // O n8n vai receber o payload original e decidir se aciona a Jade ou não.
-  // Como fromMe=true já foi tratado aqui, o n8n pode ignorar esses eventos
-  // ou usá-los para outras automações (ex: atualizar status do atendimento).
+  // --- 4. Repasse ao n8n (fire-and-forget) ---
   if (n8nWebhookUrl) {
     forwardToN8n(payload, n8nWebhookUrl);
   } else {
     console.warn("[ZAPI-PROXY] N8N_ZAPI_WEBHOOK_URL não configurada — repasse desativado.");
   }
 
-  // Responde imediatamente à Z-API com 200 para evitar retentativas.
   return NextResponse.json({ status: "ok" });
 }
