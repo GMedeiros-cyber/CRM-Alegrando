@@ -89,7 +89,7 @@ export async function sendMessage(payload: {
         const supabase = createServerSupabaseClient();
         const { error: dbErr } = await supabase.from("messages").insert({
             telefone: parsed.telefone,
-            sender_type: "humano",
+            sender_type: "equipe",
             sender_name: parsed.sender_name,
             content: parsed.mensagem,
             media_type: "text",
@@ -180,7 +180,7 @@ export async function sendFileMessage(
     const storedContent = caption.trim() ? `${publicUrl}|||${caption.trim()}` : publicUrl;
     const { error: dbErr } = await supabase.from("messages").insert({
         telefone: String(telefone),
-        sender_type: "humano",
+        sender_type: "equipe",
         sender_name: senderName,
         content: storedContent,
         media_type: mediaType,
