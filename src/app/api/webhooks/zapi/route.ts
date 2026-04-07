@@ -47,6 +47,7 @@ interface ZApiWebhookPayload {
   senderName?: string;
   senderPhoto?: string;
   type?: string;
+  fromApi?: boolean;
   text?: ZApiTextPayload;
   image?: ZApiImagePayload;
   document?: ZApiDocumentPayload;
@@ -130,9 +131,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const messageId = payload.messageId;
   const phoneRaw = payload.phone ? normalizePhone(payload.phone) : null;
   const isFromMe = payload.fromMe === true;
+  // fromApi=true significa que a mensagem foi enviada via API (pelo CRM).
+  // Nesses casos o CRM já salvou a mensagem — o proxy deve ignorar para evitar duplicata.
+  const isFromApi = payload.fromApi === true;
 
-  // --- 2. Mensagens da equipe (fromMe=true): salvar no banco ---
-  if (isFromMe && phoneRaw && messageId) {
+  // --- 2. Mensagens da equipe (fromMe=true, fromApi=false): salvar no banco ---
+  // fromApi=true = enviado pelo CRM via Z-API API → já salvo, ignorar.
+  // fromApi=false = enviado pelo celular físico → precisa salvar aqui.
+  if (isFromMe && !isFromApi && phoneRaw && messageId) {
     try {
       const supabase = createServerSupabaseClient();
 
