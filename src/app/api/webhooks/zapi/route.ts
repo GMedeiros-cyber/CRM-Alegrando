@@ -128,13 +128,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const messageId = payload.messageId;
-  const phone = payload.phone ? normalizePhone(payload.phone) : null;
+  const phoneRaw = payload.phone ? normalizePhone(payload.phone) : null;
   const isFromMe = payload.fromMe === true;
 
   // --- 2. Mensagens da equipe (fromMe=true): salvar no banco ---
-  if (isFromMe && phone && messageId) {
+  if (isFromMe && phoneRaw && messageId) {
     try {
       const supabase = createServerSupabaseClient();
+
+      // Resolve o telefone no formato exato em que está armazenado no CRM.
+      // A Z-API envia com prefixo 55, mas o CRM pode armazenar sem ele.
+      // Buscamos em "Clientes _WhatsApp" pelo número normalizado OU sem o 55.
+      const phoneWithout55 = phoneRaw.startsWith("55") ? phoneRaw.slice(2) : phoneRaw;
+      const { data: leadRow } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("telefone")
+        .or(`telefone.eq.${phoneRaw},telefone.eq.${phoneWithout55}`)
+        .maybeSingle();
+
+      // Usa o telefone do CRM se encontrado; caso contrário, usa o normalizado
+      const phone = leadRow?.telefone ?? phoneRaw;
 
       // Idempotência: verifica se o messageId já foi processado
       const { data: existing, error: lookupErr } = await supabase
