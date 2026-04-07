@@ -54,18 +54,20 @@ export function useLeadMessages(telefone: string) {
                         setMessages((prev) => {
                             if (prev.some(m => m.id === formattedMsg.id)) return prev;
 
-                            // Remove optimistic placeholder when the real humano message arrives
+                            // Remove optimistic placeholder when the real equipe/humano message arrives.
+                            // "equipe" = mensagem enviada pela equipe (via CRM ou celular físico).
                             let base = prev;
-                            if (formattedMsg.senderType === "humano") {
+                            const isTeamMessage = formattedMsg.senderType === "equipe" || formattedMsg.senderType === "humano";
+                            if (isTeamMessage) {
                                 const sixtySecondsAgo = Date.now() - 60000;
                                 const fiveSecondsAgo = Date.now() - 5000;
 
                                 // Evita duplicata: CRM salva direto (created_by != null) e o
                                 // webhook fromMe do ZAPI pode chegar logo depois (created_by = null).
-                                // Se já existe "humano" com mesmo conteúdo nos últimos 60s, descarta.
+                                // Se já existe mensagem de equipe/humano com mesmo conteúdo nos últimos 60s, descarta.
                                 const isDuplicate = prev.some(m => {
                                     if (m.id.startsWith("optimistic-")) return false;
-                                    if (m.senderType !== "humano") return false;
+                                    if (m.senderType !== formattedMsg.senderType) return false;
                                     if (m.content !== formattedMsg.content) return false;
                                     const msgTime = m.createdAt ? new Date(m.createdAt).getTime() : 0;
                                     return msgTime > sixtySecondsAgo;
@@ -101,7 +103,7 @@ export function useLeadMessages(telefone: string) {
     const addOptimisticMessage = useCallback((content: string) => {
         const optimistic: LeadMessage = {
             id: `optimistic-${Date.now()}`,
-            senderType: "humano",
+            senderType: "equipe",
             senderName: "Alegrando",
             content,
             mediaType: "text",
