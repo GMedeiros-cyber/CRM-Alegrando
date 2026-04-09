@@ -135,20 +135,174 @@ export async function sendWhatsAppDocument(
   }
 }
 
-export async function sendWhatsAppMessage(
+/**
+ * Envia reação (emoji) em uma mensagem do WhatsApp.
+ * Para remover uma reação existente, passe emoji="" (string vazia).
+ * Conforme documentação Z-API: POST /send-reaction { phone, messageId, reaction }
+ */
+export async function sendWhatsAppReaction(
   telefone: string,
-  mensagem: string
+  zapiMessageId: string,
+  emoji: string  // "" para remover
 ): Promise<{ success: boolean; error?: string }> {
   const instance = process.env.ZAPI_INSTANCE;
   const token = process.env.ZAPI_TOKEN;
   const clientToken = process.env.ZAPI_CLIENT_TOKEN;
 
   if (!instance || !token || !clientToken) {
-    console.error("[ZAPI] Variáveis de ambiente ausentes:", {
-      instance: !!instance,
-      token: !!token,
-      clientToken: !!clientToken,
+    return { success: false, error: "Variáveis Z-Api não configuradas" };
+  }
+
+  const phone = formatPhoneZapi(telefone);
+  try {
+    const response = await fetch(`${zapiBase(instance, token)}/send-reaction`, {
+      method: "POST",
+      headers: buildZapiHeaders(clientToken),
+      // Z-API aceita reaction="" para remover a reação existente
+      body: JSON.stringify({ phone, messageId: zapiMessageId, reaction: emoji }),
     });
+
+    const body = await response.text();
+    if (!response.ok) {
+      console.error(`[ZAPI-REACT] Erro ${response.status}:`, body);
+      return { success: false, error: `Z-Api reaction ${response.status}: ${body}` };
+    }
+    return { success: true };
+  } catch (err) {
+    console.error("[ZAPI-REACT] Exceção:", err);
+    return { success: false, error: String(err) };
+  }
+}
+
+/**
+ * Envia mensagem de texto com quote (responder mensagem).
+ */
+export async function sendWhatsAppReply(
+  telefone: string,
+  zapiMessageId: string,
+  text: string
+): Promise<{ success: boolean; zapiMessageId?: string; error?: string }> {
+  const instance = process.env.ZAPI_INSTANCE;
+  const token = process.env.ZAPI_TOKEN;
+  const clientToken = process.env.ZAPI_CLIENT_TOKEN;
+
+  if (!instance || !token || !clientToken) {
+    return { success: false, error: "Variáveis Z-Api não configuradas" };
+  }
+
+  const phone = formatPhoneZapi(telefone);
+  try {
+    const response = await fetch(`${zapiBase(instance, token)}/send-text`, {
+      method: "POST",
+      headers: buildZapiHeaders(clientToken),
+      body: JSON.stringify({ phone, message: text, messageId: zapiMessageId }),
+    });
+
+    const body = await response.text();
+    if (!response.ok) {
+      console.error(`[ZAPI-REPLY] Erro ${response.status}:`, body);
+      return { success: false, error: `Z-Api reply ${response.status}: ${body}` };
+    }
+    let newMessageId: string | undefined;
+    try { newMessageId = (JSON.parse(body) as Record<string, unknown>).messageId as string | undefined; } catch { /* ignore */ }
+    return { success: true, zapiMessageId: newMessageId };
+  } catch (err) {
+    console.error("[ZAPI-REPLY] Exceção:", err);
+    return { success: false, error: String(err) };
+  }
+}
+
+/**
+ * Apaga mensagem no WhatsApp.
+ */
+export async function deleteWhatsAppMessage(
+  telefone: string,
+  zapiMessageId: string,
+  owner: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const instance = process.env.ZAPI_INSTANCE;
+  const token = process.env.ZAPI_TOKEN;
+  const clientToken = process.env.ZAPI_CLIENT_TOKEN;
+
+  if (!instance || !token || !clientToken) {
+    return { success: false, error: "Variáveis Z-Api não configuradas" };
+  }
+
+  const phone = formatPhoneZapi(telefone);
+  try {
+    const response = await fetch(
+      `${zapiBase(instance, token)}/messages?messageId=${zapiMessageId}&phone=${phone}&owner=${owner}`,
+      {
+        method: "DELETE",
+        headers: buildZapiHeaders(clientToken),
+      }
+    );
+
+    const body = await response.text();
+    if (!response.ok) {
+      console.error(`[ZAPI-DEL] Erro ${response.status}:`, body);
+      return { success: false, error: `Z-Api delete ${response.status}: ${body}` };
+    }
+    return { success: true };
+  } catch (err) {
+    console.error("[ZAPI-DEL] Exceção:", err);
+    return { success: false, error: String(err) };
+  }
+}
+
+/**
+ * Fixa ou desafixa mensagem no WhatsApp.
+ * @param duration Duração do pin: 1 = 24h, 2 = 7d, 3 = 30d
+ */
+export async function pinWhatsAppMessage(
+  telefone: string,
+  zapiMessageId: string,
+  pin: boolean,
+  duration: 1 | 2 | 3 = 3
+): Promise<{ success: boolean; error?: string }> {
+  const instance = process.env.ZAPI_INSTANCE;
+  const token = process.env.ZAPI_TOKEN;
+  const clientToken = process.env.ZAPI_CLIENT_TOKEN;
+
+  if (!instance || !token || !clientToken) {
+    return { success: false, error: "Variáveis Z-Api não configuradas" };
+  }
+
+  const phone = formatPhoneZapi(telefone);
+  try {
+    const response = await fetch(`${zapiBase(instance, token)}/pin-message`, {
+      method: "POST",
+      headers: buildZapiHeaders(clientToken),
+      body: JSON.stringify({
+        phone,
+        messageId: zapiMessageId,
+        messageAction: pin ? "pin" : "unpin",
+        pinMessageDuration: duration,
+      }),
+    });
+
+    const body = await response.text();
+    if (!response.ok) {
+      console.error(`[ZAPI-PIN] Erro ${response.status}:`, body);
+      return { success: false, error: `Z-Api pin ${response.status}: ${body}` };
+    }
+    return { success: true };
+  } catch (err) {
+    console.error("[ZAPI-PIN] Exceção:", err);
+    return { success: false, error: String(err) };
+  }
+}
+
+export async function sendWhatsAppMessage(
+  telefone: string,
+  mensagem: string
+): Promise<{ success: boolean; zapiMessageId?: string; error?: string }> {
+  const instance = process.env.ZAPI_INSTANCE;
+  const token = process.env.ZAPI_TOKEN;
+  const clientToken = process.env.ZAPI_CLIENT_TOKEN;
+
+  if (!instance || !token || !clientToken) {
+    console.error("[ZAPI] Variáveis de ambiente ausentes");
     return { success: false, error: "Variáveis Z-Api não configuradas" };
   }
 
@@ -172,8 +326,15 @@ export async function sendWhatsAppMessage(
       return { success: false, error: `Z-Api ${response.status}: ${body}` };
     }
 
-    console.log("[ZAPI] Sucesso:", body);
-    return { success: true };
+    // Z-API returns { zaapId, messageId, id } — capture messageId for future operations
+    let zapiMessageId: string | undefined;
+    try {
+      const parsed = JSON.parse(body) as Record<string, unknown>;
+      zapiMessageId = (parsed.messageId as string) || undefined;
+    } catch { /* response not JSON, ignore */ }
+
+    console.log("[ZAPI] Sucesso:", zapiMessageId ?? body);
+    return { success: true, zapiMessageId };
   } catch (err) {
     console.error("[ZAPI] Exceção:", err);
     return { success: false, error: String(err) };

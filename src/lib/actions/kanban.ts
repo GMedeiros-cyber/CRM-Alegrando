@@ -84,7 +84,12 @@ export async function getKanbanData(): Promise<KanbanData> {
         
         // Se o lead não tem coluna, manda para a coluna "novo_lead"
         if (!colId) {
-            const novoLeadCol = columns.find(c => c.slug === "novo_lead" || c.name === "Novo Lead");
+            const novoLeadCol = columns.find(c =>
+                c.slug === "novo_lead" ||
+                c.name?.toLowerCase() === "novo lead" ||
+                c.name?.toLowerCase().includes("novo lead") ||
+                c.position === 0
+            );
             if (novoLeadCol) {
                 colId = novoLeadCol.id;
             }

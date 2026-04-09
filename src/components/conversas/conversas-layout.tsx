@@ -15,6 +15,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { ChatWindow } from "./chat-window";
+import { EmojiPickerInput } from "./emoji-picker-input";
 import {
     listClientes,
     getClienteByTelefone,
@@ -104,6 +105,29 @@ function isRecentlyCreated(createdAt: Date | null): boolean {
 // =============================================
 // MAIN COMPONENT
 // =============================================
+function formatLastMessageTime(date: Date | null): string {
+    if (!date) return "";
+    const now = new Date();
+    const d = new Date(date);
+
+    // Comparar dias-calendário no timezone local (não ms brutos)
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dMidnight    = new Date(d.getFullYear(),   d.getMonth(),   d.getDate());
+    const diffDays = Math.round(
+        (todayMidnight.getTime() - dMidnight.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (diffDays === 0) {
+        return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
+    if (diffDays === 1) return "Ontem";
+    if (diffDays <= 6) {
+        const dias = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+        return dias[d.getDay()];
+    }
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
 export function ConversasLayout() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -152,6 +176,7 @@ export function ConversasLayout() {
     // Chat
     const [chatMessage, setChatMessage] = useState("");
     const addOptimisticRef = useRef<((content: string) => void) | null>(null);
+    const [replyTo, setReplyTo] = useState<import("@/lib/actions/leads").LeadMessage | null>(null);
 
     // Tasks
     const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -367,6 +392,7 @@ export function ConversasLayout() {
         async (telefone: string) => {
             setSelectedTelefone(telefone);
             setMobileView("chat");
+            setReplyTo(null);
             router.push(`/conversas?telefone=${telefone}`, { scroll: false });
 
             // Marcar como lida localmente e no banco
@@ -465,17 +491,32 @@ export function ConversasLayout() {
     function handleSendMessage() {
         if (!cliente?.telefone || !chatMessage.trim()) return;
         const text = chatMessage.trim();
+        const currentReply = replyTo;
         setChatMessage("");
+        setReplyTo(null);
         addOptimisticRef.current?.(text);
 
         startSendingMessage(async () => {
             try {
-                await sendMessage({
-                    telefone: cliente.telefone,
-                    mensagem: text,
-                    sender_name: "Equipe",
-                    iaAtiva: cliente.iaAtiva,
-                });
+                if (currentReply) {
+                    const { replyToMessage } = await import("@/lib/actions/messages");
+                    await replyToMessage({
+                        telefone: cliente.telefone,
+                        text,
+                        senderName: "Equipe",
+                        iaAtiva: cliente.iaAtiva,
+                        replyToZapiId: currentReply.zapiMessageId ?? null,
+                        replyToContent: currentReply.content,
+                        replyToSenderName: currentReply.senderName ?? null,
+                    });
+                } else {
+                    await sendMessage({
+                        telefone: cliente.telefone,
+                        mensagem: text,
+                        sender_name: "Equipe",
+                        iaAtiva: cliente.iaAtiva,
+                    });
+                }
             } catch (err) {
                 setToast({ type: "error", text: `Erro ao enviar: ${err}` });
             }
@@ -1487,6 +1528,9 @@ export function ConversasLayout() {
                                                 )}>
                                                     {item.nome || item.telefone}
                                                 </p>
+                                                <span className="text-[10px] text-slate-500 shrink-0 ml-auto">
+                                                    {formatLastMessageTime(item.lastMessageAt)}
+                                                </span>
                                                 {item.unreadCount > 0 && (
                                                     <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 animate-in zoom-in-50">
                                                         {item.unreadCount > 99 ? "99+" : item.unreadCount}
@@ -1649,7 +1693,8 @@ export function ConversasLayout() {
                         {/* Messages — Realtime via Supabase */}
                         <ChatWindow
                             telefone={cliente.telefone}
-                            onReady={(fn) => { addOptimisticRef.current = fn; }}
+                            onReady={(fns) => { addOptimisticRef.current = fns.addOptimisticMessage; }}
+                            onReply={(msg) => setReplyTo(msg)}
                         />
 
                         {/* Attachment preview area */}
@@ -1701,9 +1746,32 @@ export function ConversasLayout() {
                             </div>
                         )}
 
+                        {/* Reply preview */}
+                        {replyTo && (
+                            <div className="px-5 py-2 border-t border-border/50 bg-slate-900/60 flex items-center gap-2">
+                                <div className="w-1 h-8 rounded-full bg-brand-500 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[11px] font-medium text-brand-400">
+                                        Respondendo a {replyTo.senderName || (replyTo.senderType === "lead" || replyTo.senderType === "cliente" ? "Cliente" : "Equipe")}
+                                    </p>
+                                    <p className="text-xs text-slate-400 truncate">{replyTo.content}</p>
+                                </div>
+                                <button
+                                    onClick={() => setReplyTo(null)}
+                                    className="p-1 text-slate-500 hover:text-white transition-colors shrink-0"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+
                         {/* Input */}
                         <div className="px-5 py-3 border-t-2 border-border shrink-0 bg-background/80">
                             <div className="flex gap-2 items-center">
+                                {/* Emoji picker */}
+                                <EmojiPickerInput
+                                    onEmojiSelect={(emoji) => setChatMessage((prev) => prev + emoji)}
+                                />
                                 {/* File attachment */}
                                 <input
                                     ref={fileInputRef}
