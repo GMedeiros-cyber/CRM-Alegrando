@@ -73,6 +73,7 @@ export type ClienteDetail = {
     posPasseioAtivo: boolean;
     posPasseioEnviado: boolean;
     posPasseioEnviadoEm: string | null;
+    fotoUrl: string | null;
 };
 
 /** Mensagem individual do chat */
@@ -84,6 +85,10 @@ export type LeadMessage = {
     mediaType: "text" | "audio" | "image" | "document" | null;
     createdAt: Date | null;
     createdBy?: string | null;
+    zapiMessageId?: string | null;
+    reactions?: Record<string, string[]>;
+    pinned?: boolean;
+    replyTo?: { content: string; senderName: string | null } | null;
     _optimistic?: boolean;
 };
 
@@ -225,6 +230,7 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         posPasseioAtivo: data.pos_passeio_ativo ?? false,
         posPasseioEnviado: data.pos_passeio_enviado ?? false,
         posPasseioEnviadoEm: data.pos_passeio_enviado_em || null,
+        fotoUrl: data.foto_url || null,
     };
 }
 
@@ -591,12 +597,20 @@ export async function createCliente(data: {
         throw new Error("Lead já existe com este telefone");
     }
 
+    const { data: primeiraColuna } = await supabase
+        .from("kanban_columns")
+        .select("id")
+        .order("position", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
     const { error } = await supabase.from("Clientes _WhatsApp").insert({
         telefone,
         nome: data.nome || null,
         ia_ativa: true,
         status_atendimento: "novo",
         foto_url: data.fotoUrl || null,
+        kanban_column_id: primeiraColuna?.id || null,
     });
 
     if (error) {

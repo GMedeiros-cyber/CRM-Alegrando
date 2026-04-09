@@ -33,6 +33,53 @@ export function useLeadMessages(telefone: string) {
             .on(
                 "postgres_changes",
                 {
+                    event: "UPDATE",
+                    schema: "public",
+                    table: "messages",
+                    filter: `telefone=eq.${telefone}`,
+                },
+                (payload) => {
+                    const updated = payload.new;
+                    const meta = updated.metadata as Record<string, unknown> | null;
+                    if (isMounted) {
+                        setMessages((prev) =>
+                            prev.map((m) =>
+                                m.id === updated.id
+                                    ? {
+                                        ...m,
+                                        content: updated.content as string,
+                                        // updated.reactions pode chegar como null quando o DB tem '{}'
+                        // Não usar ?? aqui — se null, significa reações removidas (usar {})
+                        reactions: updated.reactions != null
+                            ? (updated.reactions as Record<string, string[]>)
+                            : {},
+                                        pinned: updated.pinned === true,
+                                        zapiMessageId: (meta?.messageId as string) ?? m.zapiMessageId,
+                                    }
+                                    : m
+                            )
+                        );
+                    }
+                }
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "DELETE",
+                    schema: "public",
+                    table: "messages",
+                    filter: `telefone=eq.${telefone}`,
+                },
+                (payload) => {
+                    const deleted = payload.old;
+                    if (isMounted && deleted?.id) {
+                        setMessages((prev) => prev.filter((m) => m.id !== deleted.id));
+                    }
+                }
+            )
+            .on(
+                "postgres_changes",
+                {
                     event: "INSERT",
                     schema: "public",
                     table: "messages",
@@ -40,6 +87,7 @@ export function useLeadMessages(telefone: string) {
                 },
                 (payload) => {
                     const newMsg = payload.new;
+                    const meta = newMsg.metadata as Record<string, unknown> | null;
                     const formattedMsg: LeadMessage = {
                         id: newMsg.id,
                         senderType: newMsg.sender_type,
@@ -48,6 +96,10 @@ export function useLeadMessages(telefone: string) {
                         mediaType: newMsg.media_type || "text",
                         createdAt: newMsg.created_at ? new Date(newMsg.created_at) : null,
                         createdBy: newMsg.created_by ?? null,
+                        zapiMessageId: (meta?.messageId as string) ?? null,
+                        reactions: (newMsg.reactions as Record<string, string[]>) ?? {},
+                        pinned: newMsg.pinned === true,
+                        replyTo: (meta?.replyTo as { content: string; senderName: string | null }) ?? null,
                     };
 
                     if (isMounted) {
@@ -114,7 +166,17 @@ export function useLeadMessages(telefone: string) {
         setMessages((prev) => [...prev, optimistic]);
     }, []);
 
-    return { messages, loading, addOptimisticMessage };
+    /** Atualiza campos de uma mensagem na UI imediatamente (optimistic). */
+    const updateMessageById = useCallback((id: string, updates: Partial<LeadMessage>) => {
+        setMessages((prev) => prev.map((m) => m.id === id ? { ...m, ...updates } : m));
+    }, []);
+
+    /** Remove uma mensagem da UI imediatamente (optimistic). */
+    const removeMessageById = useCallback((id: string) => {
+        setMessages((prev) => prev.filter((m) => m.id !== id));
+    }, []);
+
+    return { messages, loading, addOptimisticMessage, updateMessageById, removeMessageById };
 }
 
 /**
@@ -123,7 +185,7 @@ export function useLeadMessages(telefone: string) {
 async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> {
     const { data, error } = await supabase
         .from("messages")
-        .select("id, sender_type, sender_name, content, media_type, created_at, created_by")
+        .select("id, sender_type, sender_name, content, media_type, created_at, created_by, metadata, pinned, reactions")
         .eq("telefone", telefone)
         .order("created_at", { ascending: true });
 
@@ -131,13 +193,20 @@ async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> 
         return [];
     }
 
-    return (data || []).map((row: Record<string, unknown>) => ({
-        id: row.id as string,
-        senderType: row.sender_type as string,
-        senderName: (row.sender_name as string) || null,
-        content: row.content as string,
-        mediaType: (row.media_type as "text" | "audio" | "image" | "document") || "text",
-        createdAt: row.created_at ? new Date(row.created_at as string) : null,
-        createdBy: (row.created_by as string) ?? null,
-    }));
+    return (data || []).map((row: Record<string, unknown>) => {
+        const meta = row.metadata as Record<string, unknown> | null;
+        return {
+            id: row.id as string,
+            senderType: row.sender_type as string,
+            senderName: (row.sender_name as string) || null,
+            content: row.content as string,
+            mediaType: (row.media_type as "text" | "audio" | "image" | "document") || "text",
+            createdAt: row.created_at ? new Date(row.created_at as string) : null,
+            createdBy: (row.created_by as string) ?? null,
+            zapiMessageId: (meta?.messageId as string) ?? null,
+            reactions: (row.reactions as Record<string, string[]>) ?? {},
+            pinned: row.pinned === true,
+            replyTo: (meta?.replyTo as { content: string; senderName: string | null }) ?? null,
+        };
+    });
 }
