@@ -252,9 +252,6 @@ function RemoveReactionModal({ emoji, onRemove, onChangeReaction, onCancel }: {
                 <h3 className="text-sm font-semibold text-white text-center mb-1">Sua reação</h3>
                 <p className="text-xs text-slate-400 text-center mb-5">O que deseja fazer com esta reação?</p>
                 <div className="flex flex-col gap-2">
-                    <button onClick={onRemove} className="w-full px-4 py-2.5 rounded-xl text-sm bg-rose-500/20 border border-rose-500/30 text-rose-300 hover:bg-rose-500/30 transition-all font-medium">
-                        Remover reação
-                    </button>
                     <button onClick={onChangeReaction} className="w-full px-4 py-2.5 rounded-xl text-sm bg-violet-500/20 border border-violet-500/30 text-violet-300 hover:bg-violet-500/30 transition-all font-medium">
                         Trocar reação
                     </button>
