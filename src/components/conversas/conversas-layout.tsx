@@ -1610,13 +1610,27 @@ export function ConversasLayout() {
                                 >
                                     <ArrowLeft className="w-5 h-5" />
                                 </button>
-                                <div className="min-w-0">
-                                    <h3 className="font-display text-lg font-bold text-white leading-tight truncate tracking-tight">
-                                        {cliente.nome || "Sem nome"}
-                                    </h3>
-                                    <p className="text-xs text-slate-400 font-mono tracking-wide mt-0.5">
-                                        {cliente.telefone}
-                                    </p>
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-10 h-10 rounded-full bg-slate-700 shrink-0 border border-slate-600 overflow-hidden flex items-center justify-center text-sm font-bold text-slate-200">
+                                        {cliente.fotoUrl ? (
+                                            <img
+                                                src={cliente.fotoUrl}
+                                                alt={cliente.nome || "avatar"}
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                                            />
+                                        ) : (
+                                            (cliente.nome || String(cliente.telefone)).charAt(0).toUpperCase()
+                                        )}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h3 className="font-display text-base font-bold text-white leading-tight truncate tracking-tight">
+                                            {cliente.nome || "Sem nome"}
+                                        </h3>
+                                        <p className="text-xs text-slate-400 font-mono tracking-wide mt-0.5">
+                                            {cliente.telefone}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 
