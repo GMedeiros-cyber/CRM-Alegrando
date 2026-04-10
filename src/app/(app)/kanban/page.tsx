@@ -156,6 +156,7 @@ export default function KanbanPage() {
                         initialColumns={columns}
                         initialLeads={leads}
                         onDataChanged={loadData}
+                        canal={kanbanCanal}
                     />
                 </div>
             )}

@@ -35,11 +35,13 @@ interface KanbanBoardProps {
     initialColumns: KanbanColumnType[];
     initialLeads: KanbanLead[];
     onDataChanged?: () => void;
+    canal?: string;
 }
 
 export function KanbanBoard({
     initialColumns,
     initialLeads,
+    canal,
 }: KanbanBoardProps) {
     const router = useRouter();
     const [columns, setColumns] = useState(initialColumns);
@@ -82,7 +84,7 @@ export function KanbanBoard({
         }
         try {
             const color = COLORS[columns.length % COLORS.length];
-            const created = await createKanbanColumn(name, color);
+            const created = await createKanbanColumn(name, color, canal ?? "alegrando");
             if (!created) return;
             setColumns((prev) => [...prev, created]);
             setLeadsMap((prev) => ({ ...prev, [created.id]: [] }));

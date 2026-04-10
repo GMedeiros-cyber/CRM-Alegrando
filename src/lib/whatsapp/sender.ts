@@ -340,3 +340,101 @@ export async function sendWhatsAppMessage(
     return { success: false, error: String(err) };
   }
 }
+
+// =============================================
+// EVOLUTION API (canal festas)
+// =============================================
+
+function buildEvoHeaders(apiKey: string) {
+  return { "Content-Type": "application/json", apikey: apiKey };
+}
+
+function evoPhone(telefone: string): string {
+  const digits = telefone.replace(/\D/g, "");
+  return `${digits}@s.whatsapp.net`;
+}
+
+export async function sendEvolutionReaction(
+  telefone: string,
+  evoMessageId: string,
+  emoji: string
+): Promise<{ success: boolean; error?: string }> {
+  const url = process.env.EVOLUTION_API_URL;
+  const instance = process.env.EVOLUTION_INSTANCE;
+  const key = process.env.EVOLUTION_API_KEY;
+  if (!url || !instance || !key) return { success: false, error: "Evolution API não configurada" };
+
+  try {
+    const res = await fetch(`${url}/message/sendReaction/${instance}`, {
+      method: "POST",
+      headers: buildEvoHeaders(key),
+      body: JSON.stringify({
+        reactionMessage: {
+          key: { remoteJid: evoPhone(telefone), id: evoMessageId },
+          text: emoji,
+        },
+      }),
+    });
+    if (!res.ok) return { success: false, error: `Evolution reaction ${res.status}` };
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}
+
+export async function sendEvolutionReply(
+  telefone: string,
+  evoMessageId: string,
+  text: string
+): Promise<{ success: boolean; evoMessageId?: string; error?: string }> {
+  const url = process.env.EVOLUTION_API_URL;
+  const instance = process.env.EVOLUTION_INSTANCE;
+  const key = process.env.EVOLUTION_API_KEY;
+  if (!url || !instance || !key) return { success: false, error: "Evolution API não configurada" };
+
+  try {
+    const res = await fetch(`${url}/message/sendText/${instance}`, {
+      method: "POST",
+      headers: buildEvoHeaders(key),
+      body: JSON.stringify({
+        number: evoPhone(telefone),
+        text,
+        quoted: {
+          key: { id: evoMessageId },
+          message: { conversation: "" },
+        },
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return { success: false, error: `Evolution reply ${res.status}` };
+    return { success: true, evoMessageId: (body as Record<string, unknown>)?.key ? ((body as Record<string, Record<string, unknown>>).key.id as string) : undefined };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}
+
+export async function deleteEvolutionMessage(
+  telefone: string,
+  evoMessageId: string
+): Promise<{ success: boolean; error?: string }> {
+  const url = process.env.EVOLUTION_API_URL;
+  const instance = process.env.EVOLUTION_INSTANCE;
+  const key = process.env.EVOLUTION_API_KEY;
+  if (!url || !instance || !key) return { success: false, error: "Evolution API não configurada" };
+
+  try {
+    const res = await fetch(`${url}/chat/deleteMessage/${instance}`, {
+      method: "DELETE",
+      headers: buildEvoHeaders(key),
+      body: JSON.stringify({
+        remoteJid: evoPhone(telefone),
+        fromMe: true,
+        id: evoMessageId,
+      }),
+    });
+    if (!res.ok) return { success: false, error: `Evolution delete ${res.status}` };
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}

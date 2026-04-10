@@ -183,6 +183,7 @@ export async function createKanbanColumn(
     const { data: existing } = await supabase
         .from("kanban_columns")
         .select("position")
+        .eq("canal", canal || "alegrando")
         .order("position", { ascending: false })
         .limit(1);
 
@@ -198,7 +199,7 @@ export async function createKanbanColumn(
             position: nextPosition,
             canal: canal || "alegrando",
         })
-        .select("id, name, slug, position, color")
+        .select("id, name, slug, position, color, canal")
         .single();
 
     if (error) {
