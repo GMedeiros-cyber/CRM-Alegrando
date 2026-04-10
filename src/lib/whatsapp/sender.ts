@@ -428,13 +428,14 @@ export async function deleteEvolutionMessage(
   if (!url || !instance || !key) return { success: false, error: "Evolution API não configurada" };
 
   try {
-    const res = await fetch(`${url}/chat/deleteMessage/${instance}`, {
+    const res = await fetch(`${url}/chat/deleteMessageForEveryone/${instance}`, {
       method: "DELETE",
       headers: buildEvoHeaders(key),
       body: JSON.stringify({
+        id: evoMessageId,
         remoteJid: evoPhone(telefone),
         fromMe: true,
-        id: evoMessageId,
+        participant: "",
       }),
     });
     if (!res.ok) return { success: false, error: `Evolution delete ${res.status}` };

@@ -75,12 +75,15 @@ export async function sendMessage(payload: {
             return { success: false, error: "Evolution API não configurada" };
         }
 
+        let evoMessageId: string | undefined;
         try {
-            await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+            const res = await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", apikey: evoKey },
                 body: JSON.stringify({ number: String(parsed.telefone), text: parsed.mensagem }),
             });
+            const body = await res.json().catch(() => ({}));
+            evoMessageId = (body as Record<string, Record<string, unknown>>)?.key?.id as string | undefined;
         } catch (err) {
             console.error("[sendMessage] Evolution API falhou:", err);
             return { success: false, error: "Falha ao enviar via Evolution API" };
@@ -93,6 +96,7 @@ export async function sendMessage(payload: {
             content: parsed.mensagem,
             media_type: "text",
             created_by: userId,
+            ...(evoMessageId ? { metadata: { messageId: evoMessageId } } : {}),
         });
 
         return { success: true };
