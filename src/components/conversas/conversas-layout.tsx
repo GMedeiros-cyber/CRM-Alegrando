@@ -308,7 +308,6 @@ export function ConversasLayout() {
 
     useEffect(() => {
         loadList();
-        getKanbanColumns().then(setKanbanColumns);
     }, [loadList]);
 
     // Realtime: atualiza lista quando nova mensagem é inserida na tabela messages
@@ -353,6 +352,7 @@ export function ConversasLayout() {
 
             if (clienteData) {
                 setCliente(clienteData);
+                getKanbanColumns(clienteData.canal ?? "alegrando").then(setKanbanColumns);
                 setForm({
                     nome: clienteData.nome || "",
                     email: clienteData.email || "",
@@ -514,7 +514,7 @@ export function ConversasLayout() {
                     await replyToMessage({
                         telefone: cliente.telefone,
                         text,
-                        senderName: "Equipe",
+                        senderName: cliente.canal === "festas" ? "Márcia" : "Equipe",
                         iaAtiva: cliente.iaAtiva,
                         replyToZapiId: currentReply.zapiMessageId ?? null,
                         replyToContent: currentReply.content,
@@ -524,7 +524,7 @@ export function ConversasLayout() {
                     await sendMessage({
                         telefone: cliente.telefone,
                         mensagem: text,
-                        sender_name: "Equipe",
+                        sender_name: cliente.canal === "festas" ? "Márcia" : "Equipe",
                         iaAtiva: cliente.iaAtiva,
                     });
                 }
@@ -694,7 +694,7 @@ export function ConversasLayout() {
                     const formData = new FormData();
                     formData.append("file", att.file);
                     formData.append("telefone", cliente.telefone);
-                    formData.append("sender_name", "Equipe");
+                    formData.append("sender_name", cliente.canal === "festas" ? "Márcia" : "Equipe");
                     formData.append("caption", att.caption);
                     const res = await sendFileMessage(formData);
                     if (!res.success) {
@@ -725,36 +725,38 @@ export function ConversasLayout() {
                     </div>
                 </div>
 
-                {/* AI Toggle */}
-                <div
-                    className={cn(
-                        "flex items-center gap-3 px-3 py-2 rounded-xl border-2 transition-colors",
-                        cliente.iaAtiva
-                            ? "bg-emerald-500/15 border-emerald-500/50"
-                            : "bg-orange-500/15 border-orange-500/50"
-                    )}
-                >
-                    <div className="flex items-center gap-2">
-                        {cliente.iaAtiva ? (
-                            <Bot className="w-4 h-4 text-emerald-400" />
-                        ) : (
-                            <UserRound className="w-4 h-4 text-orange-400" />
+                {/* AI Toggle — only for alegrando */}
+                {cliente.canal !== "festas" && (
+                    <div
+                        className={cn(
+                            "flex items-center gap-3 px-3 py-2 rounded-xl border-2 transition-colors",
+                            cliente.iaAtiva
+                                ? "bg-emerald-500/15 border-emerald-500/50"
+                                : "bg-orange-500/15 border-orange-500/50"
                         )}
-                        <span
-                            className={cn(
-                                "text-xs font-semibold",
-                                cliente.iaAtiva ? "text-emerald-300" : "text-orange-300"
+                    >
+                        <div className="flex items-center gap-2">
+                            {cliente.iaAtiva ? (
+                                <Bot className="w-4 h-4 text-emerald-400" />
+                            ) : (
+                                <UserRound className="w-4 h-4 text-orange-400" />
                             )}
-                        >
-                            {cliente.iaAtiva ? "IA Ativa" : "Modo Manual"}
-                        </span>
+                            <span
+                                className={cn(
+                                    "text-xs font-semibold",
+                                    cliente.iaAtiva ? "text-emerald-300" : "text-orange-300"
+                                )}
+                            >
+                                {cliente.iaAtiva ? "IA Ativa" : "Modo Manual"}
+                            </span>
+                        </div>
+                        <Switch
+                            checked={cliente.iaAtiva}
+                            onCheckedChange={handleToggleIA}
+                            className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-orange-500"
+                        />
                     </div>
-                    <Switch
-                        checked={cliente.iaAtiva}
-                        onCheckedChange={handleToggleIA}
-                        className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-orange-500"
-                    />
-                </div>
+                )}
 
                 {/* Fields */}
                 <div className="space-y-3">
@@ -833,7 +835,7 @@ export function ConversasLayout() {
                         </Select>
                     </FieldGroup>
 
-                    {/* Último Passeio — sempre visível, read-only */}
+                    {cliente.canal !== "festas" && (
                     <FieldGroup label="Último Passeio">
                         <p className="text-sm text-white px-1 h-8 flex items-center">
                             {form.ultimoPasseio
@@ -841,9 +843,10 @@ export function ConversasLayout() {
                                 : "Nenhum passeio registrado"}
                         </p>
                     </FieldGroup>
+                    )}
 
                     {/* Histórico de Passeios */}
-                    <div className="pt-2 border-t border-slate-700/60">
+                    {cliente.canal !== "festas" && <div className="pt-2 border-t border-slate-700/60">
                         <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-1.5">
                                 <MapPin className="w-3.5 h-3.5 text-brand-400/70" />
@@ -916,10 +919,10 @@ export function ConversasLayout() {
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </div>}
 
                     {/* Follow-up */}
-                    <FieldGroup label="Follow-up ativo">
+                    {cliente.canal !== "festas" && <FieldGroup label="Follow-up ativo">
                         <div className="flex items-center h-8">
                             <Switch
                                 checked={form.followupAtivo}
@@ -940,9 +943,9 @@ export function ConversasLayout() {
                                 className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-slate-600"
                             />
                         </div>
-                    </FieldGroup>
+                    </FieldGroup>}
 
-                    {form.followupAtivo && (
+                    {cliente.canal !== "festas" && form.followupAtivo && (
                         <>
                             <div className="grid grid-cols-2 gap-2">
                                 <FieldGroup label="Follow-up (dias)">
@@ -1038,9 +1041,10 @@ export function ConversasLayout() {
                         </>
                     )}
 
-                    <div className="my-2 border-t border-slate-700/50" />
+                    {cliente.canal !== "festas" && <div className="my-2 border-t border-slate-700/50" />}
 
                     {/* Pós-Passeio */}
+                    {cliente.canal !== "festas" && (<>
                     <FieldGroup label="Pós-Passeio (Fotos)">
                         <div className="flex items-center h-8">
                             <Switch
@@ -1069,7 +1073,7 @@ export function ConversasLayout() {
                         <div className="flex flex-col gap-2 p-3 bg-slate-800/30 rounded-xl border border-slate-700/50 relative overflow-hidden">
                             {/* Ícone de fundo */}
                             <Camera className="absolute -right-4 -top-4 w-24 h-24 text-slate-800/50 pointer-events-none" />
-                            
+
                             {!form.posPasseioEnviado ? (
                                 <>
                                     <div className="flex flex-col gap-2 z-10">
@@ -1092,8 +1096,6 @@ export function ConversasLayout() {
                                                             setToast({ type: "success", text: "Mensagem de fotos enviada!" });
                                                             setForm(f => ({ ...f, posPasseioEnviado: true, posPasseioEnviadoEm: new Date().toISOString() }));
                                                             loadList();
-                                                            // Trigger reload no Chat também se possível...
-                                                            // O real-time fará a listagem dar um fetch
                                                         } else {
                                                             setToast({ type: "error", text: result.error || "Erro ao enviar." });
                                                         }
@@ -1141,6 +1143,7 @@ export function ConversasLayout() {
                             )}
                         </div>
                     )}
+                    </>)}
 
                     {/* Redes Sociais */}
                     <div className="pt-2">
@@ -1213,7 +1216,7 @@ export function ConversasLayout() {
                 </div>
 
                 {/* Agendamentos */}
-                <div className="pt-4 border-t border-slate-700/60">
+                {cliente.canal !== "festas" && <div className="pt-4 border-t border-slate-700/60">
                     <div className="flex items-center gap-1.5 mb-3">
                         <CalendarDays className="w-3.5 h-3.5 text-brand-400/70" />
                         <h4 className="text-xs font-semibold text-slate-300 tracking-tight flex-1">
@@ -1284,7 +1287,7 @@ export function ConversasLayout() {
                             })}
                         </div>
                     )}
-                </div>
+                </div>}
 
                 {/* Tarefas */}
                 <div className="pt-4 border-t border-slate-700/60">
@@ -1577,7 +1580,7 @@ export function ConversasLayout() {
                                                 NOVO
                                             </span>
                                         )}
-                                        {!item.iaAtiva && (
+                                        {!item.iaAtiva && item.canal !== "festas" && (
                                             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
                                                 Manual
                                             </span>
@@ -1688,7 +1691,7 @@ export function ConversasLayout() {
 
                                 {/* AI Toggle / Festas badge */}
                                 {cliente.canal === "festas" ? (
-                                    <span className="hidden md:inline-flex px-3 py-1.5 rounded-xl bg-pink-500/15 border border-pink-500/40 text-pink-300 text-xs font-semibold">
+                                    <span className="inline-flex px-3 py-1.5 rounded-xl bg-pink-500/15 border border-pink-500/40 text-pink-300 text-xs font-semibold">
                                         🎉 Festas
                                     </span>
                                 ) : (

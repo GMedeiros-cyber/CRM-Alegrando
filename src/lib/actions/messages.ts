@@ -285,17 +285,24 @@ export async function reactToMessage(payload: {
         newReactions[payload.emoji] = [...(newReactions[payload.emoji] ?? []), payload.userId];
     }
 
-    // Envia para Z-API
-    // Para remover: reaction="" | Para adicionar/substituir: reaction=emoji
+    // Detecta canal e envia reação para a API correta
     if (payload.zapiMessageId) {
-        const { sendWhatsAppReaction } = await import("@/lib/whatsapp/sender");
-        const result = await sendWhatsAppReaction(
-            payload.telefone,
-            payload.zapiMessageId,
-            payload.emoji  // "" remove, emoji não-vazio adiciona
-        );
-        if (!result.success) {
-            console.error("[reactToMessage] Z-API falhou:", result.error);
+        const { data: leadRow } = await supabase
+            .from("Clientes _WhatsApp")
+            .select("canal")
+            .eq("telefone", payload.telefone)
+            .maybeSingle();
+        const isFestas = (leadRow?.canal ?? "alegrando") === "festas";
+
+        if (isFestas) {
+            const { sendEvolutionReaction } = await import("@/lib/whatsapp/sender");
+            await sendEvolutionReaction(payload.telefone, payload.zapiMessageId, payload.emoji);
+        } else {
+            const { sendWhatsAppReaction } = await import("@/lib/whatsapp/sender");
+            const result = await sendWhatsAppReaction(payload.telefone, payload.zapiMessageId, payload.emoji);
+            if (!result.success) {
+                console.error("[reactToMessage] Z-API falhou:", result.error);
+            }
         }
     }
 
@@ -326,6 +333,62 @@ export async function replyToMessage(payload: {
 }): Promise<{ success: boolean; error?: string }> {
     const userId = await requireAuth();
 
+    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabaseClient();
+
+    // Detectar canal
+    const { data: leadRow } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("canal")
+        .eq("telefone", payload.telefone)
+        .maybeSingle();
+    const isFestas = (leadRow?.canal ?? "alegrando") === "festas";
+
+    if (isFestas) {
+        // Canal festas → Evolution API (IA não se aplica)
+        const evoUrl = process.env.EVOLUTION_API_URL;
+        const evoInstance = process.env.EVOLUTION_INSTANCE;
+        const evoKey = process.env.EVOLUTION_API_KEY;
+
+        if (!evoUrl || !evoInstance || !evoKey) {
+            return { success: false, error: "Evolution API não configurada" };
+        }
+
+        let evoMessageId: string | undefined;
+        if (payload.replyToZapiId) {
+            const { sendEvolutionReply } = await import("@/lib/whatsapp/sender");
+            const result = await sendEvolutionReply(payload.telefone, payload.replyToZapiId, payload.text);
+            if (!result.success) return { success: false, error: result.error };
+            evoMessageId = result.evoMessageId;
+        } else {
+            const res = await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", apikey: evoKey },
+                body: JSON.stringify({ number: String(payload.telefone), text: payload.text }),
+            });
+            const body = await res.json().catch(() => ({}));
+            evoMessageId = (body as Record<string, Record<string, unknown>>)?.key?.id as string | undefined;
+        }
+
+        const meta = {
+            ...(evoMessageId ? { messageId: evoMessageId } : {}),
+            ...(payload.replyToContent ? { replyTo: { content: payload.replyToContent, senderName: payload.replyToSenderName ?? null } } : {}),
+        };
+
+        const { error: dbErr } = await supabase.from("messages").insert({
+            telefone: payload.telefone,
+            sender_type: "equipe",
+            sender_name: payload.senderName,
+            content: payload.text,
+            media_type: "text",
+            created_by: userId,
+            ...(Object.keys(meta).length > 0 ? { metadata: meta } : {}),
+        });
+        if (dbErr) console.error("[replyToMessage] DB falhou:", dbErr.message);
+        return { success: true };
+    }
+
+    // Canal alegrando
     if (payload.iaAtiva) {
         const webhookUrl = process.env.N8N_WEBHOOK_URL;
         if (webhookUrl) {
@@ -357,8 +420,6 @@ export async function replyToMessage(payload: {
             sentZapiMessageId = result.zapiMessageId;
         }
 
-        const { createServerSupabaseClient } = await import("@/lib/supabase/server");
-        const supabase = createServerSupabaseClient();
         const meta = {
             ...(sentZapiMessageId ? { messageId: sentZapiMessageId } : {}),
             ...(payload.replyToContent ? { replyTo: { content: payload.replyToContent, senderName: payload.replyToSenderName ?? null } } : {}),
@@ -401,11 +462,21 @@ export async function deleteMessage(payload: {
     if (payload.owner) {
         // Apagar para todos — tenta deletar no WhatsApp e marca no CRM
         if (payload.zapiMessageId) {
-            const { deleteWhatsAppMessage } = await import("@/lib/whatsapp/sender");
-            const result = await deleteWhatsAppMessage(payload.telefone, payload.zapiMessageId, true);
-            if (!result.success) {
-                console.error("[deleteMessage] Z-API falhou:", result.error);
-                // Continua para marcar no CRM mesmo que o WA falhe
+            const { data: leadRow } = await supabase
+                .from("Clientes _WhatsApp")
+                .select("canal")
+                .eq("telefone", payload.telefone)
+                .maybeSingle();
+            const isFestas = (leadRow?.canal ?? "alegrando") === "festas";
+
+            if (isFestas) {
+                const { deleteEvolutionMessage } = await import("@/lib/whatsapp/sender");
+                const result = await deleteEvolutionMessage(payload.telefone, payload.zapiMessageId);
+                if (!result.success) console.error("[deleteMessage] Evolution falhou:", result.error);
+            } else {
+                const { deleteWhatsAppMessage } = await import("@/lib/whatsapp/sender");
+                const result = await deleteWhatsAppMessage(payload.telefone, payload.zapiMessageId, true);
+                if (!result.success) console.error("[deleteMessage] Z-API falhou:", result.error);
             }
         }
         // Marca como apagada no CRM (não remove o registro — fica visível como "Mensagem apagada")
@@ -446,17 +517,28 @@ export async function pinMessage(payload: {
 }): Promise<{ success: boolean; error?: string }> {
     await requireAuth();
 
+    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabaseClient();
+
     if (payload.zapiMessageId) {
-        const { pinWhatsAppMessage } = await import("@/lib/whatsapp/sender");
-        const result = await pinWhatsAppMessage(payload.telefone, payload.zapiMessageId, payload.pin, payload.duration ?? 3);
-        if (!result.success) {
-            console.error("[pinMessage] Z-API falhou:", result.error);
+        const { data: leadRow } = await supabase
+            .from("Clientes _WhatsApp")
+            .select("canal")
+            .eq("telefone", payload.telefone)
+            .maybeSingle();
+        const isFestas = (leadRow?.canal ?? "alegrando") === "festas";
+
+        // Evolution API v2 não tem endpoint de pin — só atualiza o banco
+        if (!isFestas) {
+            const { pinWhatsAppMessage } = await import("@/lib/whatsapp/sender");
+            const result = await pinWhatsAppMessage(payload.telefone, payload.zapiMessageId, payload.pin, payload.duration ?? 3);
+            if (!result.success) {
+                console.error("[pinMessage] Z-API falhou:", result.error);
+            }
         }
     }
 
     // Atualiza no banco
-    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
-    const supabase = createServerSupabaseClient();
     const { error } = await supabase
         .from("messages")
         .update({ pinned: payload.pin })
