@@ -369,10 +369,12 @@ export async function sendEvolutionReaction(
       method: "POST",
       headers: buildEvoHeaders(key),
       body: JSON.stringify({
-        reactionMessage: {
-          key: { remoteJid: evoPhone(telefone), id: evoMessageId },
-          text: emoji,
+        key: {
+          remoteJid: evoPhone(telefone),
+          fromMe: true,
+          id: evoMessageId,
         },
+        reaction: emoji,
       }),
     });
     if (!res.ok) return { success: false, error: `Evolution reaction ${res.status}` };
@@ -400,8 +402,11 @@ export async function sendEvolutionReply(
         number: evoPhone(telefone),
         text,
         quoted: {
-          key: { id: evoMessageId },
-          message: { conversation: "" },
+          key: {
+            remoteJid: evoPhone(telefone),
+            fromMe: false,
+            id: evoMessageId,
+          },
         },
       }),
     });

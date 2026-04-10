@@ -202,11 +202,51 @@ export async function sendFileMessage(
     const publicUrl = urlData.publicUrl;
     console.log("[sendFileMessage] fileUrl:", publicUrl);
 
-    // Send via ZAPI — images use /send-image (inline), documents use /send-document/ext (base64)
+    // Detectar canal do lead
+    const { data: leadRow } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("canal")
+        .eq("telefone", String(telefone))
+        .maybeSingle();
+    const isFestas = (leadRow?.canal ?? "alegrando") === "festas";
+
+    // Send via API correta por canal
     const isImage = file.type.startsWith("image/");
     let zapiResult: { success: boolean; error?: string };
 
-    if (isImage) {
+    if (isFestas) {
+        const evoUrl = process.env.EVOLUTION_API_URL;
+        const evoInstance = process.env.EVOLUTION_INSTANCE;
+        const evoKey = process.env.EVOLUTION_API_KEY;
+        if (!evoUrl || !evoInstance || !evoKey) {
+            zapiResult = { success: false, error: "Evolution API não configurada" };
+        } else {
+            const phone = String(telefone).replace(/\D/g, "");
+            const normalizedPhone = (phone.startsWith("55") && phone.length >= 12) ? phone : `55${phone}`;
+            const mediatype = file.type.startsWith("image/") ? "image"
+                : file.type.startsWith("video/") ? "video"
+                : "document";
+            try {
+                const res = await fetch(`${evoUrl}/message/sendMedia/${evoInstance}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", apikey: evoKey },
+                    body: JSON.stringify({
+                        number: normalizedPhone,
+                        mediatype,
+                        mimetype: file.type,
+                        media: buffer.toString("base64"),
+                        fileName: file.name,
+                        caption: caption || "",
+                    }),
+                });
+                zapiResult = res.ok
+                    ? { success: true }
+                    : { success: false, error: `Evolution sendMedia ${res.status}` };
+            } catch (err) {
+                zapiResult = { success: false, error: String(err) };
+            }
+        }
+    } else if (isImage) {
         const { sendWhatsAppImage } = await import("@/lib/whatsapp/sender");
         zapiResult = await sendWhatsAppImage(String(telefone), publicUrl, caption);
     } else {
