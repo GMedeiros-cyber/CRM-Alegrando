@@ -53,6 +53,52 @@ export async function sendMessage(payload: {
     const userId = await requireAuth();
     const parsed = sendMessageSchema.parse(payload);
 
+    // Detectar canal do lead
+    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+    const supabase = createServerSupabaseClient();
+    const { data: leadRow } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("canal")
+        .eq("telefone", parsed.telefone)
+        .maybeSingle();
+
+    const canal = (leadRow?.canal as string) ?? "alegrando";
+
+    // Canal festas → Evolution API (sem IA)
+    if (canal === "festas") {
+        const evoUrl = process.env.EVOLUTION_API_URL;
+        const evoInstance = process.env.EVOLUTION_INSTANCE;
+        const evoKey = process.env.EVOLUTION_API_KEY;
+
+        if (!evoUrl || !evoInstance || !evoKey) {
+            console.error("[sendMessage] Evolution API não configurada.");
+            return { success: false, error: "Evolution API não configurada" };
+        }
+
+        try {
+            await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", apikey: evoKey },
+                body: JSON.stringify({ number: String(parsed.telefone), text: parsed.mensagem }),
+            });
+        } catch (err) {
+            console.error("[sendMessage] Evolution API falhou:", err);
+            return { success: false, error: "Falha ao enviar via Evolution API" };
+        }
+
+        await supabase.from("messages").insert({
+            telefone: parsed.telefone,
+            sender_type: "equipe",
+            sender_name: parsed.sender_name,
+            content: parsed.mensagem,
+            media_type: "text",
+            created_by: userId,
+        });
+
+        return { success: true };
+    }
+
+    // Canal alegrando → Z-API ou n8n
     if (parsed.iaAtiva) {
         const webhookUrl = process.env.N8N_WEBHOOK_URL;
         if (!webhookUrl) {
@@ -85,8 +131,6 @@ export async function sendMessage(payload: {
             return { success: false, error: result.error };
         }
 
-        const { createServerSupabaseClient } = await import("@/lib/supabase/server");
-        const supabase = createServerSupabaseClient();
         const { error: dbErr } = await supabase.from("messages").insert({
             telefone: parsed.telefone,
             sender_type: "equipe",
