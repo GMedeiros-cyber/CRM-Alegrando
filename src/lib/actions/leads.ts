@@ -46,6 +46,7 @@ export type ClienteListItem = {
     lastMessageAt: Date | null;
     createdAt: Date | null;
     fotoUrl: string | null;
+    canal: string;
 };
 
 /** Detalhe completo do cliente selecionado */
@@ -74,6 +75,7 @@ export type ClienteDetail = {
     posPasseioEnviado: boolean;
     posPasseioEnviadoEm: string | null;
     fotoUrl: string | null;
+    canal: string;
 };
 
 /** Mensagem individual do chat */
@@ -116,7 +118,7 @@ export async function listClientes(params?: {
     // 1. Buscar clientes com contagem total
     let query = supabase
         .from("Clientes _WhatsApp")
-        .select("telefone, nome, email, status, status_atendimento, ia_ativa, last_seen_at, created_at, foto_url", { count: "exact" })
+        .select("telefone, nome, email, status, status_atendimento, ia_ativa, last_seen_at, created_at, foto_url, canal", { count: "exact" })
         .order("created_at", { ascending: false });
 
     if (search) {
@@ -175,6 +177,7 @@ export async function listClientes(params?: {
         lastMessageAt: lastMessageMap.get(String(c.telefone)) || null,
         createdAt: c.created_at ? new Date(c.created_at) : null,
         fotoUrl: (c.foto_url as string) || null,
+        canal: (c.canal as string) || "alegrando",
     }));
 
     return { data: mapped, total: count || 0 };
@@ -231,6 +234,7 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         posPasseioEnviado: data.pos_passeio_enviado ?? false,
         posPasseioEnviadoEm: data.pos_passeio_enviado_em || null,
         fotoUrl: data.foto_url || null,
+        canal: (data.canal as string) || "alegrando",
     };
 }
 
@@ -577,6 +581,7 @@ export async function createCliente(data: {
     telefone: string;
     nome: string | null;
     fotoUrl?: string | null;
+    canal?: string;
 }): Promise<{ success: boolean }> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
@@ -611,6 +616,7 @@ export async function createCliente(data: {
         status_atendimento: "novo",
         foto_url: data.fotoUrl || null,
         kanban_column_id: primeiraColuna?.id || null,
+        canal: data.canal || "alegrando",
     });
 
     if (error) {

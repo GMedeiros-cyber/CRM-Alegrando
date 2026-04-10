@@ -14,6 +14,7 @@ import {
     CheckCircle2,
     AlertCircle,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function KanbanPage() {
     const [columns, setColumns] = useState<KanbanColumn[]>([]);
@@ -24,18 +25,24 @@ export default function KanbanPage() {
         text: string;
     } | null>(null);
     const [isPending] = useTransition();
+    const [kanbanCanal, setKanbanCanal] = useState<"alegrando" | "festas">(() => {
+        if (typeof window !== "undefined") {
+            return (localStorage.getItem("crm_kanban_canal") as "alegrando" | "festas") || "alegrando";
+        }
+        return "alegrando";
+    });
 
-    async function loadData() {
+    async function loadData(canal?: string) {
         try {
             setLoading(true);
-            const data = await getKanbanData();
+            const data = await getKanbanData(canal ?? kanbanCanal);
 
             // Auto-seed se não há colunas
             if (data.columns.length === 0) {
                 const seedResult = await seedDefaultColumns();
                 if (seedResult.seeded) {
                     // Recarregar após seed
-                    const newData = await getKanbanData();
+                    const newData = await getKanbanData(canal ?? kanbanCanal);
                     setColumns(newData.columns);
                     setLeads(newData.leads);
                     setMessage({ type: "success", text: "Colunas padrão criadas automaticamente!" });
@@ -52,9 +59,10 @@ export default function KanbanPage() {
         }
     }
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         loadData();
-    }, []);
+    }, [kanbanCanal]);
 
     return (
         <div className="space-y-4">
@@ -71,6 +79,23 @@ export default function KanbanPage() {
 
                 {/* Toolbar */}
                 <div className="flex items-center gap-2">
+                    {(["alegrando", "festas"] as const).map((v) => (
+                        <button
+                            key={v}
+                            onClick={() => {
+                                setKanbanCanal(v);
+                                localStorage.setItem("crm_kanban_canal", v);
+                            }}
+                            className={cn(
+                                "text-[11px] font-semibold uppercase px-3 py-2 rounded-xl border-2 transition-colors",
+                                kanbanCanal === v
+                                    ? "bg-brand-500/20 text-brand-400 border-brand-500/40"
+                                    : "bg-card text-muted-foreground border-border hover:text-foreground hover:border-muted-foreground/40"
+                            )}
+                        >
+                            {v === "alegrando" ? "🎒 Alegrando" : "🎉 Festas"}
+                        </button>
+                    ))}
                     <button
                         onClick={() => { setMessage(null); loadData(); }}
                         disabled={isPending}

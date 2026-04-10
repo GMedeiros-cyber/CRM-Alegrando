@@ -190,6 +190,12 @@ export function ConversasLayout() {
     const [loadingAgendamentos, setLoadingAgendamentos] = useState(false);
 
     const [sortOrder, setSortOrder] = useState<string>("recent");
+    const [canalFiltro, setCanalFiltro] = useState<"todos" | "alegrando" | "festas">(() => {
+        if (typeof window !== "undefined") {
+            return (localStorage.getItem("crm_canal_filtro") as "todos" | "alegrando" | "festas") || "todos";
+        }
+        return "todos";
+    });
     const [totalClientes, setTotalClientes] = useState(0);
     const [loadingMore, setLoadingMore] = useState(false);
     const CLIENTES_LIMIT = 50;
@@ -266,6 +272,11 @@ export function ConversasLayout() {
         }
         return 0;
     });
+
+    // Filtro por canal
+    const clientesFiltrados = canalFiltro === "todos"
+        ? sortedLeads
+        : sortedLeads.filter(c => c.canal === canalFiltro);
 
     // Load clientes list (page 1)
     const loadList = useCallback(async () => {
@@ -1475,6 +1486,24 @@ export function ConversasLayout() {
                             <option value="za">Z-A</option>
                         </select>
                     </div>
+
+                    {/* Canal filter */}
+                    <div className="mt-2 flex items-center gap-1.5">
+                        {(["todos", "alegrando", "festas"] as const).map((v) => (
+                            <button
+                                key={v}
+                                onClick={() => { setCanalFiltro(v); localStorage.setItem("crm_canal_filtro", v); }}
+                                className={cn(
+                                    "text-[10px] font-semibold uppercase px-2.5 py-1 rounded-full border transition-colors",
+                                    canalFiltro === v
+                                        ? "bg-brand-500/20 text-brand-400 border-brand-500/40"
+                                        : "bg-slate-800/40 text-slate-500 border-slate-700/40 hover:text-slate-400"
+                                )}
+                            >
+                                {v === "todos" ? "Todos" : v === "alegrando" ? "Alegrando" : "Festas 🎉"}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* List */}
@@ -1489,7 +1518,7 @@ export function ConversasLayout() {
                         </div>
                     ) : (
                         <div className="space-y-1.5 flex flex-col">
-                            {sortedLeads.map((item) => (
+                            {clientesFiltrados.map((item) => (
                                 <button
                                     key={item.telefone.toString()}
                                     onClick={() => handleSelectCliente(item.telefone.toString())}
@@ -1551,6 +1580,11 @@ export function ConversasLayout() {
                                         {!item.iaAtiva && (
                                             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
                                                 Manual
+                                            </span>
+                                        )}
+                                        {item.canal === "festas" && (
+                                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                                                🎉 Festas
                                             </span>
                                         )}
                                     </div>
@@ -1652,36 +1686,42 @@ export function ConversasLayout() {
                                     <PanelRightOpen className="w-5 h-5" />
                                 </button>
 
-                                {/* AI Toggle */}
-                                <div
-                                    className={cn(
-                                        "hidden md:flex items-center gap-3 px-3 py-2 rounded-xl border-2 transition-colors",
-                                        cliente.iaAtiva
-                                            ? "bg-emerald-500/15 border-emerald-500/50"
-                                            : "bg-orange-500/15 border-orange-500/50"
-                                    )}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        {cliente.iaAtiva ? (
-                                            <Bot className="w-4 h-4 text-emerald-400" />
-                                        ) : (
-                                            <UserRound className="w-4 h-4 text-orange-400" />
+                                {/* AI Toggle / Festas badge */}
+                                {cliente.canal === "festas" ? (
+                                    <span className="hidden md:inline-flex px-3 py-1.5 rounded-xl bg-pink-500/15 border border-pink-500/40 text-pink-300 text-xs font-semibold">
+                                        🎉 Festas
+                                    </span>
+                                ) : (
+                                    <div
+                                        className={cn(
+                                            "hidden md:flex items-center gap-3 px-3 py-2 rounded-xl border-2 transition-colors",
+                                            cliente.iaAtiva
+                                                ? "bg-emerald-500/15 border-emerald-500/50"
+                                                : "bg-orange-500/15 border-orange-500/50"
                                         )}
-                                        <span
-                                            className={cn(
-                                                "text-xs font-semibold",
-                                                cliente.iaAtiva ? "text-emerald-300" : "text-orange-300"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            {cliente.iaAtiva ? (
+                                                <Bot className="w-4 h-4 text-emerald-400" />
+                                            ) : (
+                                                <UserRound className="w-4 h-4 text-orange-400" />
                                             )}
-                                        >
-                                            {cliente.iaAtiva ? "IA Ativa" : "Modo Manual"}
-                                        </span>
+                                            <span
+                                                className={cn(
+                                                    "text-xs font-semibold",
+                                                    cliente.iaAtiva ? "text-emerald-300" : "text-orange-300"
+                                                )}
+                                            >
+                                                {cliente.iaAtiva ? "IA Ativa" : "Modo Manual"}
+                                            </span>
+                                        </div>
+                                        <Switch
+                                            checked={cliente.iaAtiva}
+                                            onCheckedChange={handleToggleIA}
+                                            className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-orange-500"
+                                        />
                                     </div>
-                                    <Switch
-                                        checked={cliente.iaAtiva}
-                                        onCheckedChange={handleToggleIA}
-                                        className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-orange-500"
-                                    />
-                                </div>
+                                )}
                             </div>
                         </div>
 

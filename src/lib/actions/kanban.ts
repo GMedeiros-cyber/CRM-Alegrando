@@ -43,17 +43,19 @@ export type KanbanData = {
 /**
  * Busca todas as colunas e leads com kanban_column_id.
  */
-export async function getKanbanData(): Promise<KanbanData> {
+export async function getKanbanData(canal: string = "alegrando"): Promise<KanbanData> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
     const [columnsRes, leadsRes] = await Promise.all([
         supabase
             .from("kanban_columns")
             .select("id, name, slug, position, color")
+            .eq("canal", canal)
             .order("position", { ascending: true }),
         supabase
             .from("Clientes _WhatsApp")
             .select("*")
+            .eq("canal", canal)
             .order("kanban_position", { ascending: true }),
     ]);
 
@@ -85,10 +87,13 @@ export async function getKanbanData(): Promise<KanbanData> {
         // Se o lead não tem coluna, manda para a coluna "novo_lead"
         if (!colId) {
             const novoLeadCol = columns.find(c =>
-                c.slug === "novo_lead" ||
-                c.name?.toLowerCase() === "novo lead" ||
-                c.name?.toLowerCase().includes("novo lead") ||
-                c.position === 0
+                (canal === "festas" && c.slug === "novo_lead_festas") ||
+                (canal === "alegrando" && (
+                    c.slug === "novo_lead" ||
+                    c.name?.toLowerCase() === "novo lead" ||
+                    c.name?.toLowerCase().includes("novo lead") ||
+                    c.position === 0
+                ))
             );
             if (novoLeadCol) {
                 colId = novoLeadCol.id;
@@ -122,12 +127,13 @@ export async function getKanbanData(): Promise<KanbanData> {
 /**
  * Retorna as colunas kanban ordenadas por posição.
  */
-export async function getKanbanColumns(): Promise<KanbanColumn[]> {
+export async function getKanbanColumns(canal: string = "alegrando"): Promise<KanbanColumn[]> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("kanban_columns")
         .select("id, name, slug, position, color")
+        .eq("canal", canal)
         .order("position", { ascending: true });
 
     if (error) {
@@ -169,7 +175,8 @@ export async function moveLeadInKanban(
  */
 export async function createKanbanColumn(
     name: string,
-    color?: string
+    color?: string,
+    canal?: string
 ): Promise<KanbanColumn | null> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
@@ -189,6 +196,7 @@ export async function createKanbanColumn(
             name,
             color: color || "#6366f1",
             position: nextPosition,
+            canal: canal || "alegrando",
         })
         .select("id, name, slug, position, color")
         .single();
