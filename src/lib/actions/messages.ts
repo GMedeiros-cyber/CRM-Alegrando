@@ -350,17 +350,20 @@ export async function reactToMessage(payload: {
         }
     }
 
-    const { error } = await supabase
+    const { error, data: updated } = await supabase
         .from("messages")
         .update({ reactions: newReactions })
-        .eq("id", payload.dbMessageId);
+        .eq("id", payload.dbMessageId)
+        .select("reactions")
+        .single();
 
     if (error) {
-        console.error("[reactToMessage] DB falhou:", error.message);
+        console.error("[reactToMessage] DB update falhou:", error.code, error.message, error.details);
         return { success: false, error: error.message };
     }
-    // Retorna o estado exato salvo no banco para o cliente aplicar diretamente
-    return { success: true, newReactions };
+
+    const confirmedReactions = (updated?.reactions as Record<string, string[]>) ?? newReactions;
+    return { success: true, newReactions: confirmedReactions };
 }
 
 /**

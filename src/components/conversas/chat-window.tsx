@@ -77,7 +77,9 @@ function SenderLabel({ message, isClient }: { message: LeadMessage; isClient: bo
         <div className="flex items-center gap-1.5 mb-1">
             <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span className="text-[11px] font-bold tracking-wide text-emerald-400">Alegrando</span>
+                <span className="text-[11px] font-bold tracking-wide text-emerald-400">
+                    {message.senderName || "Alegrando"}
+                </span>
             </div>
         </div>
     );

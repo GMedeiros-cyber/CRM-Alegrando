@@ -217,6 +217,7 @@ export function ConversasLayout() {
     // New lead modal
     const [showNewLeadModal, setShowNewLeadModal] = useState(false);
     const [newLeadForm, setNewLeadForm] = useState({ telefone: "", nome: "" });
+    const [newLeadCanal, setNewLeadCanal] = useState<"alegrando" | "festas">("alegrando");
     const [newLeadPhoto, setNewLeadPhoto] = useState<{ file: File; preview: string } | null>(null);
     const newLeadPhotoRef = useRef<HTMLInputElement>(null);
     const [isCreatingLead, startCreatingLead] = useTransition();
@@ -650,9 +651,11 @@ export function ConversasLayout() {
                     telefone: tel,
                     nome: newLeadForm.nome.trim() || null,
                     fotoUrl,
+                    canal: newLeadCanal,
                 });
                 setShowNewLeadModal(false);
                 setNewLeadForm({ telefone: "", nome: "" });
+                setNewLeadCanal("alegrando");
                 setNewLeadPhoto(null);
                 setToast({ type: "success", text: "Lead criado com sucesso!" });
                 loadList();
@@ -1938,7 +1941,7 @@ export function ConversasLayout() {
                                 </h3>
                             </div>
                             <button
-                                onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); }}
+                                onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); setNewLeadCanal("alegrando"); }}
                                 className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
                             >
                                 <X className="w-4 h-4" />
@@ -2009,11 +2012,33 @@ export function ConversasLayout() {
                                     }}
                                 />
                             </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                    Canal
+                                </Label>
+                                <div className="flex gap-2">
+                                    {(["alegrando", "festas"] as const).map((c) => (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => setNewLeadCanal(c)}
+                                            className={cn(
+                                                "flex-1 h-8 rounded-lg text-xs font-semibold border-2 transition-colors",
+                                                newLeadCanal === c
+                                                    ? "bg-brand-500/20 text-brand-400 border-brand-500/40"
+                                                    : "bg-slate-800/40 text-slate-500 border-slate-700/40 hover:text-slate-300"
+                                            )}
+                                        >
+                                            {c === "alegrando" ? "🎒 Alegrando" : "🎉 Festas"}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
 
                         <div className="flex gap-2 mt-5">
                             <button
-                                onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); }}
+                                onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); setNewLeadCanal("alegrando"); }}
                                 className="flex-1 h-9 rounded-lg border border-slate-600 text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors"
                             >
                                 Cancelar
