@@ -30,6 +30,7 @@ const updateClienteSchema = z.object({
     posPasseioEnviado: z.boolean().optional(),
     endereco: z.string().max(500).nullable().optional(),
     responsavel: z.string().max(200).nullable().optional(),
+    segundoNumero: z.string().max(20).nullable().optional(),
 }).strict();
 
 // =============================================
@@ -80,6 +81,7 @@ export type ClienteDetail = {
     endereco: string | null;
     canal: string;
     responsavel: string | null;
+    segundoNumero: string | null;
 };
 
 /** Mensagem individual do chat */
@@ -241,6 +243,7 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         endereco: data.endereco || null,
         canal: (data.canal as string) || "alegrando",
         responsavel: data.responsavel || null,
+        segundoNumero: data.segundo_numero || null,
     };
 }
 
@@ -283,6 +286,7 @@ export async function updateCliente(
         posPasseioEnviado?: boolean;
         endereco?: string | null;
         responsavel?: string | null;
+        segundoNumero?: string | null;
     }
 ) {
     const userId = await requireAuth();
@@ -323,6 +327,7 @@ export async function updateCliente(
     if (parsed.posPasseioEnviado !== undefined) updateData.pos_passeio_enviado = parsed.posPasseioEnviado;
     if (parsed.endereco !== undefined) updateData.endereco = parsed.endereco;
     if (parsed.responsavel !== undefined) updateData.responsavel = parsed.responsavel;
+    if (parsed.segundoNumero !== undefined) updateData.segundo_numero = parsed.segundoNumero;
 
     await supabase
         .from("Clientes _WhatsApp")

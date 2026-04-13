@@ -11,11 +11,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const data = payload.data;
     const isFromMe = data?.key?.fromMe === true;
-    if (!isFromMe) return NextResponse.json({ status: "skipped" });
 
     const rawPhone = data?.key?.remoteJid?.replace(/@.*$/, "") ?? "";
     if (!rawPhone || rawPhone.includes("@g.us")) {
         return NextResponse.json({ status: "skipped" }); // ignorar grupos
+    }
+
+    const supabaseEarly = createServerSupabaseClient();
+    const digitsEarly = rawPhone.replace(/\D/g, "");
+    const phone =
+        digitsEarly.startsWith("55") && digitsEarly.length >= 12 ? digitsEarly : `55${digitsEarly}`;
+
+    // Atualizar foto e nome do contato quando ele manda mensagem
+    if (!isFromMe) {
+        const pushName = data?.pushName || null;
+        if (pushName) {
+            supabaseEarly
+                .from("Clientes _WhatsApp")
+                .update({ nome: pushName })
+                .eq("telefone", phone)
+                .then();
+        }
+        return NextResponse.json({ status: "ok" });
     }
 
     const messageId = data?.key?.id;
@@ -25,12 +42,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         null;
     if (!content || !messageId) return NextResponse.json({ status: "skipped" });
 
-    const supabase = createServerSupabaseClient();
-
-    // Normalizar telefone
-    const digits = rawPhone.replace(/\D/g, "");
-    const phone =
-        digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
+    const supabase = supabaseEarly;
 
     // Idempotência
     const { data: existing } = await supabase

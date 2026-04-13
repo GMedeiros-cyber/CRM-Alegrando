@@ -141,6 +141,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .then(({ error }) => {
         if (error) console.error("[ZAPI-PROXY] Falha ao atualizar chat_lid:", error.message);
       });
+
+    if (payload.senderPhoto && realPhone) {
+      supabase
+        .from("Clientes _WhatsApp")
+        .update({ foto_url: payload.senderPhoto })
+        .or(`telefone.eq.${realPhone},telefone.eq.${phoneWithout55}`)
+        .then(({ error }) => {
+          if (error) console.error("[ZAPI-PROXY] Falha ao atualizar foto:", error.message);
+        });
+    }
   }
 
   // --- 3. Mensagens da equipe (fromMe=true, fromApi=false): salvar no banco ---

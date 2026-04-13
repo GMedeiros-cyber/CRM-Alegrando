@@ -161,6 +161,7 @@ export function ConversasLayout() {
         instagram: "",
         endereco: "",
         responsavel: "",
+        segundoNumero: "",
         kanbanColumnId: "",
         ultimoPasseio: "",
         followupDias: 45,
@@ -367,6 +368,7 @@ export function ConversasLayout() {
                     instagram: clienteData.instagram || "",
                     endereco: clienteData.endereco || "",
                     responsavel: clienteData.responsavel || "",
+                    segundoNumero: clienteData.segundoNumero || "",
                     kanbanColumnId: clienteData.kanbanColumnId || "",
                     ultimoPasseio: clienteData.ultimoPasseio || "",
                     followupDias: clienteData.followupDias ?? 45,
@@ -467,6 +469,7 @@ export function ConversasLayout() {
                     instagram,
                     endereco: form.endereco || null,
                     responsavel: form.responsavel || null,
+                    segundoNumero: form.segundoNumero || null,
                     kanbanColumnId: form.kanbanColumnId || null,
                     ultimoPasseio: form.ultimoPasseio || null,
                     followupDias: form.followupDias,
@@ -789,6 +792,18 @@ export function ConversasLayout() {
                             className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536]/50 border-[#C7D2FE] dark:border-[#3d4a60] text-[#191918] dark:text-white font-medium cursor-not-allowed"
                         />
                     </FieldGroup>
+
+                    {cliente.canal !== "festas" && (
+                        <FieldGroup icon={<Phone className="w-3 h-3" />} label="Segundo Número">
+                            <Input
+                                value={form.segundoNumero}
+                                onChange={(e) => setForm((f) => ({ ...f, segundoNumero: e.target.value }))}
+                                onBlur={handleSave}
+                                placeholder="(opcional)"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+                    )}
 
                     {cliente.canal !== "festas" && (
                         <FieldGroup icon={<MapPin className="w-3 h-3" />} label="Endereço">
