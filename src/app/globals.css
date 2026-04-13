@@ -163,26 +163,6 @@
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #4a5568; }
 [data-theme="dark"] ::-webkit-scrollbar-track { background: #0f1829; }
 
-/* Inputs no tema escuro */
-[data-theme="dark"] input,
-[data-theme="dark"] textarea,
-[data-theme="dark"] select {
-  color: #ffffff !important;
-  background-color: #1e2536 !important;
-  border-color: #3d4a60 !important;
-}
-[data-theme="dark"] input::placeholder,
-[data-theme="dark"] textarea::placeholder {
-  color: #94a3b8 !important;
-}
-[data-theme="dark"] label {
-  color: #cbd5e1 !important;
-}
-[data-theme="dark"] [contenteditable] {
-  color: #ffffff !important;
-  background-color: #1e2536 !important;
-}
-
 /* FullCalendar */
 [data-theme="dark"] .fc {
   --fc-border-color: #3d4a60;
@@ -241,26 +221,56 @@
   input,
   textarea,
   select {
-    color: #191918 !important;
+    color: #191918;
     font-weight: 500;
   }
 
   input:disabled,
   textarea:disabled,
   select:disabled {
-    color: #191918 !important;
+    color: #191918;
     opacity: 0.7;
   }
 
   input::placeholder,
   textarea::placeholder {
-    color: #9B9A97 !important;
+    color: #9B9A97;
     font-weight: 400;
   }
 
   label {
     color: #37352F;
     font-weight: 600;
+  }
+
+  /* Dark mode — maior especificidade ([data-theme="dark"] X) > (X) no mesmo layer */
+  [data-theme="dark"] input,
+  [data-theme="dark"] textarea,
+  [data-theme="dark"] select {
+    color: #e2e8f0;
+    background-color: #1e2536;
+    border-color: #3d4a60;
+  }
+
+  [data-theme="dark"] input:disabled,
+  [data-theme="dark"] textarea:disabled,
+  [data-theme="dark"] select:disabled {
+    color: #94a3b8;
+    opacity: 0.7;
+  }
+
+  [data-theme="dark"] input::placeholder,
+  [data-theme="dark"] textarea::placeholder {
+    color: #64748b;
+  }
+
+  [data-theme="dark"] label {
+    color: #cbd5e1;
+  }
+
+  [data-theme="dark"] [contenteditable] {
+    color: #e2e8f0;
+    background-color: #1e2536;
   }
 
   h1,
@@ -373,7 +383,7 @@ main > div {
 /* ============================================
    FULLCALENDAR DARK MODE OVERRIDES
    ============================================ */
-.agenda-dark-calendar {
+:root:not([data-theme="dark"]) .agenda-dark-calendar {
   --fc-border-color: #C7D2FE;
   --fc-page-bg-color: transparent;
   --fc-neutral-bg-color: #EEF2FF;
@@ -385,14 +395,14 @@ main > div {
 }
 
 /* Toolbar */
-.agenda-dark-calendar .fc-toolbar-title {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-toolbar-title {
   color: #191918 !important;
   font-family: var(--font-display) !important;
   font-weight: 700 !important;
   font-size: 1.25rem !important;
 }
 
-.agenda-dark-calendar .fc-button {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button {
   background-color: #EEF2FF !important;
   border-color: #A5B4FC !important;
   color: #37352F !important;
@@ -404,38 +414,38 @@ main > div {
   transition: all 0.15s !important;
 }
 
-.agenda-dark-calendar .fc-button:hover {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button:hover {
   background-color: #C7D2FE !important;
   border-color: #6366F1 !important;
   color: #ffffff !important;
 }
 
-.agenda-dark-calendar .fc-button-active,
-.agenda-dark-calendar .fc-button:active {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button-active,
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button:active {
   background-color: #ef5544 !important;
   border-color: #ef5544 !important;
   color: #ffffff !important;
 }
 
-.agenda-dark-calendar .fc-button-group .fc-button {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button-group .fc-button {
   border-radius: 0 !important;
 }
 
-.agenda-dark-calendar .fc-button-group .fc-button:first-child {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button-group .fc-button:first-child {
   border-radius: 0.75rem 0 0 0.75rem !important;
 }
 
-.agenda-dark-calendar .fc-button-group .fc-button:last-child {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button-group .fc-button:last-child {
   border-radius: 0 0.75rem 0.75rem 0 !important;
 }
 
 /* Day headers */
-.agenda-dark-calendar .fc-col-header-cell {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-col-header-cell {
   background-color: #EEF2FF !important;
   border-color: #C7D2FE !important;
 }
 
-.agenda-dark-calendar .fc-col-header-cell-cushion {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-col-header-cell-cushion {
   color: #9B9A97 !important;
   font-weight: 600 !important;
   font-size: 0.75rem !important;
@@ -445,39 +455,39 @@ main > div {
 }
 
 /* Day cells */
-.agenda-dark-calendar .fc-daygrid-day {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-daygrid-day {
   background-color: transparent !important;
   border-color: #C7D2FE !important;
   cursor: pointer !important;
   transition: background-color 0.15s ease !important;
 }
 
-.agenda-dark-calendar .fc-daygrid-day:hover {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-daygrid-day:hover {
   background-color: #E0E7FF !important;
 }
 
-.agenda-dark-calendar .fc-daygrid-day:hover .fc-daygrid-day-number {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-daygrid-day:hover .fc-daygrid-day-number {
   color: #ef5544 !important;
 }
 
-.agenda-dark-calendar .fc-daygrid-day-number {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-daygrid-day-number {
   color: #191918 !important;
   font-weight: 500 !important;
   font-size: 0.85rem !important;
   padding: 0.5rem !important;
 }
 
-.agenda-dark-calendar .fc-day-today .fc-daygrid-day-number {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-day-today .fc-daygrid-day-number {
   color: #ef5544 !important;
   font-weight: 800 !important;
 }
 
-.agenda-dark-calendar .fc-day-other .fc-daygrid-day-number {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-day-other .fc-daygrid-day-number {
   color: #A5B4FC !important;
 }
 
 /* Events */
-.agenda-dark-calendar .fc-event {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-event {
   border-radius: 0.5rem !important;
   border-width: 0 !important;
   border-left-width: 3px !important;
@@ -488,60 +498,60 @@ main > div {
   transition: transform 0.1s, box-shadow 0.1s !important;
 }
 
-.agenda-dark-calendar .fc-event:hover {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-event:hover {
   transform: translateY(-1px) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
 }
 
 /* "more" link */
-.agenda-dark-calendar .fc-daygrid-more-link {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-daygrid-more-link {
   color: #ef5544 !important;
   font-weight: 700 !important;
   font-size: 0.7rem !important;
 }
 
 /* Time grid */
-.agenda-dark-calendar .fc-timegrid-slot {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-timegrid-slot {
   border-color: #C7D2FE !important;
 }
 
-.agenda-dark-calendar .fc-timegrid-slot-label-cushion {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-timegrid-slot-label-cushion {
   color: #6366F1 !important;
   font-size: 0.7rem !important;
 }
 
-.agenda-dark-calendar .fc-timegrid-axis-cushion {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-timegrid-axis-cushion {
   color: #6366F1 !important;
 }
 
 /* Now indicator */
-.agenda-dark-calendar .fc-timegrid-now-indicator-line {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-timegrid-now-indicator-line {
   border-color: #ef5544 !important;
   border-width: 2px !important;
 }
 
-.agenda-dark-calendar .fc-timegrid-now-indicator-arrow {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-timegrid-now-indicator-arrow {
   border-color: #ef5544 !important;
 }
 
 /* Popover */
-.agenda-dark-calendar .fc-popover {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-popover {
   background-color: #EEF2FF !important;
   border-color: #A5B4FC !important;
   border-radius: 0.75rem !important;
   box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15) !important;
 }
 
-.agenda-dark-calendar .fc-popover-header {
+:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-popover-header {
   background-color: #C7D2FE !important;
   color: #191918 !important;
   border-radius: 0.75rem 0.75rem 0 0 !important;
 }
 
 /* Table borders */
-.agenda-dark-calendar table,
-.agenda-dark-calendar td,
-.agenda-dark-calendar th {
+:root:not([data-theme="dark"]) .agenda-dark-calendar table,
+:root:not([data-theme="dark"]) .agenda-dark-calendar td,
+:root:not([data-theme="dark"]) .agenda-dark-calendar th {
   border-color: #C7D2FE !important;
 }
 
