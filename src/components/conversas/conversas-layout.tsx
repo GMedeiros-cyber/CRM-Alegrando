@@ -90,7 +90,7 @@ type TaskItem = { id: string; text: string; done: boolean };
 // =============================================
 const statusStyles: Record<string, string> = {
     ativo: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
-    inativo: "bg-[#C7D2FE]/20 text-[#37352F] border-[#A5B4FC]/40",
+    inativo: "bg-[#C7D2FE]/20 text-[#37352F] dark:text-[#cbd5e1] border-[#A5B4FC] dark:border-[#4a5568]/40",
     novo: "bg-blue-500/20 text-blue-300 border-blue-500/40",
 };
 
@@ -722,10 +722,10 @@ export function ConversasLayout() {
         return (
             <div className="p-4 space-y-4">
                 {/* Section title */}
-                <div className="pb-3 mb-1 border-b border-[#C7D2FE]/70">
+                <div className="pb-3 mb-1 border-b border-[#C7D2FE] dark:border-[#3d4a60]/70">
                     <div className="flex items-center gap-2">
                         <div className="w-1 h-5 rounded-full bg-brand-500" />
-                        <h3 className="text-sm font-bold text-[#191918] tracking-tight">
+                        <h3 className="text-sm font-bold text-[#191918] dark:text-white tracking-tight">
                             Detalhes do Cliente
                         </h3>
                     </div>
@@ -772,7 +772,7 @@ export function ConversasLayout() {
                             onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
                             onBlur={handleSave}
                             placeholder="Nome do cliente"
-                            className="rounded-lg h-8 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1]"
+                            className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                         />
                     </FieldGroup>
 
@@ -780,7 +780,7 @@ export function ConversasLayout() {
                         <Input
                             value={cliente.telefone}
                             disabled
-                            className="rounded-lg h-8 text-sm bg-[#EEF2FF]/50 border-[#C7D2FE] text-[#191918] font-medium cursor-not-allowed"
+                            className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536]/50 border-[#C7D2FE] dark:border-[#3d4a60] text-[#191918] dark:text-white font-medium cursor-not-allowed"
                         />
                     </FieldGroup>
 
@@ -791,7 +791,7 @@ export function ConversasLayout() {
                                 onChange={(e) => setForm((f) => ({ ...f, endereco: e.target.value }))}
                                 onBlur={handleSave}
                                 placeholder="Rua, número, bairro, cidade"
-                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1]"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                             />
                         </FieldGroup>
                     )}
@@ -803,7 +803,7 @@ export function ConversasLayout() {
                                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                                 onBlur={handleSave}
                                 placeholder="email@exemplo.com"
-                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1]"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                             />
                         </FieldGroup>
                         <FieldGroup label="CPF">
@@ -812,7 +812,7 @@ export function ConversasLayout() {
                                 onChange={(e) => setForm((f) => ({ ...f, cpf: e.target.value }))}
                                 onBlur={handleSave}
                                 placeholder="000.000.000-00"
-                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1]"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                             />
                         </FieldGroup>
                     </div>
@@ -837,7 +837,7 @@ export function ConversasLayout() {
                                 }
                             }}
                         >
-                            <SelectTrigger className="rounded-lg h-8 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918]">
+                            <SelectTrigger className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white">
                                 <SelectValue placeholder="Mudar coluna..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -855,7 +855,7 @@ export function ConversasLayout() {
 
                     {cliente.canal !== "festas" && (
                     <FieldGroup label="Último Passeio">
-                        <p className="text-sm text-[#191918] px-1 h-8 flex items-center">
+                        <p className="text-sm text-[#191918] dark:text-white px-1 h-8 flex items-center">
                             {form.ultimoPasseio
                                 ? new Date(form.ultimoPasseio + "T00:00:00").toLocaleDateString("pt-BR")
                                 : "Nenhum passeio registrado"}
@@ -864,15 +864,15 @@ export function ConversasLayout() {
                     )}
 
                     {/* Histórico de Passeios */}
-                    {cliente.canal !== "festas" && <div className="pt-2 border-t border-[#C7D2FE]/60">
+                    {cliente.canal !== "festas" && <div className="pt-2 border-t border-[#C7D2FE] dark:border-[#3d4a60]/60">
                         <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-1.5">
                                 <MapPin className="w-3.5 h-3.5 text-brand-400/70" />
-                                <h4 className="text-xs font-semibold text-[#37352F] tracking-tight">
+                                <h4 className="text-xs font-semibold text-[#37352F] dark:text-[#cbd5e1] tracking-tight">
                                     Histórico de Passeios
                                 </h4>
                                 {passeiosHistorico.length > 0 && (
-                                    <span className="text-[10px] bg-[#E0E7FF]/80 text-[#6366F1] px-1.5 py-0.5 rounded-full font-medium">
+                                    <span className="text-[10px] bg-[#E0E7FF] dark:bg-[#2d3347]/80 text-[#6366F1] dark:text-[#94a3b8] px-1.5 py-0.5 rounded-full font-medium">
                                         {passeiosHistorico.length}
                                     </span>
                                 )}
@@ -887,12 +887,12 @@ export function ConversasLayout() {
 
                         {/* Formulário de adicionar passeio */}
                         {addingPasseio && (
-                            <div className="space-y-2 mb-3 p-2 rounded-lg bg-[#EEF2FF]/60 border border-[#C7D2FE]">
+                            <div className="space-y-2 mb-3 p-2 rounded-lg bg-[#EEF2FF] dark:bg-[#1e2536]/60 border border-[#C7D2FE] dark:border-[#3d4a60]">
                                 <Input
                                     value={novoPasseioDestino}
                                     onChange={(e) => setNovoPasseioDestino(e.target.value)}
                                     placeholder="Ex: Passeio Sítio do Carroção"
-                                    className="rounded-lg h-8 text-sm bg-[#F7F7F5] border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1]"
+                                    className="rounded-lg h-8 text-sm bg-[#F7F7F5] dark:bg-[#0f1829] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                                 />
                                 <DatePicker
                                     value={novoPasseioData}
@@ -903,7 +903,7 @@ export function ConversasLayout() {
                                 <button
                                     onClick={handleAddPasseio}
                                     disabled={!novoPasseioDestino || !novoPasseioData || isSavingCliente}
-                                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 text-[#191918] text-xs font-semibold hover:bg-brand-600 disabled:opacity-40 transition-colors"
+                                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500 text-[#191918] dark:text-white text-xs font-semibold hover:bg-brand-600 disabled:opacity-40 transition-colors"
                                 >
                                     <Save className="w-3 h-3" />
                                     Salvar Passeio
@@ -913,17 +913,17 @@ export function ConversasLayout() {
 
                         {/* Lista de passeios */}
                         {passeiosHistorico.length === 0 ? (
-                            <p className="text-xs text-[#9B9A97] italic">Nenhum passeio registrado.</p>
+                            <p className="text-xs text-[#9B9A97] dark:text-[#64748b] italic">Nenhum passeio registrado.</p>
                         ) : (
                             <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
                                 {passeiosHistorico.map((p) => (
                                     <div
                                         key={p.id}
-                                        className="group/passeio flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-[#EEF2FF]/60 transition-colors"
+                                        className="group/passeio flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536]/60 transition-colors"
                                     >
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-xs text-[#191918] font-medium truncate">{p.destino}</p>
-                                            <p className="text-[10px] text-[#6366F1]">
+                                            <p className="text-xs text-[#191918] dark:text-white font-medium truncate">{p.destino}</p>
+                                            <p className="text-[10px] text-[#6366F1] dark:text-[#94a3b8]">
                                                 {new Date(p.dataPaseio + "T00:00:00").toLocaleDateString("pt-BR")}
                                             </p>
                                         </div>
@@ -973,7 +973,7 @@ export function ConversasLayout() {
                                         value={form.followupDias}
                                         onChange={(e) => setForm((f) => ({ ...f, followupDias: parseInt(e.target.value) || 45 }))}
                                         onBlur={handleSave}
-                                        className="rounded-lg h-8 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918]"
+                                        className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white"
                                     />
                                 </FieldGroup>
                                 <FieldGroup label="Horario de envio">
@@ -989,8 +989,8 @@ export function ConversasLayout() {
                             </div>
 
                             {form.followupEnviado && (
-                                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#EEF2FF]/60 border border-[#C7D2FE]">
-                                    <span className="text-xs text-[#6366F1]">
+                                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#EEF2FF] dark:bg-[#1e2536]/60 border border-[#C7D2FE] dark:border-[#3d4a60]">
+                                    <span className="text-xs text-[#6366F1] dark:text-[#94a3b8]">
                                         ✅ Enviado {form.followupEnviadoEm
                                             ? `em ${new Date(form.followupEnviadoEm).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${new Date(form.followupEnviadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
                                             : ""}
@@ -1010,7 +1010,7 @@ export function ConversasLayout() {
                                             });
                                         }}
                                         disabled={isRunningAction}
-                                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#E0E7FF] text-[#6366F1] hover:text-[#191918] hover:bg-[#C7D2FE] transition-colors"
+                                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#E0E7FF] dark:bg-[#2d3347] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white hover:bg-[#C7D2FE] dark:hover:bg-[#3d4a60] transition-colors"
                                     >
                                         Resetar
                                     </button>
@@ -1059,7 +1059,7 @@ export function ConversasLayout() {
                         </>
                     )}
 
-                    {cliente.canal !== "festas" && <div className="my-2 border-t border-[#C7D2FE]/50" />}
+                    {cliente.canal !== "festas" && <div className="my-2 border-t border-[#C7D2FE] dark:border-[#3d4a60]/50" />}
 
                     {/* Pós-Passeio */}
                     {cliente.canal !== "festas" && (<>
@@ -1088,20 +1088,20 @@ export function ConversasLayout() {
                     </FieldGroup>
 
                     {form.posPasseioAtivo && (
-                        <div className="flex flex-col gap-2 p-3 bg-[#F0F4FF] rounded-xl border border-[#C7D2FE]/50 relative overflow-hidden">
+                        <div className="flex flex-col gap-2 p-3 bg-[#F0F4FF] dark:bg-[#1e2536] rounded-xl border border-[#C7D2FE] dark:border-[#3d4a60]/50 relative overflow-hidden">
                             {/* Ícone de fundo */}
-                            <Camera className="absolute -right-4 -top-4 w-24 h-24 text-[#9B9A97]/50 pointer-events-none" />
+                            <Camera className="absolute -right-4 -top-4 w-24 h-24 text-[#9B9A97] dark:text-[#64748b]/50 pointer-events-none" />
 
                             {!form.posPasseioEnviado ? (
                                 <>
                                     <div className="flex flex-col gap-2 z-10">
-                                        <Label className="text-[10px] text-[#6366F1]">Link das Fotos</Label>
+                                        <Label className="text-[10px] text-[#6366F1] dark:text-[#94a3b8]">Link das Fotos</Label>
                                         <Input
                                             type="url"
                                             value={posPasseioLink}
                                             onChange={(e) => setPosPasseioLink(e.target.value)}
                                             placeholder="https://..."
-                                            className="h-8 text-xs bg-[#EEF2FF] border-[#A5B4FC] focus:border-emerald-500/50 transition-colors"
+                                            className="h-8 text-xs bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] focus:border-emerald-500/50 transition-colors"
                                         />
                                         <button
                                             disabled={isRunningAction || !posPasseioLink.trim()}
@@ -1120,7 +1120,7 @@ export function ConversasLayout() {
                                                     } catch {}
                                                 });
                                             }}
-                                            className="flex items-center justify-center gap-2 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[#191918] font-medium transition-all disabled:opacity-50 disabled:hover:bg-emerald-600 text-xs shadow-sm mt-1"
+                                            className="flex items-center justify-center gap-2 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[#191918] dark:text-white font-medium transition-all disabled:opacity-50 disabled:hover:bg-emerald-600 text-xs shadow-sm mt-1"
                                         >
                                             <Link2 className="w-3.5 h-3.5" />
                                             {isRunningAction ? "Enviando..." : "Enviar Link"}
@@ -1130,11 +1130,11 @@ export function ConversasLayout() {
                             ) : (
                                 <div className="flex items-center justify-between z-10">
                                     <div className="flex flex-col gap-1">
-                                        <span className="text-xs text-[#37352F] font-medium flex items-center gap-1.5">
+                                        <span className="text-xs text-[#37352F] dark:text-[#cbd5e1] font-medium flex items-center gap-1.5">
                                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                                             Enviadas
                                         </span>
-                                        <span className="text-[10px] text-[#6366F1]">
+                                        <span className="text-[10px] text-[#6366F1] dark:text-[#94a3b8]">
                                             {form.posPasseioEnviadoEm ? new Date(form.posPasseioEnviadoEm).toLocaleString("pt-BR") : "Data desconhecida"}
                                         </span>
                                     </div>
@@ -1153,7 +1153,7 @@ export function ConversasLayout() {
                                             });
                                         }}
                                         disabled={isRunningAction}
-                                        className="text-[10px] font-medium px-2 py-1 rounded border border-[#A5B4FC] text-[#37352F] hover:text-[#191918] hover:bg-[#E0E7FF] transition-colors"
+                                        className="text-[10px] font-medium px-2 py-1 rounded border border-[#A5B4FC] dark:border-[#4a5568] text-[#37352F] dark:text-[#cbd5e1] hover:text-[#191918] dark:hover:text-white hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] transition-colors"
                                     >
                                         Novo Envio
                                     </button>
@@ -1167,7 +1167,7 @@ export function ConversasLayout() {
                     <div className="pt-2">
                         <div className="flex items-center gap-1.5 mb-2">
                             <Share2 className="w-3.5 h-3.5 text-brand-400/70" />
-                            <h4 className="text-xs font-semibold text-[#37352F] tracking-tight">
+                            <h4 className="text-xs font-semibold text-[#37352F] dark:text-[#cbd5e1] tracking-tight">
                                 Redes Sociais
                             </h4>
                         </div>
@@ -1178,14 +1178,14 @@ export function ConversasLayout() {
                                     onChange={(e) => setForm((f) => ({ ...f, linkedin: e.target.value }))}
                                     onBlur={handleSave}
                                     placeholder="https://linkedin.com/in/..."
-                                    className="rounded-lg h-8 pr-8 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1]"
+                                    className="rounded-lg h-8 pr-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                                 />
                                 {form.linkedin && (
                                     <a
                                         href={form.linkedin.startsWith('http') ? form.linkedin : `https://${form.linkedin}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6366F1] hover:text-brand-400"
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6366F1] dark:text-[#94a3b8] hover:text-brand-400"
                                     >
                                         <ExternalLink className="w-3.5 h-3.5" />
                                     </a>
@@ -1197,14 +1197,14 @@ export function ConversasLayout() {
                                     onChange={(e) => setForm((f) => ({ ...f, facebook: e.target.value }))}
                                     onBlur={handleSave}
                                     placeholder="https://facebook.com/..."
-                                    className="rounded-lg h-8 pr-8 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1]"
+                                    className="rounded-lg h-8 pr-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                                 />
                                 {form.facebook && (
                                     <a
                                         href={form.facebook.startsWith('http') ? form.facebook : `https://${form.facebook}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6366F1] hover:text-brand-400"
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6366F1] dark:text-[#94a3b8] hover:text-brand-400"
                                     >
                                         <ExternalLink className="w-3.5 h-3.5" />
                                     </a>
@@ -1216,14 +1216,14 @@ export function ConversasLayout() {
                                     onChange={(e) => setForm((f) => ({ ...f, instagram: e.target.value }))}
                                     onBlur={handleSave}
                                     placeholder="https://instagram.com/..."
-                                    className="rounded-lg h-8 pr-8 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1]"
+                                    className="rounded-lg h-8 pr-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                                 />
                                 {form.instagram && (
                                     <a
                                         href={form.instagram.startsWith('http') ? form.instagram : `https://${form.instagram}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6366F1] hover:text-brand-400"
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6366F1] dark:text-[#94a3b8] hover:text-brand-400"
                                     >
                                         <ExternalLink className="w-3.5 h-3.5" />
                                     </a>
@@ -1234,14 +1234,14 @@ export function ConversasLayout() {
                 </div>
 
                 {/* Agendamentos */}
-                {cliente.canal !== "festas" && <div className="pt-4 border-t border-[#C7D2FE]/60">
+                {cliente.canal !== "festas" && <div className="pt-4 border-t border-[#C7D2FE] dark:border-[#3d4a60]/60">
                     <div className="flex items-center gap-1.5 mb-3">
                         <CalendarDays className="w-3.5 h-3.5 text-brand-400/70" />
-                        <h4 className="text-xs font-semibold text-[#37352F] tracking-tight flex-1">
+                        <h4 className="text-xs font-semibold text-[#37352F] dark:text-[#cbd5e1] tracking-tight flex-1">
                             Agendamentos
                         </h4>
                         {agendamentos.length > 0 && (
-                            <span className="text-[10px] bg-[#E0E7FF]/80 text-[#6366F1] px-1.5 py-0.5 rounded-full font-medium">
+                            <span className="text-[10px] bg-[#E0E7FF] dark:bg-[#2d3347]/80 text-[#6366F1] dark:text-[#94a3b8] px-1.5 py-0.5 rounded-full font-medium">
                                 {agendamentos.length}
                             </span>
                         )}
@@ -1249,10 +1249,10 @@ export function ConversasLayout() {
 
                     {loadingAgendamentos ? (
                         <div className="flex justify-center py-3">
-                            <Loader2 className="w-4 h-4 animate-spin text-[#6366F1]" />
+                            <Loader2 className="w-4 h-4 animate-spin text-[#6366F1] dark:text-[#94a3b8]" />
                         </div>
                     ) : agendamentos.length === 0 ? (
-                        <p className="text-xs text-[#9B9A97] italic">Nenhum agendamento vinculado.</p>
+                        <p className="text-xs text-[#9B9A97] dark:text-[#64748b] italic">Nenhum agendamento vinculado.</p>
                     ) : (
                         <div className="space-y-2">
                             {agendamentos.map((ag) => {
@@ -1264,16 +1264,16 @@ export function ConversasLayout() {
                                 return (
                                     <div
                                         key={ag.id}
-                                        className="group/ag rounded-xl border border-[#C7D2FE] bg-[#EEF2FF]/60 p-3 hover:border-[#A5B4FC] transition-colors"
+                                        className="group/ag rounded-xl border border-[#C7D2FE] dark:border-[#3d4a60] bg-[#EEF2FF] dark:bg-[#1e2536]/60 p-3 hover:border-[#A5B4FC] dark:hover:border-[#4a5568] transition-colors"
                                     >
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-semibold text-[#191918] truncate">{ag.title}</p>
-                                                <div className="flex items-center gap-1 mt-1 text-[11px] text-[#6366F1]">
+                                                <p className="text-xs font-semibold text-[#191918] dark:text-white truncate">{ag.title}</p>
+                                                <div className="flex items-center gap-1 mt-1 text-[11px] text-[#6366F1] dark:text-[#94a3b8]">
                                                     <CalendarDays className="w-3 h-3 shrink-0" />
                                                     <span>{dateStr}</span>
                                                 </div>
-                                                <div className="flex items-center gap-1 text-[11px] text-[#6366F1]">
+                                                <div className="flex items-center gap-1 text-[11px] text-[#6366F1] dark:text-[#94a3b8]">
                                                     <Clock className="w-3 h-3 shrink-0" />
                                                     <span>{timeStr}</span>
                                                 </div>
@@ -1286,14 +1286,14 @@ export function ConversasLayout() {
                                             <div className="flex flex-col gap-1 shrink-0">
                                                 <a
                                                     href={`/agenda?eventId=${ag.extendedProps.googleEventId}`}
-                                                    className="p-1.5 rounded-lg bg-[#E0E7FF] text-[#6366F1] hover:text-[#191918] hover:bg-[#C7D2FE] transition-colors"
+                                                    className="p-1.5 rounded-lg bg-[#E0E7FF] dark:bg-[#2d3347] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white hover:bg-[#C7D2FE] dark:hover:bg-[#3d4a60] transition-colors"
                                                     title="Ver na Agenda"
                                                 >
                                                     <ExternalLink className="w-3 h-3" />
                                                 </a>
                                                 <button
                                                     onClick={() => handleDeleteAgendamento(ag.extendedProps.googleEventId)}
-                                                    className="p-1.5 rounded-lg bg-[#E0E7FF] text-[#6366F1] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                                    className="p-1.5 rounded-lg bg-[#E0E7FF] dark:bg-[#2d3347] text-[#6366F1] dark:text-[#94a3b8] hover:text-red-400 hover:bg-red-500/10 transition-colors"
                                                     title="Excluir agendamento"
                                                 >
                                                     <Trash2 className="w-3 h-3" />
@@ -1308,14 +1308,14 @@ export function ConversasLayout() {
                 </div>}
 
                 {/* Tarefas */}
-                <div className="pt-4 border-t border-[#C7D2FE]/60">
+                <div className="pt-4 border-t border-[#C7D2FE] dark:border-[#3d4a60]/60">
                     <div className="flex items-center gap-1.5 mb-3">
                         <ListTodo className="w-3.5 h-3.5 text-brand-400/70" />
-                        <h4 className="text-xs font-semibold text-[#37352F] tracking-tight flex-1">
+                        <h4 className="text-xs font-semibold text-[#37352F] dark:text-[#cbd5e1] tracking-tight flex-1">
                             Tarefas
                         </h4>
                         {pendingTasks.length > 0 && (
-                            <span className="text-[10px] bg-[#E0E7FF]/80 text-[#6366F1] px-1.5 py-0.5 rounded-full font-medium">
+                            <span className="text-[10px] bg-[#E0E7FF] dark:bg-[#2d3347]/80 text-[#6366F1] dark:text-[#94a3b8] px-1.5 py-0.5 rounded-full font-medium">
                                 {pendingTasks.length} pendentes
                             </span>
                         )}
@@ -1328,13 +1328,13 @@ export function ConversasLayout() {
 
                     {tasks.length > 0 && (
                         <div className="flex items-center gap-2 mb-3">
-                            <div className="flex-1 h-1.5 bg-[#E0E7FF] rounded-full overflow-hidden">
+                            <div className="flex-1 h-1.5 bg-[#E0E7FF] dark:bg-[#2d3347] rounded-full overflow-hidden">
                                 <div
                                     className="h-full bg-brand-500 rounded-full transition-all duration-300"
                                     style={{ width: `${(doneTasks.length / tasks.length) * 100}%` }}
                                 />
                             </div>
-                            <span className="text-[10px] text-[#6366F1] shrink-0">
+                            <span className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] shrink-0">
                                 {doneTasks.length}/{tasks.length}
                             </span>
                         </div>
@@ -1342,25 +1342,25 @@ export function ConversasLayout() {
 
                     <div className="space-y-1.5">
                         {sortedTasks.map((task) => (
-                            <div key={task.id} className="group/task flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#EEF2FF]/60 transition-colors">
+                            <div key={task.id} className="group/task flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536]/60 transition-colors">
                                 <button
                                     onClick={() => handleToggleTask(task.id)}
                                     className={cn(
                                         "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
                                         task.done
                                             ? "bg-brand-500 border-brand-500"
-                                            : "border-[#A5B4FC] hover:border-[#6366F1]"
+                                            : "border-[#A5B4FC] dark:border-[#4a5568] hover:border-[#6366F1]"
                                     )}
                                 >
                                     {task.done && (
-                                        <svg className="w-2.5 h-2.5 text-[#191918]" viewBox="0 0 12 12" fill="none">
+                                        <svg className="w-2.5 h-2.5 text-[#191918] dark:text-white" viewBox="0 0 12 12" fill="none">
                                             <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                         </svg>
                                     )}
                                 </button>
                                 <span className={cn(
                                     "text-xs flex-1 min-w-0 break-words",
-                                    task.done ? "text-[#9B9A97] line-through" : "text-[#37352F]"
+                                    task.done ? "text-[#9B9A97] dark:text-[#64748b] line-through" : "text-[#37352F] dark:text-[#cbd5e1]"
                                 )}>
                                     {task.text}
                                 </span>
@@ -1380,12 +1380,12 @@ export function ConversasLayout() {
                             onChange={(e) => setNewTaskText(e.target.value)}
                             onKeyDown={(e) => { if (e.key === "Enter") handleAddTask(); }}
                             placeholder="+ Adicionar tarefa..."
-                            className="flex-1 bg-[#EEF2FF] border border-[#C7D2FE] rounded-lg px-2 py-1.5 text-xs text-[#191918] placeholder:text-[#9B9A97] outline-none focus:ring-1 focus:ring-brand-400 focus:border-brand-400"
+                            className="flex-1 bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60] rounded-lg px-2 py-1.5 text-xs text-[#191918] dark:text-white placeholder:text-[#9B9A97] dark:placeholder:text-[#94a3b8] outline-none focus:ring-1 focus:ring-brand-400 focus:border-brand-400"
                         />
                         {newTaskText.trim() && (
                             <button
                                 onClick={handleAddTask}
-                                className="p-1.5 rounded-lg bg-brand-500 text-[#191918] hover:bg-brand-600 transition-colors shrink-0"
+                                className="p-1.5 rounded-lg bg-brand-500 text-[#191918] dark:text-white hover:bg-brand-600 transition-colors shrink-0"
                             >
                                 <Plus className="w-3 h-3" />
                             </button>
@@ -1393,7 +1393,7 @@ export function ConversasLayout() {
                     </div>
 
                     {tasks.length === 0 && (
-                        <p className="text-xs text-[#9B9A97] italic mt-2">
+                        <p className="text-xs text-[#9B9A97] dark:text-[#64748b] italic mt-2">
                             Nenhuma tarefa criada ainda.
                         </p>
                     )}
@@ -1414,11 +1414,11 @@ export function ConversasLayout() {
                             <p className="text-xs text-amber-400 font-medium mb-2">Apagar todo o histórico de mensagens?</p>
                             <div className="flex gap-2">
                                 <button onClick={handleClearMessages} disabled={isRunningAction}
-                                    className="flex-1 px-2 py-1.5 rounded-lg bg-amber-500 text-[#191918] text-xs font-semibold hover:bg-amber-600 transition-colors disabled:opacity-40">
+                                    className="flex-1 px-2 py-1.5 rounded-lg bg-amber-500 text-[#191918] dark:text-white text-xs font-semibold hover:bg-amber-600 transition-colors disabled:opacity-40">
                                     Confirmar
                                 </button>
                                 <button onClick={() => setConfirmingClearMessages(false)}
-                                    className="flex-1 px-2 py-1.5 rounded-lg bg-[#E0E7FF] text-[#191918] text-xs font-semibold hover:bg-[#C7D2FE] transition-colors">
+                                    className="flex-1 px-2 py-1.5 rounded-lg bg-[#E0E7FF] dark:bg-[#2d3347] text-[#191918] dark:text-white text-xs font-semibold hover:bg-[#C7D2FE] dark:hover:bg-[#3d4a60] transition-colors">
                                     Cancelar
                                 </button>
                             </div>
@@ -1437,11 +1437,11 @@ export function ConversasLayout() {
                             <p className="text-xs text-red-400 font-medium mb-2">Excluir cliente permanentemente? Isso apaga todos os dados.</p>
                             <div className="flex gap-2">
                                 <button onClick={handleDeleteCliente} disabled={isRunningAction}
-                                    className="flex-1 px-2 py-1.5 rounded-lg bg-red-500 text-[#191918] text-xs font-semibold hover:bg-red-600 transition-colors disabled:opacity-40">
+                                    className="flex-1 px-2 py-1.5 rounded-lg bg-red-500 text-[#191918] dark:text-white text-xs font-semibold hover:bg-red-600 transition-colors disabled:opacity-40">
                                     {isRunningAction ? "Excluindo..." : "Confirmar exclusão"}
                                 </button>
                                 <button onClick={() => setConfirmingDelete(false)}
-                                    className="flex-1 px-2 py-1.5 rounded-lg bg-[#E0E7FF] text-[#191918] text-xs font-semibold hover:bg-[#C7D2FE] transition-colors">
+                                    className="flex-1 px-2 py-1.5 rounded-lg bg-[#E0E7FF] dark:bg-[#2d3347] text-[#191918] dark:text-white text-xs font-semibold hover:bg-[#C7D2FE] dark:hover:bg-[#3d4a60] transition-colors">
                                     Cancelar
                                 </button>
                             </div>
@@ -1483,23 +1483,23 @@ export function ConversasLayout() {
                         </button>
                     </div>
                     <div className="relative mt-3">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6366F1]" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6366F1] dark:text-[#94a3b8]" />
                         <Input
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             placeholder="Buscar por nome ou telefone..."
-                            className="pl-9 rounded-xl bg-[#EEF2FF] border-[#A5B4FC] h-9 text-sm text-[#191918] placeholder:text-[#6366F1] focus:border-brand-500 focus:ring-brand-500/20"
+                            className="pl-9 rounded-xl bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] h-9 text-sm text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8] focus:border-brand-500 focus:ring-brand-500/20"
                         />
                     </div>
 
                     <div className="mt-2 flex items-center justify-between">
-                        <span className="text-[10px] font-semibold text-[#6366F1] uppercase tracking-wider">
+                        <span className="text-[10px] font-semibold text-[#6366F1] dark:text-[#94a3b8] uppercase tracking-wider">
                             Ordenar por:
                         </span>
                         <select
                             value={sortOrder}
                             onChange={(e) => setSortOrder(e.target.value)}
-                            className="text-[11px] bg-[#EEF2FF] border border-[#C7D2FE] rounded-lg px-2 py-1 text-[#37352F] outline-none focus:border-brand-500 transition-colors cursor-pointer"
+                            className="text-[11px] bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60] rounded-lg px-2 py-1 text-[#37352F] dark:text-[#cbd5e1] outline-none focus:border-brand-500 transition-colors cursor-pointer"
                         >
                             <option value="recent">Mais recente</option>
                             <option value="oldest">Mais antigo</option>
@@ -1518,7 +1518,7 @@ export function ConversasLayout() {
                                     "text-[10px] font-semibold uppercase px-2.5 py-1 rounded-full border transition-colors",
                                     canalFiltro === v
                                         ? "bg-brand-500/20 text-brand-400 border-brand-500/40"
-                                        : "bg-[#EEF2FF]/40 text-[#6366F1] border-[#C7D2FE]/40 hover:text-[#6366F1]"
+                                        : "bg-[#EEF2FF] dark:bg-[#1e2536]/40 text-[#6366F1] dark:text-[#94a3b8] border-[#C7D2FE] dark:border-[#3d4a60]/40 hover:text-[#6366F1] dark:hover:text-[#94a3b8]"
                                 )}
                             >
                                 {v === "todos" ? "Todos" : v === "alegrando" ? "Alegrando" : "Festas 🎉"}
@@ -1531,10 +1531,10 @@ export function ConversasLayout() {
                 <div className="flex-1 overflow-y-auto px-2 py-2">
                     {loading ? (
                         <div className="flex items-center justify-center py-12">
-                            <Loader2 className="w-5 h-5 animate-spin text-[#6366F1]" />
+                            <Loader2 className="w-5 h-5 animate-spin text-[#6366F1] dark:text-[#94a3b8]" />
                         </div>
                     ) : clientesList.length === 0 ? (
-                        <div className="text-center py-12 text-sm text-[#6366F1]">
+                        <div className="text-center py-12 text-sm text-[#6366F1] dark:text-[#94a3b8]">
                             Nenhum cliente encontrado
                         </div>
                     ) : (
@@ -1552,7 +1552,7 @@ export function ConversasLayout() {
                                 >
                                     <div className="flex items-center gap-3">
                                         {/* Avatar */}
-                                        <div className="w-9 h-9 rounded-full bg-[#E0E7FF] shrink-0 border border-[#A5B4FC] overflow-hidden flex items-center justify-center text-sm font-bold text-[#191918]">
+                                        <div className="w-9 h-9 rounded-full bg-[#E0E7FF] dark:bg-[#2d3347] shrink-0 border border-[#A5B4FC] dark:border-[#4a5568] overflow-hidden flex items-center justify-center text-sm font-bold text-[#191918] dark:text-white">
                                             {item.fotoUrl ? (
                                                 <img
                                                     src={item.fotoUrl}
@@ -1574,20 +1574,20 @@ export function ConversasLayout() {
                                                     "text-sm font-bold truncate",
                                                     selectedTelefone === item.telefone.toString()
                                                         ? "text-brand-400"
-                                                        : "text-[#191918]"
+                                                        : "text-[#191918] dark:text-white"
                                                 )}>
                                                     {item.nome || item.telefone}
                                                 </p>
-                                                <span className="text-[10px] text-[#6366F1] shrink-0 ml-auto">
+                                                <span className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] shrink-0 ml-auto">
                                                     {formatLastMessageTime(item.lastMessageAt)}
                                                 </span>
                                                 {item.unreadCount > 0 && (
-                                                    <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-[#191918] text-[10px] font-bold flex items-center justify-center shrink-0 animate-in zoom-in-50">
+                                                    <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-[#191918] dark:text-white text-[10px] font-bold flex items-center justify-center shrink-0 animate-in zoom-in-50">
                                                         {item.unreadCount > 99 ? "99+" : item.unreadCount}
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="text-[11px] font-mono text-[#191918] font-medium truncate mt-0.5">
+                                            <p className="text-[11px] font-mono text-[#191918] dark:text-white font-medium truncate mt-0.5">
                                                 {item.telefone}
                                             </p>
                                         </div>
@@ -1615,7 +1615,7 @@ export function ConversasLayout() {
                                 <button
                                     onClick={loadMore}
                                     disabled={loadingMore}
-                                    className="w-full mt-2 py-2 text-xs font-medium text-[#6366F1] hover:text-[#191918] bg-[#EEF2FF]/60 hover:bg-[#EEF2FF] rounded-xl border border-[#C7D2FE]/50 transition-colors disabled:opacity-40"
+                                    className="w-full mt-2 py-2 text-xs font-medium text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white bg-[#EEF2FF] dark:bg-[#1e2536]/60 hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] rounded-xl border border-[#C7D2FE] dark:border-[#3d4a60]/50 transition-colors disabled:opacity-40"
                                 >
                                     {loadingMore ? (
                                         <span className="flex items-center justify-center gap-1.5">
@@ -1641,12 +1641,12 @@ export function ConversasLayout() {
                     // Empty state
                     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
                         <div className="w-16 h-16 rounded-2xl bg-card flex items-center justify-center mb-4">
-                            <MessageSquare className="w-8 h-8 text-[#9B9A97]" />
+                            <MessageSquare className="w-8 h-8 text-[#9B9A97] dark:text-[#64748b]" />
                         </div>
-                        <h3 className="font-display text-lg font-semibold text-[#6366F1]">
+                        <h3 className="font-display text-lg font-semibold text-[#6366F1] dark:text-[#94a3b8]">
                             Selecione uma conversa
                         </h3>
-                        <p className="text-sm text-[#6366F1] mt-1 max-w-xs">
+                        <p className="text-sm text-[#6366F1] dark:text-[#94a3b8] mt-1 max-w-xs">
                             Clique em um cliente na lista à esquerda para ver o histórico de mensagens.
                         </p>
                     </div>
@@ -1661,12 +1661,12 @@ export function ConversasLayout() {
                             <div className="flex items-center gap-2 min-w-0">
                                 <button
                                     onClick={() => setMobileView("list")}
-                                    className="md:hidden p-1.5 rounded-lg hover:bg-[#EEF2FF] text-[#6366F1] hover:text-[#191918] transition-colors shrink-0"
+                                    className="md:hidden p-1.5 rounded-lg hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors shrink-0"
                                 >
                                     <ArrowLeft className="w-5 h-5" />
                                 </button>
                                 <div className="flex items-center gap-3 min-w-0">
-                                    <div className="w-10 h-10 rounded-full bg-[#E0E7FF] shrink-0 border border-[#A5B4FC] overflow-hidden flex items-center justify-center text-sm font-bold text-[#191918]">
+                                    <div className="w-10 h-10 rounded-full bg-[#E0E7FF] dark:bg-[#2d3347] shrink-0 border border-[#A5B4FC] dark:border-[#4a5568] overflow-hidden flex items-center justify-center text-sm font-bold text-[#191918] dark:text-white">
                                         {cliente.fotoUrl ? (
                                             <img
                                                 src={cliente.fotoUrl}
@@ -1679,10 +1679,10 @@ export function ConversasLayout() {
                                         )}
                                     </div>
                                     <div className="min-w-0">
-                                        <h3 className="font-display text-base font-bold text-[#191918] leading-tight truncate tracking-tight">
+                                        <h3 className="font-display text-base font-bold text-[#191918] dark:text-white leading-tight truncate tracking-tight">
                                             {cliente.nome || "Sem nome"}
                                         </h3>
-                                        <p className="text-xs text-[#191918] font-mono font-medium tracking-wide mt-0.5">
+                                        <p className="text-xs text-[#191918] dark:text-white font-mono font-medium tracking-wide mt-0.5">
                                             {cliente.telefone}
                                         </p>
                                     </div>
@@ -1693,7 +1693,7 @@ export function ConversasLayout() {
                                 {/* Search in conversation */}
                                 <button
                                     onClick={() => window.dispatchEvent(new Event("chat-search-open"))}
-                                    className="p-2 rounded-lg hover:bg-[#EEF2FF] text-[#6366F1] hover:text-[#191918] transition-colors"
+                                    className="p-2 rounded-lg hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors"
                                     title="Buscar na conversa"
                                 >
                                     <Search className="w-4 h-4" />
@@ -1702,7 +1702,7 @@ export function ConversasLayout() {
                                 {/* Mobile: details button */}
                                 <button
                                     onClick={() => setMobileDetailsOpen(true)}
-                                    className="md:hidden p-2 rounded-lg hover:bg-[#EEF2FF] text-[#6366F1] hover:text-[#191918] transition-colors"
+                                    className="md:hidden p-2 rounded-lg hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors"
                                 >
                                     <PanelRightOpen className="w-5 h-5" />
                                 </button>
@@ -1774,23 +1774,23 @@ export function ConversasLayout() {
 
                         {/* Attachment preview area */}
                         {attachments.length > 0 && (
-                            <div className="px-5 py-3 border-t border-border/50 bg-[#F7F7F5]/80">
+                            <div className="px-5 py-3 border-t border-border/50 bg-[#F7F7F5] dark:bg-[#0f1829]/80">
                                 <div className="flex gap-3 overflow-x-auto pb-2">
                                     {attachments.map((att, idx) => (
                                         <div key={att.id}
-                                            className="relative shrink-0 w-52 rounded-xl border border-[#C7D2FE] bg-[#EEF2FF]/80 overflow-hidden flex flex-col">
+                                            className="relative shrink-0 w-52 rounded-xl border border-[#C7D2FE] dark:border-[#3d4a60] bg-[#EEF2FF] dark:bg-[#1e2536]/80 overflow-hidden flex flex-col">
                                             <button
                                                 onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))}
-                                                className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-[#191918]/30 text-[#191918] flex items-center justify-center hover:bg-black/80 transition-colors">
+                                                className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-[#191918]/30 text-[#191918] dark:text-white flex items-center justify-center hover:bg-black/80 transition-colors">
                                                 <X className="w-3 h-3" />
                                             </button>
                                             {att.preview ? (
                                                 <img src={att.preview} alt={att.file.name}
                                                     className="w-full h-28 object-cover" />
                                             ) : (
-                                                <div className="w-full h-28 flex flex-col items-center justify-center gap-1 bg-[#F7F7F5]/60">
+                                                <div className="w-full h-28 flex flex-col items-center justify-center gap-1 bg-[#F7F7F5] dark:bg-[#0f1829]/60">
                                                     <FileText className="w-8 h-8 text-brand-400" />
-                                                    <p className="text-[10px] text-[#6366F1] px-2 text-center truncate w-full">{att.file.name}</p>
+                                                    <p className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] px-2 text-center truncate w-full">{att.file.name}</p>
                                                 </div>
                                             )}
                                             <textarea
@@ -1811,11 +1811,11 @@ export function ConversasLayout() {
                                                     }
                                                 }}
                                                 placeholder="Adicionar legenda... (Enter para enviar)"
-                                                className="w-full px-2 py-1.5 text-xs bg-transparent text-[#37352F] placeholder:text-[#6366F1] outline-none border-t border-[#C7D2FE]/50 resize-none leading-relaxed" />
+                                                className="w-full px-2 py-1.5 text-xs bg-transparent text-[#37352F] dark:text-[#cbd5e1] placeholder:text-[#6366F1] dark:text-[#94a3b8] outline-none border-t border-[#C7D2FE] dark:border-[#3d4a60]/50 resize-none leading-relaxed" />
                                         </div>
                                     ))}
                                 </div>
-                                <p className="text-[10px] text-[#6366F1] mt-1">
+                                <p className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] mt-1">
                                     {attachments.length} arquivo{attachments.length !== 1 ? "s" : ""} — Enter na legenda ou clique em enviar
                                 </p>
                             </div>
@@ -1823,17 +1823,17 @@ export function ConversasLayout() {
 
                         {/* Reply preview */}
                         {replyTo && (
-                            <div className="px-5 py-2 border-t border-border/50 bg-[#F7F7F5]/60 flex items-center gap-2">
+                            <div className="px-5 py-2 border-t border-border/50 bg-[#F7F7F5] dark:bg-[#0f1829]/60 flex items-center gap-2">
                                 <div className="w-1 h-8 rounded-full bg-brand-500 shrink-0" />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-[11px] font-medium text-brand-400">
                                         Respondendo a {replyTo.senderName || (replyTo.senderType === "lead" || replyTo.senderType === "cliente" ? "Cliente" : "Equipe")}
                                     </p>
-                                    <p className="text-xs text-[#6366F1] truncate">{replyTo.content}</p>
+                                    <p className="text-xs text-[#6366F1] dark:text-[#94a3b8] truncate">{replyTo.content}</p>
                                 </div>
                                 <button
                                     onClick={() => setReplyTo(null)}
-                                    className="p-1 text-[#6366F1] hover:text-[#191918] transition-colors shrink-0"
+                                    className="p-1 text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors shrink-0"
                                 >
                                     <X className="w-4 h-4" />
                                 </button>
@@ -1863,7 +1863,7 @@ export function ConversasLayout() {
                                         "flex items-center justify-center w-10 h-10 rounded-xl transition-colors shrink-0 border",
                                         attachments.length > 0
                                             ? "bg-brand-500/20 border-brand-500/50 text-brand-400"
-                                            : "hover:bg-[#EEF2FF] border-[#C7D2FE]/50 text-[#6366F1] hover:text-[#191918] disabled:opacity-30"
+                                            : "hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]/50 text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white disabled:opacity-30"
                                     )}
                                     title="Anexar arquivo"
                                 >
@@ -1880,7 +1880,7 @@ export function ConversasLayout() {
                                                 ? "Adicione legenda nos arquivos acima ou clique em enviar"
                                                 : "Digite uma mensagem..."
                                     }
-                                    className="rounded-xl flex-1 h-10 bg-[#EEF2FF] border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1] focus:border-brand-500 focus:ring-brand-500/20"
+                                    className="rounded-xl flex-1 h-10 bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8] focus:border-brand-500 focus:ring-brand-500/20"
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter" && !e.shiftKey && !cliente.iaAtiva && attachments.length === 0) {
                                             e.preventDefault();
@@ -1895,7 +1895,7 @@ export function ConversasLayout() {
                                         cliente.iaAtiva ||
                                         (attachments.length === 0 && !chatMessage.trim())
                                     }
-                                    className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500 text-[#191918] hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 shrink-0"
+                                    className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500 text-[#191918] dark:text-white hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 shrink-0"
                                 >
                                     {isSendingMessage ? (
                                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -1904,7 +1904,7 @@ export function ConversasLayout() {
                                     )}
                                 </button>
                             </div>
-                            <p className="text-[10px] text-[#9B9A97] mt-1.5 text-center">
+                            <p className="text-[10px] text-[#9B9A97] dark:text-[#64748b] mt-1.5 text-center">
                                 {cliente.iaAtiva
                                     ? "IA ativa — pause para enviar mensagens manualmente"
                                     : "Enter para enviar · Clique 📎 para anexar arquivos"}
@@ -1920,7 +1920,7 @@ export function ConversasLayout() {
                     renderClienteDetails()
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-center px-6">
-                        <p className="text-sm text-[#6366F1]">
+                        <p className="text-sm text-[#6366F1] dark:text-[#94a3b8]">
                             Selecione um cliente para ver os detalhes
                         </p>
                     </div>
@@ -1934,7 +1934,7 @@ export function ConversasLayout() {
                         renderClienteDetails()
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full text-center px-6">
-                            <p className="text-sm text-[#6366F1]">
+                            <p className="text-sm text-[#6366F1] dark:text-[#94a3b8]">
                                 Selecione um cliente para ver os detalhes
                             </p>
                         </div>
@@ -1945,19 +1945,19 @@ export function ConversasLayout() {
             {/* =================== NEW LEAD MODAL =================== */}
             {showNewLeadModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#191918]/30 backdrop-blur-sm animate-in fade-in">
-                    <div className="bg-[#F7F7F5] border-2 border-[#C7D2FE] rounded-2xl shadow-2xl w-[380px] max-w-[90vw] p-6 animate-in zoom-in-95">
+                    <div className="bg-[#F7F7F5] dark:bg-[#0f1829] border-2 border-[#C7D2FE] dark:border-[#3d4a60] rounded-2xl shadow-2xl w-[380px] max-w-[90vw] p-6 animate-in zoom-in-95">
                         <div className="flex items-center justify-between mb-5">
                             <div className="flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-lg bg-brand-500/20 flex items-center justify-center">
                                     <UserPlus className="w-4 h-4 text-brand-400" />
                                 </div>
-                                <h3 className="font-display text-base font-bold text-[#191918]">
+                                <h3 className="font-display text-base font-bold text-[#191918] dark:text-white">
                                     Novo Lead
                                 </h3>
                             </div>
                             <button
                                 onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); setNewLeadCanal("alegrando"); }}
-                                className="p-1.5 rounded-lg hover:bg-[#EEF2FF] text-[#6366F1] hover:text-[#191918] transition-colors"
+                                className="p-1.5 rounded-lg hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors"
                             >
                                 <X className="w-4 h-4" />
                             </button>
@@ -1979,18 +1979,18 @@ export function ConversasLayout() {
                             <button
                                 type="button"
                                 onClick={() => newLeadPhotoRef.current?.click()}
-                                className="relative w-20 h-20 rounded-full border-2 border-dashed border-[#A5B4FC] hover:border-brand-500 bg-[#EEF2FF]/60 hover:bg-[#EEF2FF] transition-colors overflow-hidden group"
+                                className="relative w-20 h-20 rounded-full border-2 border-dashed border-[#A5B4FC] dark:border-[#4a5568] hover:border-brand-500 bg-[#EEF2FF] dark:bg-[#1e2536]/60 hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] transition-colors overflow-hidden group"
                                 title="Adicionar foto"
                             >
                                 {newLeadPhoto ? (
                                     <>
                                         <img src={newLeadPhoto.preview} alt="foto" className="w-full h-full object-cover" />
                                         <div className="absolute inset-0 bg-[#191918]/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <Plus className="w-5 h-5 text-[#191918]" />
+                                            <Plus className="w-5 h-5 text-[#191918] dark:text-white" />
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center gap-1 h-full text-[#6366F1] group-hover:text-brand-400 transition-colors">
+                                    <div className="flex flex-col items-center justify-center gap-1 h-full text-[#6366F1] dark:text-[#94a3b8] group-hover:text-brand-400 transition-colors">
                                         <Plus className="w-6 h-6" />
                                         <span className="text-[10px] font-medium">Foto</span>
                                     </div>
@@ -2000,7 +2000,7 @@ export function ConversasLayout() {
 
                         <div className="space-y-3">
                             <div className="space-y-1">
-                                <Label className="text-[10px] font-semibold text-[#37352F] uppercase tracking-wider flex items-center gap-1">
+                                <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
                                     <Phone className="w-3 h-3" />
                                     Telefone *
                                 </Label>
@@ -2008,12 +2008,12 @@ export function ConversasLayout() {
                                     value={newLeadForm.telefone}
                                     onChange={(e) => setNewLeadForm((f) => ({ ...f, telefone: e.target.value }))}
                                     placeholder="5511999999999"
-                                    className="rounded-lg h-9 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1]"
+                                    className="rounded-lg h-9 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                                     autoFocus
                                 />
                             </div>
                             <div className="space-y-1">
-                                <Label className="text-[10px] font-semibold text-[#37352F] uppercase tracking-wider flex items-center gap-1">
+                                <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
                                     <User className="w-3 h-3" />
                                     Nome
                                 </Label>
@@ -2021,14 +2021,14 @@ export function ConversasLayout() {
                                     value={newLeadForm.nome}
                                     onChange={(e) => setNewLeadForm((f) => ({ ...f, nome: e.target.value }))}
                                     placeholder="Nome do contato (opcional)"
-                                    className="rounded-lg h-9 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1]"
+                                    className="rounded-lg h-9 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter") handleCreateLead();
                                     }}
                                 />
                             </div>
                             <div className="space-y-1">
-                                <Label className="text-[10px] font-semibold text-[#37352F] uppercase tracking-wider flex items-center gap-1">
+                                <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
                                     Canal
                                 </Label>
                                 <div className="flex gap-2">
@@ -2041,7 +2041,7 @@ export function ConversasLayout() {
                                                 "flex-1 h-8 rounded-lg text-xs font-semibold border-2 transition-colors",
                                                 newLeadCanal === c
                                                     ? "bg-brand-500/20 text-brand-400 border-brand-500/40"
-                                                    : "bg-[#EEF2FF]/40 text-[#6366F1] border-[#C7D2FE]/40 hover:text-[#37352F]"
+                                                    : "bg-[#EEF2FF] dark:bg-[#1e2536]/40 text-[#6366F1] dark:text-[#94a3b8] border-[#C7D2FE] dark:border-[#3d4a60]/40 hover:text-[#37352F] dark:hover:text-[#cbd5e1]"
                                             )}
                                         >
                                             {c === "alegrando" ? "🎒 Alegrando" : "🎉 Festas"}
@@ -2054,14 +2054,14 @@ export function ConversasLayout() {
                         <div className="flex gap-2 mt-5">
                             <button
                                 onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); setNewLeadCanal("alegrando"); }}
-                                className="flex-1 h-9 rounded-lg border border-[#A5B4FC] text-sm font-medium text-[#37352F] hover:bg-[#EEF2FF] transition-colors"
+                                className="flex-1 h-9 rounded-lg border border-[#A5B4FC] dark:border-[#4a5568] text-sm font-medium text-[#37352F] dark:text-[#cbd5e1] hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] transition-colors"
                             >
                                 Cancelar
                             </button>
                             <button
                                 onClick={handleCreateLead}
                                 disabled={isCreatingLead || !newLeadForm.telefone.trim()}
-                                className="flex-1 h-9 rounded-lg bg-brand-500 text-[#191918] text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 flex items-center justify-center gap-1.5"
+                                className="flex-1 h-9 rounded-lg bg-brand-500 text-[#191918] dark:text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 flex items-center justify-center gap-1.5"
                             >
                                 {isCreatingLead ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -2094,7 +2094,7 @@ function FieldGroup({
 }) {
     return (
         <div className="space-y-1">
-            <Label className="text-[10px] font-semibold text-[#37352F] uppercase tracking-wider flex items-center gap-1">
+            <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
                 {icon}
                 {label}
             </Label>

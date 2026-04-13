@@ -109,7 +109,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
             {...attributes}
             {...listeners}
             className={cn(
-                "group bg-card rounded-xl border-2 border-[#818CF8] p-3.5 cursor-grab active:cursor-grabbing shadow-sm",
+                "group bg-card rounded-xl border-2 border-[#818CF8] dark:border-[#4a5568] p-3.5 cursor-grab active:cursor-grabbing shadow-sm",
                 "hover:shadow-md hover:border-[#6366F1] transition-all duration-200",
                 isDragging && "opacity-30 shadow-none",
                 isOverlay && "shadow-xl rotate-[2deg] scale-105 border-brand-400"
@@ -165,7 +165,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                     {/* Progress bar */}
                     {checkItems.length > 0 && (
                         <div className="flex items-center gap-2 mb-1">
-                            <CheckSquare className="w-3 h-3 text-[#6366F1]" />
+                            <CheckSquare className="w-3 h-3 text-[#6366F1] dark:text-[#94a3b8]" />
                             <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
                                 <div
                                     className="h-full bg-brand-500 rounded-full transition-all duration-300"
@@ -174,7 +174,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                                     }}
                                 />
                             </div>
-                            <span className="text-[10px] font-medium text-[#6366F1]">
+                            <span className="text-[10px] font-medium text-[#6366F1] dark:text-[#94a3b8]">
                                 {doneCount}/{checkItems.length}
                             </span>
                         </div>
@@ -199,7 +199,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                                 )}
                             >
                                 {item.done && (
-                                    <svg className="w-2.5 h-2.5 text-[#191918]" viewBox="0 0 12 12" fill="none">
+                                    <svg className="w-2.5 h-2.5 text-[#191918] dark:text-white" viewBox="0 0 12 12" fill="none">
                                         <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
                                 )}
@@ -245,7 +245,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                                     e.stopPropagation();
                                     addCheckItem();
                                 }}
-                                className="p-1.5 rounded-lg bg-brand-500 text-[#191918] hover:bg-brand-600 transition-colors"
+                                className="p-1.5 rounded-lg bg-brand-500 text-[#191918] dark:text-white hover:bg-brand-600 transition-colors"
                             >
                                 <Plus className="w-3 h-3" />
                             </button>

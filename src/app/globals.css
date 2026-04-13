@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /* ============================================
    ALEGRANDO CRM — DESIGN SYSTEM (DARK MODE)
@@ -155,21 +155,72 @@
   --color-surface: #1e2536;
   --color-surface-muted: #2d3347;
   --color-surface-subtle: #3d4a60;
+  color-scheme: dark;
 }
 
+/* Scrollbar escuro */
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #3d4a60; border-radius: 4px; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #4a5568; }
+[data-theme="dark"] ::-webkit-scrollbar-track { background: #0f1829; }
+
+/* Inputs no tema escuro */
 [data-theme="dark"] input,
 [data-theme="dark"] textarea,
 [data-theme="dark"] select {
   color: #ffffff !important;
-  font-weight: 500;
+  background-color: #1e2536 !important;
+  border-color: #3d4a60 !important;
 }
 [data-theme="dark"] input::placeholder,
 [data-theme="dark"] textarea::placeholder {
   color: #94a3b8 !important;
 }
-[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #3d4a60; border-radius: 4px; }
-[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #4a5568; }
-[data-theme="dark"] ::-webkit-scrollbar-track { background: #0f1829; }
+[data-theme="dark"] label {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] [contenteditable] {
+  color: #ffffff !important;
+  background-color: #1e2536 !important;
+}
+
+/* FullCalendar */
+[data-theme="dark"] .fc {
+  --fc-border-color: #3d4a60;
+  --fc-neutral-bg-color: #1e2536;
+  --fc-list-event-hover-bg-color: #2d3347;
+  --fc-page-bg-color: #0f1829;
+  background-color: #0f1829;
+}
+[data-theme="dark"] .fc-toolbar-title { color: #ffffff !important; }
+[data-theme="dark"] .fc-button {
+  background-color: #1e2536 !important;
+  border-color: #3d4a60 !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"] .fc-button:hover { background-color: #2d3347 !important; }
+[data-theme="dark"] .fc-col-header-cell {
+  background-color: #1e2536 !important;
+  border-color: #3d4a60 !important;
+}
+[data-theme="dark"] .fc-col-header-cell-cushion { color: #cbd5e1 !important; }
+[data-theme="dark"] .fc-daygrid-day {
+  background-color: #0f1829 !important;
+  border-color: #3d4a60 !important;
+}
+[data-theme="dark"] .fc-daygrid-day-number { color: #ffffff !important; }
+[data-theme="dark"] .fc-day-other .fc-daygrid-day-number { color: #64748b !important; }
+[data-theme="dark"] .fc-timegrid-slot { border-color: #3d4a60 !important; }
+[data-theme="dark"] .fc-timegrid-slot-label-cushion { color: #94a3b8 !important; }
+[data-theme="dark"] .fc-popover {
+  background-color: #1e2536 !important;
+  border-color: #3d4a60 !important;
+}
+[data-theme="dark"] .fc-popover-header {
+  background-color: #2d3347 !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"] td,
+[data-theme="dark"] th { border-color: #3d4a60 !important; }
 
 @keyframes gradientShift {
   0% { background-position: 0% 50%; }
@@ -494,178 +545,3 @@ main > div {
   border-color: #C7D2FE !important;
 }
 
-/* ============================================
-   TEMA ESCURO — override total de cores hardcoded
-   ============================================ */
-
-/* --- BACKGROUNDS HARDCODED (light → dark) --- */
-[data-theme="dark"] .bg-\[\#F7F7F5\],
-[data-theme="dark"] .bg-\[\#f7f7f5\] {
-  background-color: #0f1829 !important;
-}
-[data-theme="dark"] .bg-\[\#EEF2FF\],
-[data-theme="dark"] .bg-\[\#eef2ff\] {
-  background-color: #1e2536 !important;
-}
-[data-theme="dark"] .bg-\[\#E0E7FF\],
-[data-theme="dark"] .bg-\[\#e0e7ff\] {
-  background-color: #2d3347 !important;
-}
-[data-theme="dark"] .bg-\[\#F0F4FF\],
-[data-theme="dark"] .bg-\[\#f0f4ff\] {
-  background-color: #1e2536 !important;
-}
-[data-theme="dark"] .hover\:bg-\[\#E0E7FF\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#e0e7ff\]:hover {
-  background-color: #2d3347 !important;
-}
-[data-theme="dark"] .hover\:bg-\[\#C7D2FE\]:hover,
-[data-theme="dark"] .hover\:bg-\[\#c7d2fe\]:hover {
-  background-color: #3d4a60 !important;
-}
-[data-theme="dark"] .bg-\[\#191918\]\/10 {
-  background-color: rgba(15, 24, 41, 0.4) !important;
-}
-[data-theme="dark"] .bg-\[\#191918\]\/15 {
-  background-color: rgba(15, 24, 41, 0.6) !important;
-}
-
-/* --- BORDERS HARDCODED --- */
-[data-theme="dark"] .border-\[\#C7D2FE\],
-[data-theme="dark"] .border-\[\#c7d2fe\] {
-  border-color: #3d4a60 !important;
-}
-[data-theme="dark"] .border-\[\#A5B4FC\],
-[data-theme="dark"] .border-\[\#a5b4fc\] {
-  border-color: #4a5568 !important;
-}
-[data-theme="dark"] .border-\[\#818CF8\],
-[data-theme="dark"] .border-\[\#818cf8\] {
-  border-color: #4a5568 !important;
-}
-
-/* --- TEXTO HARDCODED --- */
-[data-theme="dark"] .text-\[\#191918\] {
-  color: #ffffff !important;
-}
-[data-theme="dark"] .text-\[\#37352F\],
-[data-theme="dark"] .text-\[\#37352f\] {
-  color: #cbd5e1 !important;
-}
-[data-theme="dark"] .text-\[\#6366F1\],
-[data-theme="dark"] .text-\[\#6366f1\] {
-  color: #94a3b8 !important;
-}
-[data-theme="dark"] .text-\[\#9B9A97\] {
-  color: #64748b !important;
-}
-[data-theme="dark"] .hover\:text-\[\#191918\]:hover {
-  color: #ffffff !important;
-}
-
-/* --- PLACEHOLDERS --- */
-[data-theme="dark"] .placeholder\:text-\[\#9B9A97\]::placeholder {
-  color: #94a3b8 !important;
-}
-
-/* --- INPUTS GERAIS --- */
-[data-theme="dark"] input,
-[data-theme="dark"] textarea,
-[data-theme="dark"] select {
-  color: #ffffff !important;
-  background-color: #1e2536 !important;
-  font-weight: 500;
-}
-[data-theme="dark"] input::placeholder,
-[data-theme="dark"] textarea::placeholder {
-  color: #94a3b8 !important;
-}
-[data-theme="dark"] label {
-  color: #cbd5e1 !important;
-}
-
-/* --- SCROLLBAR --- */
-[data-theme="dark"] ::-webkit-scrollbar-thumb {
-  background: #3d4a60 !important;
-  border-radius: 4px;
-}
-[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
-  background: #4a5568 !important;
-}
-[data-theme="dark"] ::-webkit-scrollbar-track {
-  background: #0f1829 !important;
-}
-
-/* --- SOMBRAS --- */
-[data-theme="dark"] .shadow-sm {
-  box-shadow: 0 1px 3px rgba(0,0,0,0.4) !important;
-}
-[data-theme="dark"] .shadow-md {
-  box-shadow: 0 4px 6px rgba(0,0,0,0.5) !important;
-}
-
-/* --- FULLCALENDAR NO TEMA ESCURO --- */
-[data-theme="dark"] .fc {
-  --fc-border-color: #3d4a60;
-  --fc-neutral-bg-color: #1e2536;
-  --fc-list-event-hover-bg-color: #2d3347;
-  --fc-page-bg-color: #0f1829;
-}
-[data-theme="dark"] .fc-toolbar-title {
-  color: #ffffff !important;
-}
-[data-theme="dark"] .fc-button {
-  background-color: #1e2536 !important;
-  border-color: #3d4a60 !important;
-  color: #ffffff !important;
-}
-[data-theme="dark"] .fc-button:hover {
-  background-color: #2d3347 !important;
-}
-[data-theme="dark"] .fc-col-header-cell {
-  background-color: #1e2536 !important;
-  border-color: #3d4a60 !important;
-}
-[data-theme="dark"] .fc-col-header-cell-cushion {
-  color: #cbd5e1 !important;
-}
-[data-theme="dark"] .fc-daygrid-day {
-  background-color: #0f1829 !important;
-  border-color: #3d4a60 !important;
-}
-[data-theme="dark"] .fc-daygrid-day-number {
-  color: #ffffff !important;
-}
-[data-theme="dark"] .fc-day-other .fc-daygrid-day-number {
-  color: #64748b !important;
-}
-[data-theme="dark"] .fc-timegrid-slot {
-  border-color: #3d4a60 !important;
-}
-[data-theme="dark"] .fc-timegrid-slot-label-cushion {
-  color: #94a3b8 !important;
-}
-[data-theme="dark"] .fc-popover {
-  background-color: #1e2536 !important;
-  border-color: #3d4a60 !important;
-}
-[data-theme="dark"] .fc-popover-header {
-  background-color: #2d3347 !important;
-  color: #ffffff !important;
-}
-[data-theme="dark"] td,
-[data-theme="dark"] th {
-  border-color: #3d4a60 !important;
-}
-
-/* --- HEADER BLOCKS DE SEÇÃO --- */
-[data-theme="dark"] .bg-\[\#EEF2FF\].border-2,
-[data-theme="dark"] .bg-\[\#EEF2FF\].border {
-  background-color: #1e2536 !important;
-  border-color: #3d4a60 !important;
-}
-
-/* --- BUBBLE CLIENTE --- */
-[data-theme="dark"] .bg-\[\#dbeafe\] {
-  background-color: #1e2d45 !important;
-}
