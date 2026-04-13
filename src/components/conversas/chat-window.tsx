@@ -168,6 +168,15 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
             </p>
         );
     }
+    // Detectar JSON blob acidental (payload Z-API vazou como texto)
+    if (content && content.startsWith("{") && content.includes("connectedPhone")) {
+        return (
+            <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-white/10 text-white/80" : "bg-slate-700/60 text-slate-300")}>
+                <FileText className="w-4 h-4 shrink-0" />
+                <span>Mídia enviada pelo WhatsApp</span>
+            </div>
+        );
+    }
     return <p className="text-sm whitespace-pre-wrap leading-relaxed">{content}</p>;
 }
 

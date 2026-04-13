@@ -28,6 +28,7 @@ const updateClienteSchema = z.object({
     followupEnviado: z.boolean().optional(),
     posPasseioAtivo: z.boolean().optional(),
     posPasseioEnviado: z.boolean().optional(),
+    endereco: z.string().max(500).nullable().optional(),
 }).strict();
 
 // =============================================
@@ -75,6 +76,7 @@ export type ClienteDetail = {
     posPasseioEnviado: boolean;
     posPasseioEnviadoEm: string | null;
     fotoUrl: string | null;
+    endereco: string | null;
     canal: string;
 };
 
@@ -234,6 +236,7 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         posPasseioEnviado: data.pos_passeio_enviado ?? false,
         posPasseioEnviadoEm: data.pos_passeio_enviado_em || null,
         fotoUrl: data.foto_url || null,
+        endereco: data.endereco || null,
         canal: (data.canal as string) || "alegrando",
     };
 }
@@ -275,6 +278,7 @@ export async function updateCliente(
         followupEnviado?: boolean;
         posPasseioAtivo?: boolean;
         posPasseioEnviado?: boolean;
+        endereco?: string | null;
     }
 ) {
     const userId = await requireAuth();
@@ -313,6 +317,7 @@ export async function updateCliente(
         }
     }
     if (parsed.posPasseioEnviado !== undefined) updateData.pos_passeio_enviado = parsed.posPasseioEnviado;
+    if (parsed.endereco !== undefined) updateData.endereco = parsed.endereco;
 
     await supabase
         .from("Clientes _WhatsApp")

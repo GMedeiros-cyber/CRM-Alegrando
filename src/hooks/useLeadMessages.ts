@@ -50,9 +50,16 @@ export function useLeadMessages(telefone: string) {
                                         content: updated.content as string,
                                         // updated.reactions pode chegar como null quando o DB tem '{}'
                         // Não usar ?? aqui — se null, significa reações removidas (usar {})
-                        reactions: updated.reactions != null
-                            ? (updated.reactions as Record<string, string[]>)
-                            : {},
+                        reactions: (() => {
+                            const incoming = updated.reactions != null
+                                ? (updated.reactions as Record<string, string[]>)
+                                : {};
+                            const currentReactions = m.reactions ?? {};
+                            const hasLocalReactions = Object.keys(currentReactions).length > 0;
+                            const incomingIsEmpty = Object.keys(incoming).length === 0;
+                            if (hasLocalReactions && incomingIsEmpty) return currentReactions;
+                            return incoming;
+                        })(),
                                         pinned: updated.pinned === true,
                                         zapiMessageId: (meta?.messageId as string) ?? m.zapiMessageId,
                                     }
