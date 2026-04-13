@@ -1,6 +1,19 @@
 "use server";
 
 import { requireAuth } from "@/lib/auth";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+    sendWhatsAppMessage,
+    sendWhatsAppImage,
+    sendWhatsAppDocument,
+    sendWhatsAppReaction,
+    sendWhatsAppReply,
+    pinWhatsAppMessage,
+    deleteWhatsAppMessage,
+    sendEvolutionReaction,
+    sendEvolutionReply,
+    deleteEvolutionMessage,
+} from "@/lib/whatsapp/sender";
 import { z } from "zod";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -49,20 +62,13 @@ export async function sendMessage(payload: {
     mensagem: string;
     sender_name: string;
     iaAtiva: boolean;
+    canal?: string;
 }) {
     const userId = await requireAuth();
     const parsed = sendMessageSchema.parse(payload);
 
-    // Detectar canal do lead
-    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
     const supabase = createServerSupabaseClient();
-    const { data: leadRow } = await supabase
-        .from("Clientes _WhatsApp")
-        .select("canal")
-        .eq("telefone", parsed.telefone)
-        .maybeSingle();
-
-    const canal = (leadRow?.canal as string) ?? "alegrando";
+    const canal = payload.canal ?? "alegrando";
 
     // Canal festas → Evolution API (sem IA)
     if (canal === "festas") {
@@ -124,7 +130,6 @@ export async function sendMessage(payload: {
             console.error(`[sendMessage] n8n respondeu ${response.status}`);
         }
     } else {
-        const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
         const result = await sendWhatsAppMessage(
             String(parsed.telefone),
             parsed.mensagem
@@ -166,6 +171,7 @@ export async function sendFileMessage(
     const telefone = formData.get("telefone") as string | null;
     const senderName = (formData.get("sender_name") as string) || "Equipe";
     const caption = (formData.get("caption") as string) || "";
+    const canal = (formData.get("canal") as string) || "alegrando";
 
     console.log("[sendFileMessage] telefone:", telefone);
     console.log("[sendFileMessage] arquivo:", file?.name, "tamanho:", file?.size);
@@ -178,7 +184,6 @@ export async function sendFileMessage(
         return { success: false, error: "Arquivo muito grande. Máximo 10MB." };
     }
 
-    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
     const supabase = createServerSupabaseClient();
 
     // Upload to Supabase Storage
@@ -206,13 +211,7 @@ export async function sendFileMessage(
     const publicUrl = urlData.publicUrl;
     console.log("[sendFileMessage] fileUrl:", publicUrl);
 
-    // Detectar canal do lead
-    const { data: leadRow } = await supabase
-        .from("Clientes _WhatsApp")
-        .select("canal")
-        .eq("telefone", String(telefone))
-        .maybeSingle();
-    const isFestas = (leadRow?.canal ?? "alegrando") === "festas";
+    const isFestas = canal === "festas";
 
     // Send via API correta por canal
     const isImage = file.type.startsWith("image/");
@@ -251,10 +250,8 @@ export async function sendFileMessage(
             }
         }
     } else if (isImage) {
-        const { sendWhatsAppImage } = await import("@/lib/whatsapp/sender");
         zapiResult = await sendWhatsAppImage(String(telefone), publicUrl, caption);
     } else {
-        const { sendWhatsAppDocument } = await import("@/lib/whatsapp/sender");
         const base64 = buffer.toString("base64");
         zapiResult = await sendWhatsAppDocument(String(telefone), base64, file.name, caption);
     }
@@ -304,20 +301,13 @@ export async function reactToMessage(payload: {
     telefone: string;
     userId: string;
     canal?: string;
+    currentReactions?: Record<string, string[]>;
 }): Promise<{ success: boolean; newReactions?: Record<string, string[]>; error?: string }> {
     await requireAuth();
 
-    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
     const supabase = createServerSupabaseClient();
 
-    // Busca estado ATUAL do banco (fonte de verdade)
-    const { data: msg } = await supabase
-        .from("messages")
-        .select("reactions")
-        .eq("id", payload.dbMessageId)
-        .single();
-
-    const reactions = (msg?.reactions as Record<string, string[]>) || {};
+    const reactions = payload.currentReactions ?? {};
 
     // Monta o novo estado — remove o usuário de TODOS os emojis
     const newReactions: Record<string, string[]> = {};
@@ -335,13 +325,11 @@ export async function reactToMessage(payload: {
         const isFestas = (payload.canal ?? "alegrando") === "festas";
 
         if (isFestas) {
-            const { sendEvolutionReaction } = await import("@/lib/whatsapp/sender");
             const result = await sendEvolutionReaction(payload.telefone, payload.zapiMessageId, payload.emoji);
             if (!result.success) {
                 console.error("[reactToMessage] Evolution reaction falhou:", result.error);
             }
         } else {
-            const { sendWhatsAppReaction } = await import("@/lib/whatsapp/sender");
             const result = await sendWhatsAppReaction(payload.telefone, payload.zapiMessageId, payload.emoji);
             if (!result.success) {
                 console.error("[reactToMessage] Z-API reaction falhou:", result.error);
@@ -376,19 +364,13 @@ export async function replyToMessage(payload: {
     replyToZapiId: string | null;
     replyToContent?: string;
     replyToSenderName?: string | null;
+    canal?: string;
 }): Promise<{ success: boolean; error?: string }> {
     const userId = await requireAuth();
 
-    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
     const supabase = createServerSupabaseClient();
 
-    // Detectar canal
-    const { data: leadRow } = await supabase
-        .from("Clientes _WhatsApp")
-        .select("canal")
-        .eq("telefone", payload.telefone)
-        .maybeSingle();
-    const isFestas = (leadRow?.canal ?? "alegrando") === "festas";
+    const isFestas = (payload.canal ?? "alegrando") === "festas";
 
     if (isFestas) {
         // Canal festas → Evolution API (IA não se aplica)
@@ -402,7 +384,6 @@ export async function replyToMessage(payload: {
 
         let evoMessageId: string | undefined;
         if (payload.replyToZapiId) {
-            const { sendEvolutionReply } = await import("@/lib/whatsapp/sender");
             const result = await sendEvolutionReply(payload.telefone, payload.replyToZapiId, payload.text);
             if (!result.success) return { success: false, error: result.error };
             evoMessageId = result.evoMessageId;
@@ -451,14 +432,12 @@ export async function replyToMessage(payload: {
     } else {
         let sentZapiMessageId: string | undefined;
         if (payload.replyToZapiId) {
-            const { sendWhatsAppReply } = await import("@/lib/whatsapp/sender");
             const result = await sendWhatsAppReply(payload.telefone, payload.replyToZapiId, payload.text);
             if (!result.success) {
                 return { success: false, error: result.error };
             }
             sentZapiMessageId = result.zapiMessageId;
         } else {
-            const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
             const result = await sendWhatsAppMessage(payload.telefone, payload.text);
             if (!result.success) {
                 return { success: false, error: result.error };
@@ -499,24 +478,18 @@ export async function deleteMessage(payload: {
     zapiMessageId: string | null;
     telefone: string;
     owner: boolean;
+    canal?: string;
 }): Promise<{ success: boolean; error?: string }> {
     await requireAuth();
 
-    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
     const supabase = createServerSupabaseClient();
 
     if (payload.owner) {
         // Apagar para todos — tenta deletar no WhatsApp e marca no CRM
         if (payload.zapiMessageId) {
-            const { data: leadRow } = await supabase
-                .from("Clientes _WhatsApp")
-                .select("canal")
-                .eq("telefone", payload.telefone)
-                .maybeSingle();
-            const isFestas = (leadRow?.canal ?? "alegrando") === "festas";
+            const isFestas = (payload.canal ?? "alegrando") === "festas";
 
             if (isFestas) {
-                const { deleteEvolutionMessage } = await import("@/lib/whatsapp/sender");
                 const result = await deleteEvolutionMessage(payload.telefone, payload.zapiMessageId);
                 if (!result.success) {
                     console.error("[deleteMessage] Evolution falhou:", result.error);
@@ -524,11 +497,9 @@ export async function deleteMessage(payload: {
                 }
             } else {
                 // Fire-and-forget — não bloqueia a atualização do CRM
-                import("@/lib/whatsapp/sender").then(({ deleteWhatsAppMessage }) => {
-                    deleteWhatsAppMessage(payload.telefone, payload.zapiMessageId!, true)
-                        .then(r => { if (!r.success) console.error("[deleteMessage] Z-API falhou:", r.error); })
-                        .catch(err => console.error("[deleteMessage] Z-API exceção:", err));
-                });
+                deleteWhatsAppMessage(payload.telefone, payload.zapiMessageId, true)
+                    .then(r => { if (!r.success) console.error("[deleteMessage] Z-API falhou:", r.error); })
+                    .catch(err => console.error("[deleteMessage] Z-API exceção:", err));
             }
         }
         // Marca como apagada no CRM (não remove o registro — fica visível como "Mensagem apagada")
@@ -566,23 +537,17 @@ export async function pinMessage(payload: {
     telefone: string;
     pin: boolean;
     duration?: 1 | 2 | 3;
+    canal?: string;
 }): Promise<{ success: boolean; error?: string }> {
     await requireAuth();
 
-    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
     const supabase = createServerSupabaseClient();
 
     if (payload.zapiMessageId) {
-        const { data: leadRow } = await supabase
-            .from("Clientes _WhatsApp")
-            .select("canal")
-            .eq("telefone", payload.telefone)
-            .maybeSingle();
-        const isFestas = (leadRow?.canal ?? "alegrando") === "festas";
+        const isFestas = (payload.canal ?? "alegrando") === "festas";
 
         // Evolution API v2 não tem endpoint de pin — só atualiza o banco
         if (!isFestas) {
-            const { pinWhatsAppMessage } = await import("@/lib/whatsapp/sender");
             const result = await pinWhatsAppMessage(payload.telefone, payload.zapiMessageId, payload.pin, payload.duration ?? 3);
             if (!result.success) {
                 console.error("[pinMessage] Z-API falhou:", result.error);
@@ -618,7 +583,6 @@ export async function uploadContactPhoto(
     if (!file) return { success: false, error: "Arquivo não encontrado." };
     if (file.size > MAX_FILE_SIZE) return { success: false, error: "Arquivo muito grande. Máximo 10MB." };
 
-    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
     const supabase = createServerSupabaseClient();
 
     const ext = file.name.split(".").pop() || "jpg";
