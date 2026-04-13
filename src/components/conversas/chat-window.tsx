@@ -345,6 +345,7 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
     }, []);
 
     const handleReact = useCallback(async (msg: LeadMessage, emoji: string) => {
+        console.log("[REACT] iniciando reação:", { msgId: msg.id, emoji, zapiId: msg.zapiMessageId });
         const prevReactions = msg.reactions ?? {};
 
         // Optimistic: calcula localmente o que o servidor vai fazer
@@ -360,6 +361,7 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
 
         // Aplica otimisticamente
         updateMessageById(msg.id, { reactions: optimistic });
+        console.log("[REACT] otimístico aplicado:", optimistic);
 
         try {
             const result = await reactToMessage({
@@ -369,16 +371,20 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
                 telefone,
                 userId: MY_USER_ID,
             });
+            console.log("[REACT] server action retornou:", result);
 
             if (result.success && result.newReactions !== undefined) {
                 // Aplica o estado EXATO confirmado pelo servidor — ignora Realtime para esta ação
                 updateMessageById(msg.id, { reactions: result.newReactions });
+                console.log("[REACT] reactions aplicadas:", result.newReactions);
             } else if (!result.success) {
                 updateMessageById(msg.id, { reactions: prevReactions });
+                console.error("[REACT] falhou:", result.error);
                 showError("Falha ao reagir à mensagem.");
             }
         } catch (err) {
             updateMessageById(msg.id, { reactions: prevReactions });
+            console.error("[REACT] exceção:", err);
             showError("Erro ao reagir: " + String(err));
         }
     }, [telefone, updateMessageById, showError]);

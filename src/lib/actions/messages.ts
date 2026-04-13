@@ -524,9 +524,12 @@ export async function deleteMessage(payload: {
                     return { success: false, error: result.error };
                 }
             } else {
-                const { deleteWhatsAppMessage } = await import("@/lib/whatsapp/sender");
-                const result = await deleteWhatsAppMessage(payload.telefone, payload.zapiMessageId, true);
-                if (!result.success) console.error("[deleteMessage] Z-API falhou:", result.error);
+                // Fire-and-forget — não bloqueia a atualização do CRM
+                import("@/lib/whatsapp/sender").then(({ deleteWhatsAppMessage }) => {
+                    deleteWhatsAppMessage(payload.telefone, payload.zapiMessageId!, true)
+                        .then(r => { if (!r.success) console.error("[deleteMessage] Z-API falhou:", r.error); })
+                        .catch(err => console.error("[deleteMessage] Z-API exceção:", err));
+                });
             }
         }
         // Marca como apagada no CRM (não remove o registro — fica visível como "Mensagem apagada")
