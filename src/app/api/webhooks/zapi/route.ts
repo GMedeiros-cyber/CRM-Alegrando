@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from "next/server";
 const MESSAGE_EVENT_TYPES = new Set([
   "ReceivedCallback",
   "SentCallback",
+  "ReactionCallback",
 ]);
 
 interface ZApiTextPayload {
@@ -130,19 +131,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // --- 2. Mensagens do cliente (fromMe=false) com número real: atualiza chat_lid no lead ---
   // Isso cria o mapeamento LID → telefone que usaremos para mensagens do celular físico.
-  if (!isFromMe && !isLid(rawPhone) && chatLid && rawPhone) {
+  if (!isFromMe && !isLid(rawPhone) && rawPhone) {
     const realPhone = normalizePhone(rawPhone);
     const phoneWithout55 = realPhone.startsWith("55") ? realPhone.slice(2) : realPhone;
 
-    supabase
-      .from("Clientes _WhatsApp")
-      .update({ chat_lid: chatLid })
-      .or(`telefone.eq.${realPhone},telefone.eq.${phoneWithout55}`)
-      .then(({ error }) => {
-        if (error) console.error("[ZAPI-PROXY] Falha ao atualizar chat_lid:", error.message);
-      });
+    if (chatLid) {
+      supabase
+        .from("Clientes _WhatsApp")
+        .update({ chat_lid: chatLid })
+        .or(`telefone.eq.${realPhone},telefone.eq.${phoneWithout55}`)
+        .then(({ error }) => {
+          if (error) console.error("[ZAPI-PROXY] Falha ao atualizar chat_lid:", error.message);
+        });
+    }
 
-    if (payload.senderPhoto && realPhone) {
+    if (payload.senderPhoto) {
       supabase
         .from("Clientes _WhatsApp")
         .update({ foto_url: payload.senderPhoto })
@@ -150,6 +153,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         .then(({ error }) => {
           if (error) console.error("[ZAPI-PROXY] Falha ao atualizar foto:", error.message);
         });
+    }
+
+    // Salvar messageId da mensagem do cliente para permitir reações futuras
+    if (payload.messageId && eventType === "ReceivedCallback") {
+      const { content, media_type } = extractMessageContent(payload);
+      const sentAt = payload.momment
+        ? new Date(payload.momment).toISOString()
+        : new Date().toISOString();
+
+      const { data: existingMsg } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("telefone", realPhone)
+        .eq("metadata->>messageId", payload.messageId)
+        .maybeSingle();
+
+      if (!existingMsg) {
+        supabase.from("messages").insert({
+          telefone: realPhone,
+          sender_type: "cliente",
+          sender_name: payload.chatName || payload.senderName || null,
+          content,
+          media_type,
+          created_at: sentAt,
+          metadata: { messageId: payload.messageId },
+        }).then(({ error }) => {
+          if (error) console.error("[ZAPI-PROXY] Falha ao salvar msg cliente:", error.message);
+        });
+      }
     }
   }
 
@@ -226,7 +258,54 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // --- 4. Repasse ao n8n (fire-and-forget) ---
+  // --- 4. Reações do cliente (type="ReactionCallback", fromMe=false) ---
+  if (eventType === "ReactionCallback" && !isFromMe && payload.messageId) {
+    try {
+      const normalizedPhone = normalizePhone(rawPhone);
+      const phoneWithout55 = normalizedPhone.startsWith("55")
+        ? normalizedPhone.slice(2) : normalizedPhone;
+
+      const reactionEmoji = (payload as Record<string, unknown>).emoji as string || "";
+      const targetMessageId = (payload as Record<string, unknown>).reactionMessageId as string || "";
+
+      if (!targetMessageId) {
+        if (n8nWebhookUrl) forwardToN8n(payload, n8nWebhookUrl);
+        return NextResponse.json({ status: "skipped", reason: "no reactionMessageId" });
+      }
+
+      const { data: targetMsg } = await supabase
+        .from("messages")
+        .select("id, reactions")
+        .or(`telefone.eq.${normalizedPhone},telefone.eq.${phoneWithout55}`)
+        .eq("metadata->>messageId", targetMessageId)
+        .maybeSingle();
+
+      if (targetMsg) {
+        const reactions = (targetMsg.reactions as Record<string, string[]>) || {};
+        const reacterKey = "lead";
+
+        const newReactions: Record<string, string[]> = {};
+        for (const [e, users] of Object.entries(reactions)) {
+          const filtered = (users as string[]).filter((u) => u !== reacterKey);
+          if (filtered.length > 0) newReactions[e] = filtered;
+        }
+        if (reactionEmoji) {
+          newReactions[reactionEmoji] = [...(newReactions[reactionEmoji] ?? []), reacterKey];
+        }
+
+        await supabase
+          .from("messages")
+          .update({ reactions: newReactions })
+          .eq("id", targetMsg.id);
+
+        console.log(`[ZAPI-PROXY] Reação do lead salva: ${reactionEmoji} em ${targetMsg.id}`);
+      }
+    } catch (err) {
+      console.error("[ZAPI-PROXY] Erro ao processar reação:", err);
+    }
+  }
+
+  // --- 5. Repasse ao n8n (fire-and-forget) ---
   if (n8nWebhookUrl) {
     forwardToN8n(payload, n8nWebhookUrl);
   } else {
