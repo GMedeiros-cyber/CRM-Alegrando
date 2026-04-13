@@ -684,6 +684,7 @@ export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProp
                                             )}>
                                                 <MessageContextMenu
                                                     message={msg}
+                                                    canal={canal}
                                                     onReply={handleReply}
                                                     onCopy={handleCopy}
                                                     onPin={handlePinClick}

@@ -17,6 +17,7 @@ interface MessageContextMenuProps {
     onPin: (msg: LeadMessage, pin: boolean) => void;
     onDelete: (msg: LeadMessage) => void;
     onReact: (msg: LeadMessage, emoji: string) => void;
+    canal?: string;
     /** "right" = mensagem da equipe (chevron à esquerda da bolha); "left" = mensagem do cliente */
     align?: "left" | "right";
 }
@@ -28,6 +29,7 @@ export function MessageContextMenu({
     onPin,
     onDelete,
     onReact,
+    canal,
     align = "right",
 }: MessageContextMenuProps) {
     const [open, setOpen] = useState(false);
@@ -127,7 +129,7 @@ export function MessageContextMenu({
                     style={{ position: "fixed", top: menuPos.top, left: menuPos.left, zIndex: 9999, width: MENU_W }}
                     className="bg-[#EEF2FF] dark:bg-[#1e2536]/95 backdrop-blur-sm border border-[#A5B4FC] dark:border-[#4a5568]/50 rounded-xl shadow-2xl shadow-black/40 py-1.5 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
                 >
-                    <button
+                    {canal !== "festas" && <button
                         type="button"
                         onClick={() => {
                             if (triggerRef.current) {
@@ -146,7 +148,7 @@ export function MessageContextMenu({
                     >
                         <SmilePlus className="h-3.5 w-3.5 text-violet-400 group-hover/item:scale-110 transition-transform" />
                         Reagir
-                    </button>
+                    </button>}
                     <button
                         type="button"
                         onClick={() => { setOpen(false); onReply(message); }}
