@@ -377,7 +377,11 @@ export async function sendEvolutionReaction(
         reaction: emoji,
       }),
     });
-    if (!res.ok) return { success: false, error: `Evolution reaction ${res.status}` };
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error(`[EVO-REACTION] ${res.status}:`, errBody);
+      return { success: false, error: `Evolution reaction ${res.status}: ${errBody}` };
+    }
     return { success: true };
   } catch (err) {
     return { success: false, error: String(err) };
@@ -438,7 +442,11 @@ export async function deleteEvolutionMessage(
         participant: "",
       }),
     });
-    if (!res.ok) return { success: false, error: `Evolution delete ${res.status}` };
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error(`[EVO-DELETE] ${res.status}:`, errBody);
+      return { success: false, error: `Evolution delete ${res.status}: ${errBody}` };
+    }
     return { success: true };
   } catch (err) {
     return { success: false, error: String(err) };

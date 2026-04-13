@@ -152,11 +152,11 @@ export function useLeadMessages(telefone: string) {
         };
     }, [telefone]);
 
-    const addOptimisticMessage = useCallback((content: string) => {
+    const addOptimisticMessage = useCallback((content: string, senderName?: string) => {
         const optimistic: LeadMessage = {
             id: `optimistic-${Date.now()}`,
             senderType: "equipe",
-            senderName: "Alegrando",
+            senderName: senderName ?? "Alegrando",
             content,
             mediaType: "text",
             createdAt: new Date(),

@@ -33,6 +33,7 @@ export function MessageContextMenu({
     const [open, setOpen] = useState(false);
     const [showReactions, setShowReactions] = useState(false);
     const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+    const [reactPos, setReactPos] = useState<{ top: number; left: number } | null>(null);
 
     const triggerRef = useRef<HTMLButtonElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -125,7 +126,19 @@ export function MessageContextMenu({
                 >
                     <button
                         type="button"
-                        onClick={() => { setOpen(false); setShowReactions(true); }}
+                        onClick={() => {
+                            if (triggerRef.current) {
+                                const rect = triggerRef.current.getBoundingClientRect();
+                                let top = rect.bottom + 6;
+                                let left = rect.left;
+                                if (top + 80 > window.innerHeight - 8) top = rect.top - 80 - 6;
+                                if (left + 210 > window.innerWidth - 8) left = window.innerWidth - 210 - 8;
+                                if (left < 8) left = 8;
+                                setReactPos({ top, left });
+                            }
+                            setOpen(false);
+                            setShowReactions(true);
+                        }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-violet-500/15 text-slate-300 hover:text-violet-200 transition-colors text-sm group/item"
                     >
                         <SmilePlus className="h-3.5 w-3.5 text-violet-400 group-hover/item:scale-110 transition-transform" />
@@ -178,12 +191,9 @@ export function MessageContextMenu({
             {/* ReactionPicker via Portal */}
             {showReactions && (
                 <ReactionPicker
-                    triggerRef={triggerRef}
-                    onSelect={(emoji) => {
-                        setShowReactions(false);
-                        onReact(message, emoji);
-                    }}
-                    onClose={() => setShowReactions(false)}
+                    initialPos={reactPos}
+                    onSelect={(emoji) => { setShowReactions(false); setReactPos(null); onReact(message, emoji); }}
+                    onClose={() => { setShowReactions(false); setReactPos(null); }}
                 />
             )}
         </>

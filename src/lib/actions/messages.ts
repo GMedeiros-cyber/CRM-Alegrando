@@ -519,7 +519,10 @@ export async function deleteMessage(payload: {
             if (isFestas) {
                 const { deleteEvolutionMessage } = await import("@/lib/whatsapp/sender");
                 const result = await deleteEvolutionMessage(payload.telefone, payload.zapiMessageId);
-                if (!result.success) console.error("[deleteMessage] Evolution falhou:", result.error);
+                if (!result.success) {
+                    console.error("[deleteMessage] Evolution falhou:", result.error);
+                    return { success: false, error: result.error };
+                }
             } else {
                 const { deleteWhatsAppMessage } = await import("@/lib/whatsapp/sender");
                 const result = await deleteWhatsAppMessage(payload.telefone, payload.zapiMessageId, true);
