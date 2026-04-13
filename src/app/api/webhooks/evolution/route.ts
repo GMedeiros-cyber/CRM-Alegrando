@@ -9,6 +9,59 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ status: "skipped" });
     }
 
+    // Processar reações do lead (evento messages.reaction)
+    if (payload.event === "messages.reaction") {
+        try {
+            const reactionData = payload.data;
+            const rawReactPhone = reactionData?.key?.remoteJid?.replace(/@.*$/, "") ?? "";
+            const isReactFromMe = reactionData?.key?.fromMe === true;
+
+            // Só processar reações do lead (não da Márcia)
+            if (isReactFromMe || !rawReactPhone) return NextResponse.json({ status: "skipped" });
+
+            const reactDigits = rawReactPhone.replace(/\D/g, "");
+            const reactPhone = reactDigits.startsWith("55") && reactDigits.length >= 12 ? reactDigits : `55${reactDigits}`;
+
+            const targetMessageId = reactionData?.reaction?.key?.id as string || "";
+            const reactionEmoji = reactionData?.reaction?.text as string || "";
+
+            if (!targetMessageId) return NextResponse.json({ status: "skipped" });
+
+            const supabaseReact = createServerSupabaseClient();
+
+            const { data: targetMsg } = await supabaseReact
+                .from("messages")
+                .select("id, reactions")
+                .eq("telefone", reactPhone)
+                .eq("metadata->>messageId", targetMessageId)
+                .maybeSingle();
+
+            if (targetMsg) {
+                const reactions = (targetMsg.reactions as Record<string, string[]>) || {};
+                const reacterKey = "lead";
+
+                const newReactions: Record<string, string[]> = {};
+                for (const [e, users] of Object.entries(reactions)) {
+                    const filtered = (users as string[]).filter((u) => u !== reacterKey);
+                    if (filtered.length > 0) newReactions[e] = filtered;
+                }
+                if (reactionEmoji) {
+                    newReactions[reactionEmoji] = [...(newReactions[reactionEmoji] ?? []), reacterKey];
+                }
+
+                await supabaseReact
+                    .from("messages")
+                    .update({ reactions: newReactions })
+                    .eq("id", targetMsg.id);
+            }
+
+            return NextResponse.json({ status: "ok" });
+        } catch (err) {
+            console.error("[EVO-WEBHOOK] Erro ao processar reação:", err);
+            return NextResponse.json({ status: "error" });
+        }
+    }
+
     const data = payload.data;
     const isFromMe = data?.key?.fromMe === true;
 
