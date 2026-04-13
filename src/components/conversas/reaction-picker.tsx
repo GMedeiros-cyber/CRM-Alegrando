@@ -79,7 +79,7 @@ export function ReactionPicker({ triggerRef, onSelect, onClose, inline = false, 
                     key={emoji}
                     type="button"
                     onClick={() => onSelect(emoji)}
-                    className="w-7 h-7 flex items-center justify-center text-base hover:bg-slate-700/60 rounded-lg transition-all hover:scale-110"
+                    className="w-7 h-7 flex items-center justify-center text-base hover:bg-[#E0E7FF]/60 rounded-lg transition-all hover:scale-110"
                 >
                     {emoji}
                 </button>
@@ -99,7 +99,7 @@ export function ReactionPicker({ triggerRef, onSelect, onClose, inline = false, 
         <div
             ref={pickerRef}
             style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999 }}
-            className="bg-slate-800/95 backdrop-blur-sm border border-slate-600/50 rounded-xl shadow-2xl shadow-black/40 animate-in fade-in zoom-in-95 duration-150"
+            className="bg-[#EEF2FF]/95 backdrop-blur-sm border border-[#A5B4FC]/50 rounded-xl shadow-2xl shadow-black/40 animate-in fade-in zoom-in-95 duration-150"
         >
             {content}
         </div>,

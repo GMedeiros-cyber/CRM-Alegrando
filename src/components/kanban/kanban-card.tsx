@@ -109,8 +109,8 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
             {...attributes}
             {...listeners}
             className={cn(
-                "group bg-card rounded-xl border-2 border-border p-3.5 cursor-grab active:cursor-grabbing",
-                "hover:shadow-md hover:border-muted-foreground/40 transition-all duration-200",
+                "group bg-card rounded-xl border-2 border-[#818CF8] p-3.5 cursor-grab active:cursor-grabbing shadow-sm",
+                "hover:shadow-md hover:border-[#6366F1] transition-all duration-200",
                 isDragging && "opacity-30 shadow-none",
                 isOverlay && "shadow-xl rotate-[2deg] scale-105 border-brand-400"
             )}
@@ -165,7 +165,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                     {/* Progress bar */}
                     {checkItems.length > 0 && (
                         <div className="flex items-center gap-2 mb-1">
-                            <CheckSquare className="w-3 h-3 text-slate-500" />
+                            <CheckSquare className="w-3 h-3 text-[#6366F1]" />
                             <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
                                 <div
                                     className="h-full bg-brand-500 rounded-full transition-all duration-300"
@@ -174,7 +174,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                                     }}
                                 />
                             </div>
-                            <span className="text-[10px] font-medium text-slate-500">
+                            <span className="text-[10px] font-medium text-[#6366F1]">
                                 {doneCount}/{checkItems.length}
                             </span>
                         </div>
@@ -199,7 +199,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                                 )}
                             >
                                 {item.done && (
-                                    <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none">
+                                    <svg className="w-2.5 h-2.5 text-[#191918]" viewBox="0 0 12 12" fill="none">
                                         <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
                                 )}
@@ -245,7 +245,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                                     e.stopPropagation();
                                     addCheckItem();
                                 }}
-                                className="p-1.5 rounded-lg bg-brand-500 text-white hover:bg-brand-600 transition-colors"
+                                className="p-1.5 rounded-lg bg-brand-500 text-[#191918] hover:bg-brand-600 transition-colors"
                             >
                                 <Plus className="w-3 h-3" />
                             </button>
@@ -288,8 +288,8 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                         className={cn(
                             "flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md",
                             lead.iaAtiva
-                                ? "bg-emerald-500/20 text-emerald-400"
-                                : "bg-orange-500/20 text-orange-400"
+                                ? "bg-emerald-100 text-emerald-800 border border-emerald-400"
+                                : "bg-orange-200 text-orange-800 border border-orange-400"
                         )}
                     >
                         {lead.iaAtiva ? (

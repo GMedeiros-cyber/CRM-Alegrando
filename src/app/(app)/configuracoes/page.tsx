@@ -61,7 +61,7 @@ export default function ConfiguracoesPage() {
     return (
         <div className="space-y-8 max-w-4xl">
             <div className="bento-enter">
-                <h1 className="text-2xl font-bold tracking-tight text-white">
+                <h1 className="text-2xl font-bold tracking-tight text-[#191918]">
                     Configurações
                 </h1>
                 <p className="text-muted-foreground mt-1">
@@ -73,7 +73,7 @@ export default function ConfiguracoesPage() {
             <div className="rounded-xl border bg-card p-6 space-y-4 bento-enter [animation-delay:150ms]">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h2 className="text-lg font-semibold text-white">
+                        <h2 className="text-lg font-semibold text-[#191918]">
                             Mensagem de Follow-up
                         </h2>
                         <p className="text-sm text-muted-foreground">
@@ -91,13 +91,13 @@ export default function ConfiguracoesPage() {
                     value={followupMsg}
                     onChange={(e) => setFollowupMsg(e.target.value)}
                     rows={7}
-                    className="w-full rounded-lg border bg-background px-4 py-3 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-primary/50 text-white"
+                    className="w-full rounded-lg border border-[#C7D2FE] bg-[#F0F4FF] px-4 py-3 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50 text-[#191918] font-medium placeholder:text-[#9B9A97]"
                     placeholder="Mensagem de follow-up..."
                 />
             </div>
 
             <div className="rounded-xl border border-dashed bg-muted/30 p-5 bento-enter [animation-delay:200ms]">
-                <h3 className="text-sm font-semibold mb-2 text-white">
+                <h3 className="text-sm font-semibold mb-2 text-[#191918]">
                     Variáveis disponíveis
                 </h3>
                 <div className="flex flex-wrap gap-3 text-sm">
@@ -112,7 +112,7 @@ export default function ConfiguracoesPage() {
             <div className="rounded-xl border bg-card p-6 space-y-4 bento-enter [animation-delay:250ms]">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h2 className="text-lg font-semibold text-white">
+                        <h2 className="text-lg font-semibold text-[#191918]">
                             Mensagem de Pós-Passeio
                         </h2>
                         <p className="text-sm text-muted-foreground">
@@ -130,13 +130,13 @@ export default function ConfiguracoesPage() {
                     value={posPasseioMsg}
                     onChange={(e) => setPosPasseioMsg(e.target.value)}
                     rows={7}
-                    className="w-full rounded-lg border bg-background px-4 py-3 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-primary/50 text-white"
+                    className="w-full rounded-lg border border-[#C7D2FE] bg-[#F0F4FF] px-4 py-3 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50 text-[#191918] font-medium placeholder:text-[#9B9A97]"
                     placeholder="Mensagem de pós-passeio..."
                 />
             </div>
 
             <div className="rounded-xl border border-dashed bg-muted/30 p-5 bento-enter [animation-delay:300ms]">
-                <h3 className="text-sm font-semibold mb-2 text-white">
+                <h3 className="text-sm font-semibold mb-2 text-[#191918]">
                     Variáveis disponíveis
                 </h3>
                 <div className="flex flex-wrap gap-3 text-sm">

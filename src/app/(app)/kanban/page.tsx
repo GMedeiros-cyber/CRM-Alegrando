@@ -68,11 +68,11 @@ export default function KanbanPage() {
         <div className="space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between bento-enter">
-                <div>
-                    <h1 className="font-display text-3xl font-bold text-foreground tracking-tight">
+                <div className="px-6 py-4 rounded-xl bg-[#EEF2FF] border-2 border-[#818CF8] shadow-sm flex flex-col gap-1 w-fit min-w-[320px]">
+                    <h1 className="text-2xl font-bold text-[#191918] tracking-tight">
                         Kanban
                     </h1>
-                    <p className="text-muted-foreground mt-0.5 text-sm">
+                    <p className="text-sm font-medium text-[#6366F1]">
                         Quadro de vendas — arraste os cards entre as colunas
                     </p>
                 </div>

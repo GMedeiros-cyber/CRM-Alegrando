@@ -131,7 +131,7 @@ function TrelloCard({
 
     return (
         <>
-            <div className="group relative bg-slate-700/90 hover:bg-slate-600/90 rounded-lg border border-slate-600/50 hover:border-slate-500/60 p-3 shadow-sm hover:shadow-md transition-all duration-150">
+            <div className="group relative bg-[#EEF2FF] hover:bg-[#E0E7FF] rounded-lg border border-[#818CF8] hover:border-[#6366F1] p-3 shadow-sm hover:shadow-md transition-all duration-150">
                 {editing ? (
                     <div>
                         <textarea
@@ -148,13 +148,13 @@ function TrelloCard({
                                     setEditing(false);
                                 }
                             }}
-                            className="w-full bg-slate-800 rounded px-2 py-1 text-[13px] text-slate-200 outline-none focus:ring-2 focus:ring-brand-400 resize-none"
+                            className="w-full bg-[#EEF2FF] rounded px-2 py-1 text-[13px] text-[#191918] outline-none focus:ring-2 focus:ring-brand-400 resize-none"
                             rows={3}
                         />
                         <div className="flex justify-start mt-2">
                             <button
                                 onClick={handleSaveTitle}
-                                className="px-3 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-semibold hover:bg-brand-600 transition-colors"
+                                className="px-3 py-1.5 rounded-lg bg-brand-500 text-[#191918] text-xs font-semibold hover:bg-brand-600 transition-colors"
                             >
                                 Salvar
                             </button>
@@ -165,7 +165,7 @@ function TrelloCard({
                         onClick={() => setEditing(true)}
                         className="cursor-pointer"
                     >
-                        <p className="text-[13px] text-slate-200 leading-snug pr-6 break-words">
+                        <p className="text-[13px] text-[#191918] leading-snug pr-6 break-words">
                             {card.title}
                         </p>
                         {assignedUsers.length > 0 && (
@@ -176,14 +176,14 @@ function TrelloCard({
                                             key={assignedUser.id}
                                             title={assignedUser.name}
                                             className={cn(
-                                                "w-5 h-5 rounded-full overflow-hidden border border-slate-500",
+                                                "w-5 h-5 rounded-full overflow-hidden border border-[#A5B4FC]",
                                                 idx > 0 && "-ml-1"
                                             )}
                                         >
                                             {assignedUser.avatarUrl ? (
                                                 <img src={assignedUser.avatarUrl} alt={assignedUser.name} className="w-full h-full object-cover" />
                                             ) : (
-                                                <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-white font-bold">
+                                                <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-[#191918] font-bold">
                                                     {assignedUser.name.charAt(0).toUpperCase()}
                                                 </div>
                                             )}
@@ -212,9 +212,9 @@ function TrelloCard({
                             setShowUsers(false);
                             setShowDeleteConfirm(false);
                         }}
-                        className="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity bg-slate-600 hover:bg-slate-500 rounded"
+                        className="absolute top-2 right-2 p-1.5 text-[#6366F1] hover:text-[#191918] opacity-0 group-hover:opacity-100 transition-opacity bg-[#C7D2FE] hover:bg-[#A5B4FC] rounded"
                     >
-                        <SquarePen className="w-3.5 h-3.5 text-slate-300" />
+                        <SquarePen className="w-3.5 h-3.5 text-[#37352F]" />
                     </button>
                 )}
             </div>
@@ -235,24 +235,24 @@ function TrelloCard({
                         ref={menuRef}
                         onClick={(e) => e.stopPropagation()}
                         style={{ top: menuPos.top, left: menuPos.left }}
-                        className="fixed w-56 bg-slate-800 rounded-lg shadow-xl border border-slate-700 z-[100] overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100"
+                        className="fixed w-56 bg-[#EEF2FF] rounded-lg shadow-xl border border-[#C7D2FE] z-[100] overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100"
                     >
                         {showDeleteConfirm ? (
                             <div className="p-3">
-                                <p className="text-slate-200 font-medium mb-3 text-xs">Excluir este cartão?</p>
+                                <p className="text-[#191918] font-medium mb-3 text-xs">Excluir este cartão?</p>
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => {
                                             onDeleteCard(card.id);
                                             setMenuOpen(false);
                                         }}
-                                        className="flex-1 px-2 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-semibold transition-colors"
+                                        className="flex-1 px-2 py-1.5 bg-red-500 hover:bg-red-600 text-[#191918] rounded text-xs font-semibold transition-colors"
                                     >
                                         Confirmar
                                     </button>
                                     <button
                                         onClick={() => setShowDeleteConfirm(false)}
-                                        className="flex-1 px-2 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 rounded text-xs font-semibold transition-colors"
+                                        className="flex-1 px-2 py-1.5 bg-[#C7D2FE] hover:bg-[#A5B4FC] text-[#191918] rounded text-xs font-semibold transition-colors"
                                     >
                                         Cancelar
                                     </button>
@@ -263,11 +263,11 @@ function TrelloCard({
                                 <div className="flex items-center gap-2 px-2">
                                     <button
                                         onClick={() => setShowUsers(false)}
-                                        className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700"
+                                        className="text-[#6366F1] hover:text-[#191918] p-1 rounded hover:bg-[#E0E7FF]"
                                     >
                                         <X className="w-3 h-3" />
                                     </button>
-                                    <p className="text-slate-200 font-semibold text-xs border-b border-slate-700 flex-1 pb-1">Membros</p>
+                                    <p className="text-[#191918] font-semibold text-xs border-b border-[#C7D2FE] flex-1 pb-1">Membros</p>
                                 </div>
                                 <div className="max-h-48 overflow-y-auto space-y-1">
                                     {users.map((user) => {
@@ -277,13 +277,13 @@ function TrelloCard({
                                             <button
                                                 key={user.id}
                                                 onClick={() => onAssignUser(card.id, user.id, isAssigned ? "remove" : "add")}
-                                                className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700 text-slate-200 rounded text-xs transition-colors"
+                                                className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-[#E0E7FF] text-[#191918] rounded text-xs transition-colors"
                                             >
-                                                <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-slate-600">
+                                                <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-[#A5B4FC]">
                                                     {user.avatarUrl ? (
                                                         <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
                                                     ) : (
-                                                        <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-white font-bold">
+                                                        <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-[#191918] font-bold">
                                                             {user.name.charAt(0).toUpperCase()}
                                                         </div>
                                                     )}
@@ -296,13 +296,13 @@ function TrelloCard({
                                         );
                                     })}
                                 </div>
-                                <div className="border-t border-slate-700 pt-2 px-2">
+                                <div className="border-t border-[#C7D2FE] pt-2 px-2">
                                     <button
                                         onClick={() => {
                                             setShowUsers(false);
                                             setMenuOpen(false);
                                         }}
-                                        className="w-full px-2 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold transition-colors"
+                                        className="w-full px-2 py-1.5 rounded bg-[#E0E7FF] hover:bg-[#C7D2FE] text-[#191918] text-xs font-semibold transition-colors"
                                     >
                                         Confirmar
                                     </button>
@@ -312,12 +312,12 @@ function TrelloCard({
                             <div className="p-1.5 space-y-0.5">
                                 <button
                                     onClick={() => setShowUsers(true)}
-                                    className="w-full text-left px-2 py-1.5 hover:bg-slate-700 text-slate-200 rounded transition-colors text-xs font-medium flex items-center gap-2"
+                                    className="w-full text-left px-2 py-1.5 hover:bg-[#E0E7FF] text-[#191918] rounded transition-colors text-xs font-medium flex items-center gap-2"
                                 >
-                                    <UserIcon className="w-3.5 h-3.5 text-slate-400" />
+                                    <UserIcon className="w-3.5 h-3.5 text-[#6366F1]" />
                                     Alterar Membros
                                 </button>
-                                <div className="h-px bg-slate-700 my-1 mx-2" />
+                                <div className="h-px bg-[#E0E7FF] my-1 mx-2" />
                                 <button
                                     onClick={() => setShowDeleteConfirm(true)}
                                     className="w-full text-left px-2 py-1.5 hover:bg-red-500/10 text-red-400 rounded transition-colors text-xs font-medium flex items-center gap-2"
@@ -376,19 +376,19 @@ function AddCardForm({
                     if (e.key === "Escape") onCancel();
                 }}
                 placeholder="Insira um título para este cartão..."
-                className="w-full bg-slate-700/90 border border-slate-600/50 rounded-lg px-3 py-2.5 text-[13px] text-slate-200 placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400 resize-none min-h-[60px]"
+                className="w-full bg-[#E0E7FF]/90 border border-[#A5B4FC]/50 rounded-lg px-3 py-2.5 text-[13px] text-[#191918] placeholder:text-[#6366F1] outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400 resize-none min-h-[60px]"
                 rows={2}
             />
             <div className="flex items-center gap-2">
                 <button
                     onClick={handleSubmit}
-                    className="px-3 py-1.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors"
+                    className="px-3 py-1.5 rounded-lg bg-brand-500 text-[#191918] text-sm font-semibold hover:bg-brand-600 transition-colors"
                 >
                     Adicionar cartão
                 </button>
                 <button
                     onClick={onCancel}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                    className="p-1.5 rounded-lg text-[#6366F1] hover:text-[#191918] hover:bg-[#E0E7FF] transition-colors"
                 >
                     <X className="w-4 h-4" />
                 </button>
@@ -484,7 +484,7 @@ function TrelloList({
     }
 
     return (
-        <div className="flex flex-col w-[280px] min-w-[280px] max-h-full rounded-xl bg-slate-800 shrink-0">
+        <div className="flex flex-col w-[280px] min-w-[280px] max-h-full rounded-xl bg-[#EEF2FF] shrink-0">
             {/* Header */}
             <div className="flex items-center gap-2 px-3 pt-3 pb-2 relative">
                 {editingName ? (
@@ -500,12 +500,12 @@ function TrelloList({
                                 setEditingName(false);
                             }
                         }}
-                        className="flex-1 bg-slate-900 border-2 border-brand-400 rounded-lg px-2 py-1 text-sm font-bold text-white outline-none"
+                        className="flex-1 bg-[#F7F7F5] border-2 border-brand-400 rounded-lg px-2 py-1 text-sm font-bold text-[#191918] outline-none"
                     />
                 ) : (
                     <h3
                         onClick={() => setEditingName(true)}
-                        className="flex-1 text-sm font-bold text-slate-200 cursor-pointer px-1 py-0.5 rounded hover:bg-slate-700 transition-colors truncate"
+                        className="flex-1 text-sm font-bold text-[#191918] cursor-pointer px-1 py-0.5 rounded hover:bg-[#E0E7FF] transition-colors truncate"
                     >
                         {name}
                     </h3>
@@ -520,30 +520,30 @@ function TrelloList({
                                 setShowMenu(true);
                             }
                         }}
-                        className="p-1 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors"
+                        className="p-1 rounded-lg text-[#6366F1] hover:text-[#37352F] hover:bg-[#E0E7FF] transition-colors"
                     >
                         <MoreHorizontal className="w-4 h-4" />
                     </button>
                     
                     {/* Popover Menu */}
                     {showMenu && (
-                        <div className="absolute top-10 right-2 w-64 bg-slate-700 rounded-lg shadow-xl border border-slate-600 z-50 overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100">
+                        <div className="absolute top-10 right-2 w-64 bg-[#E0E7FF] rounded-lg shadow-xl border border-[#A5B4FC] z-50 overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100">
                             {showDeleteConfirm ? (
                                 <div className="p-3">
-                                    <p className="text-slate-200 font-medium mb-3">Excluir lista e todos os cartões?</p>
+                                    <p className="text-[#191918] font-medium mb-3">Excluir lista e todos os cartões?</p>
                                     <div className="flex gap-2">
                                         <button 
                                             onClick={() => {
                                                 onDeleteList(list.id);
                                                 resetMenu();
                                             }}
-                                            className="flex-1 px-2 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-semibold"
+                                            className="flex-1 px-2 py-1.5 bg-red-500 hover:bg-red-600 text-[#191918] rounded text-xs font-semibold"
                                         >
                                             Confirmar
                                         </button>
                                         <button 
                                             onClick={() => setShowDeleteConfirm(false)}
-                                            className="flex-1 px-2 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 rounded text-xs font-semibold"
+                                            className="flex-1 px-2 py-1.5 bg-[#C7D2FE] hover:bg-[#A5B4FC] text-[#191918] rounded text-xs font-semibold"
                                         >
                                             Cancelar
                                         </button>
@@ -554,11 +554,11 @@ function TrelloList({
                                     <div className="flex items-center gap-2 mb-2 px-2">
                                         <button 
                                             onClick={() => setShowMoveSubmenu(false)}
-                                            className="text-slate-400 hover:text-white"
+                                            className="text-[#6366F1] hover:text-[#191918]"
                                         >
                                             <X className="w-3 h-3" />
                                         </button>
-                                        <p className="text-slate-200 font-semibold text-xs border-b border-slate-600 flex-1 pb-1">Mover Lista</p>
+                                        <p className="text-[#191918] font-semibold text-xs border-b border-[#A5B4FC] flex-1 pb-1">Mover Lista</p>
                                     </div>
                                     <div className="max-h-48 overflow-y-auto">
                                         {Array.from({ length: totalLists }).map((_, i) => (
@@ -573,7 +573,7 @@ function TrelloList({
                                                     "w-full text-left px-3 py-1.5 rounded block",
                                                     i === list.position 
                                                         ? "text-brand-400 bg-brand-500/10 font-bold" 
-                                                        : "text-slate-300 hover:bg-slate-600"
+                                                        : "text-[#37352F] hover:bg-[#C7D2FE]"
                                                 )}
                                             >
                                                 Posição {i + 1} {i === list.position && "(Atual)"}
@@ -588,17 +588,17 @@ function TrelloList({
                                             resetMenu();
                                             setAddingCard(true);
                                         }}
-                                        className="w-full text-left px-2 py-1.5 hover:bg-slate-600 text-slate-200 rounded"
+                                        className="w-full text-left px-2 py-1.5 hover:bg-[#C7D2FE] text-[#191918] rounded"
                                     >
                                         Adicionar cartão
                                     </button>
                                     <button 
                                         onClick={() => setShowMoveSubmenu(true)}
-                                        className="w-full text-left px-2 py-1.5 hover:bg-slate-600 text-slate-200 rounded flex items-center justify-between"
+                                        className="w-full text-left px-2 py-1.5 hover:bg-[#C7D2FE] text-[#191918] rounded flex items-center justify-between"
                                     >
                                         <span>Mover lista</span>
                                     </button>
-                                    <div className="h-px bg-slate-600 my-1 mx-2" />
+                                    <div className="h-px bg-[#C7D2FE] my-1 mx-2" />
                                     <button 
                                         onClick={() => setShowDeleteConfirm(true)}
                                         className="w-full text-left px-2 py-1.5 hover:bg-red-500/20 text-red-400 rounded"
@@ -638,7 +638,7 @@ function TrelloList({
                 ) : (
                     <button
                         onClick={() => setAddingCard(true)}
-                        className="flex items-center gap-1.5 w-full px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-700/60 transition-colors"
+                        className="flex items-center gap-1.5 w-full px-3 py-2 rounded-lg text-sm text-[#6366F1] hover:text-[#191918] hover:bg-[#E0E7FF]/60 transition-colors"
                     >
                         <Plus className="w-4 h-4" />
                         Adicionar um cartão
@@ -677,7 +677,7 @@ function AddListForm({
     }
 
     return (
-        <div className="w-[280px] min-w-[280px] rounded-xl bg-slate-800 p-3 shrink-0 space-y-2">
+        <div className="w-[280px] min-w-[280px] rounded-xl bg-[#EEF2FF] p-3 shrink-0 space-y-2">
             <input
                 ref={ref}
                 value={name}
@@ -687,18 +687,18 @@ function AddListForm({
                     if (e.key === "Escape") onCancel();
                 }}
                 placeholder="Insira o título da lista..."
-                className="w-full bg-slate-900 border-2 border-brand-400 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none"
+                className="w-full bg-[#F7F7F5] border-2 border-brand-400 rounded-lg px-3 py-2 text-sm text-[#191918] placeholder:text-[#6366F1] outline-none"
             />
             <div className="flex items-center gap-2">
                 <button
                     onClick={handleSubmit}
-                    className="px-3 py-1.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors"
+                    className="px-3 py-1.5 rounded-lg bg-brand-500 text-[#191918] text-sm font-semibold hover:bg-brand-600 transition-colors"
                 >
                     Adicionar lista
                 </button>
                 <button
                     onClick={onCancel}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                    className="p-1.5 rounded-lg text-[#6366F1] hover:text-[#191918] hover:bg-[#E0E7FF] transition-colors"
                 >
                     <X className="w-4 h-4" />
                 </button>
@@ -899,11 +899,11 @@ export default function TarefasPage() {
         <div className="h-[calc(100vh-80px)] flex flex-col relative w-full overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between mb-4 shrink-0 bento-enter pl-4 pr-4 lg:pl-0 lg:pr-8">
-                <div>
-                    <h1 className="font-display text-3xl font-bold text-white tracking-tight">
+                <div className="px-6 py-4 rounded-xl bg-[#EEF2FF] border-2 border-[#818CF8] shadow-sm flex flex-col gap-1 w-fit min-w-[320px]">
+                    <h1 className="text-2xl font-bold text-[#191918] tracking-tight">
                         Tarefas
                     </h1>
-                    <p className="text-slate-400 mt-0.5 text-sm">
+                    <p className="text-sm font-medium text-[#6366F1]">
                         Quadro de tarefas da equipe — crie listas e cartões livremente
                     </p>
                 </div>
@@ -911,7 +911,7 @@ export default function TarefasPage() {
 
             {loading ? (
                 <div className="flex-1 flex justify-center mt-20">
-                    <div className="w-8 h-8 rounded-full border-4 border-slate-700 border-t-brand-500 animate-spin" />
+                    <div className="w-8 h-8 rounded-full border-4 border-[#C7D2FE] border-t-brand-500 animate-spin" />
                 </div>
             ) : (
                 <div className="flex-1 flex gap-4 overflow-x-auto overflow-y-hidden pb-4 items-start relative px-4 lg:px-0">
@@ -942,7 +942,7 @@ export default function TarefasPage() {
                     ) : (
                         <button
                             onClick={() => setAddingList(true)}
-                            className="flex items-center gap-2 w-[280px] min-w-[280px] px-4 py-3 rounded-xl bg-slate-800/60 hover:bg-slate-800 border-2 border-dashed border-slate-700 hover:border-brand-500/50 text-sm font-medium text-slate-400 hover:text-brand-400 transition-all shrink-0"
+                            className="flex items-center gap-2 w-[280px] min-w-[280px] px-4 py-3 rounded-xl bg-[#EEF2FF]/60 hover:bg-[#EEF2FF] border-2 border-dashed border-[#C7D2FE] hover:border-brand-500/50 text-sm font-medium text-[#6366F1] hover:text-brand-400 transition-all shrink-0"
                         >
                             <Plus className="w-4 h-4" />
                             Adicionar outra lista
