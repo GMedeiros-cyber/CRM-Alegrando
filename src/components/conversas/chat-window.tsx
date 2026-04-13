@@ -11,7 +11,7 @@ import { ReactionPicker } from "./reaction-picker";
 import { reactToMessage, deleteMessage, pinMessage } from "@/lib/actions/messages";
 
 export interface ChatWindowHandles {
-    addOptimisticMessage: (content: string) => void;
+    addOptimisticMessage: (content: string, senderName?: string) => void;
 }
 
 interface ChatWindowProps {

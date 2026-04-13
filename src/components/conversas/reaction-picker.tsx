@@ -14,9 +14,11 @@ interface ReactionPickerProps {
     onClose: () => void;
     /** inline=true: renderiza no fluxo (dentro de modal pai), sem portal */
     inline?: boolean;
+    /** Posição pré-calculada (quando triggerRef já desmontou) */
+    initialPos?: { top: number; left: number };
 }
 
-export function ReactionPicker({ triggerRef, onSelect, onClose, inline = false }: ReactionPickerProps) {
+export function ReactionPicker({ triggerRef, onSelect, onClose, inline = false, initialPos }: ReactionPickerProps) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const _triggerRef = triggerRef ?? { current: null } as React.RefObject<any>;
     const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -24,7 +26,9 @@ export function ReactionPicker({ triggerRef, onSelect, onClose, inline = false }
 
     // Calcula posição via getBoundingClientRect após montar
     useLayoutEffect(() => {
-        if (inline || !_triggerRef.current) return;
+        if (inline) return;
+        if (initialPos) { setPos(initialPos); return; }
+        if (!_triggerRef.current) return;
         const rect = _triggerRef.current.getBoundingClientRect();
 
         let top = rect.bottom + 6;
@@ -41,7 +45,7 @@ export function ReactionPicker({ triggerRef, onSelect, onClose, inline = false }
         if (left < 8) left = 8;
 
         setPos({ top, left });
-    }, [inline, _triggerRef]);
+    }, [inline, _triggerRef, initialPos]);
 
     // Fecha ao clicar fora ou pressionar ESC
     useEffect(() => {

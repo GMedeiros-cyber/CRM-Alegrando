@@ -506,9 +506,9 @@ export function ConversasLayout() {
         const currentReply = replyTo;
         setChatMessage("");
         setReplyTo(null);
-        addOptimisticRef.current?.(text);
+        addOptimisticRef.current?.(text, cliente.canal === "festas" ? "Márcia" : "Equipe");
 
-        startSendingMessage(async () => {
+        (async () => {
             try {
                 if (currentReply) {
                     const { replyToMessage } = await import("@/lib/actions/messages");
@@ -532,7 +532,7 @@ export function ConversasLayout() {
             } catch (err) {
                 setToast({ type: "error", text: `Erro ao enviar: ${err}` });
             }
-        });
+        })();
     }
 
     // ========= Tasks handlers =========
@@ -691,7 +691,7 @@ export function ConversasLayout() {
     // ========= Send attachments handler =========
     function handleSendAttachments() {
         if (!cliente?.telefone || attachments.length === 0) return;
-        startSendingMessage(async () => {
+        (async () => {
             for (const att of attachments) {
                 try {
                     const formData = new FormData();
@@ -708,7 +708,7 @@ export function ConversasLayout() {
                 }
             }
             setAttachments([]);
-        });
+        })();
     }
 
     // =============================================
