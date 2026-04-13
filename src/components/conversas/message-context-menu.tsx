@@ -191,7 +191,7 @@ export function MessageContextMenu({
             {/* ReactionPicker via Portal */}
             {showReactions && (
                 <ReactionPicker
-                    initialPos={reactPos}
+                    initialPos={reactPos ?? undefined}
                     onSelect={(emoji) => { setShowReactions(false); setReactPos(null); onReact(message, emoji); }}
                     onClose={() => { setShowReactions(false); setReactPos(null); }}
                 />
