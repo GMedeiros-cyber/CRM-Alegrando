@@ -160,6 +160,7 @@ export function ConversasLayout() {
         facebook: "",
         instagram: "",
         endereco: "",
+        responsavel: "",
         kanbanColumnId: "",
         ultimoPasseio: "",
         followupDias: 45,
@@ -219,6 +220,7 @@ export function ConversasLayout() {
     const [showNewLeadModal, setShowNewLeadModal] = useState(false);
     const [newLeadForm, setNewLeadForm] = useState({ telefone: "", nome: "" });
     const [newLeadCanal, setNewLeadCanal] = useState<"alegrando" | "festas">("alegrando");
+    const [newLeadResponsavel, setNewLeadResponsavel] = useState("");
     const [newLeadPhoto, setNewLeadPhoto] = useState<{ file: File; preview: string } | null>(null);
     const newLeadPhotoRef = useRef<HTMLInputElement>(null);
     const [isCreatingLead, startCreatingLead] = useTransition();
@@ -364,6 +366,7 @@ export function ConversasLayout() {
                     facebook: clienteData.facebook || "",
                     instagram: clienteData.instagram || "",
                     endereco: clienteData.endereco || "",
+                    responsavel: clienteData.responsavel || "",
                     kanbanColumnId: clienteData.kanbanColumnId || "",
                     ultimoPasseio: clienteData.ultimoPasseio || "",
                     followupDias: clienteData.followupDias ?? 45,
@@ -463,6 +466,7 @@ export function ConversasLayout() {
                     facebook,
                     instagram,
                     endereco: form.endereco || null,
+                    responsavel: form.responsavel || null,
                     kanbanColumnId: form.kanbanColumnId || null,
                     ultimoPasseio: form.ultimoPasseio || null,
                     followupDias: form.followupDias,
@@ -655,10 +659,12 @@ export function ConversasLayout() {
                     nome: newLeadForm.nome.trim() || null,
                     fotoUrl,
                     canal: newLeadCanal,
+                    responsavel: newLeadResponsavel.trim() || null,
                 });
                 setShowNewLeadModal(false);
                 setNewLeadForm({ telefone: "", nome: "" });
                 setNewLeadCanal("alegrando");
+                setNewLeadResponsavel("");
                 setNewLeadPhoto(null);
                 setToast({ type: "success", text: "Lead criado com sucesso!" });
                 loadList();
@@ -792,6 +798,18 @@ export function ConversasLayout() {
                                 onBlur={handleSave}
                                 placeholder="Rua, número, bairro, cidade"
                                 className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
+                            />
+                        </FieldGroup>
+                    )}
+
+                    {cliente.canal !== "festas" && (
+                        <FieldGroup icon={<UserRound className="w-3 h-3" />} label="Responsável">
+                            <Input
+                                value={form.responsavel}
+                                onChange={(e) => setForm((f) => ({ ...f, responsavel: e.target.value }))}
+                                onBlur={handleSave}
+                                placeholder="Nome do responsável"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
                             />
                         </FieldGroup>
                     )}
@@ -1872,9 +1890,9 @@ export function ConversasLayout() {
                                 <Input
                                     value={chatMessage}
                                     onChange={(e) => setChatMessage(e.target.value)}
-                                    disabled={cliente.iaAtiva || attachments.length > 0}
+                                    disabled={(cliente.iaAtiva && cliente.canal !== "festas") || attachments.length > 0}
                                     placeholder={
-                                        cliente.iaAtiva
+                                        (cliente.iaAtiva && cliente.canal !== "festas")
                                             ? "Pause a IA para enviar manualmente..."
                                             : attachments.length > 0
                                                 ? "Adicione legenda nos arquivos acima ou clique em enviar"
@@ -1892,7 +1910,7 @@ export function ConversasLayout() {
                                     onClick={attachments.length > 0 ? handleSendAttachments : handleSendMessage}
                                     disabled={
                                         isSendingMessage ||
-                                        cliente.iaAtiva ||
+                                        (cliente.iaAtiva && cliente.canal !== "festas") ||
                                         (attachments.length === 0 && !chatMessage.trim())
                                     }
                                     className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500 text-[#191918] dark:text-white hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 shrink-0"
@@ -1956,7 +1974,7 @@ export function ConversasLayout() {
                                 </h3>
                             </div>
                             <button
-                                onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); setNewLeadCanal("alegrando"); }}
+                                onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); setNewLeadCanal("alegrando"); setNewLeadResponsavel(""); }}
                                 className="p-1.5 rounded-lg hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors"
                             >
                                 <X className="w-4 h-4" />
@@ -2027,6 +2045,23 @@ export function ConversasLayout() {
                                     }}
                                 />
                             </div>
+                            {newLeadCanal !== "festas" && (
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
+                                        <UserRound className="w-3 h-3" />
+                                        Responsável
+                                    </Label>
+                                    <Input
+                                        value={newLeadResponsavel}
+                                        onChange={(e) => setNewLeadResponsavel(e.target.value)}
+                                        placeholder="Nome do responsável"
+                                        className="rounded-lg h-9 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") handleCreateLead();
+                                        }}
+                                    />
+                                </div>
+                            )}
                             <div className="space-y-1">
                                 <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
                                     Canal
@@ -2053,7 +2088,7 @@ export function ConversasLayout() {
 
                         <div className="flex gap-2 mt-5">
                             <button
-                                onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); setNewLeadCanal("alegrando"); }}
+                                onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); setNewLeadCanal("alegrando"); setNewLeadResponsavel(""); }}
                                 className="flex-1 h-9 rounded-lg border border-[#A5B4FC] dark:border-[#4a5568] text-sm font-medium text-[#37352F] dark:text-[#cbd5e1] hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] transition-colors"
                             >
                                 Cancelar

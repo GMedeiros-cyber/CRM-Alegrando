@@ -29,6 +29,7 @@ const updateClienteSchema = z.object({
     posPasseioAtivo: z.boolean().optional(),
     posPasseioEnviado: z.boolean().optional(),
     endereco: z.string().max(500).nullable().optional(),
+    responsavel: z.string().max(200).nullable().optional(),
 }).strict();
 
 // =============================================
@@ -78,6 +79,7 @@ export type ClienteDetail = {
     fotoUrl: string | null;
     endereco: string | null;
     canal: string;
+    responsavel: string | null;
 };
 
 /** Mensagem individual do chat */
@@ -238,6 +240,7 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         fotoUrl: data.foto_url || null,
         endereco: data.endereco || null,
         canal: (data.canal as string) || "alegrando",
+        responsavel: data.responsavel || null,
     };
 }
 
@@ -279,6 +282,7 @@ export async function updateCliente(
         posPasseioAtivo?: boolean;
         posPasseioEnviado?: boolean;
         endereco?: string | null;
+        responsavel?: string | null;
     }
 ) {
     const userId = await requireAuth();
@@ -318,6 +322,7 @@ export async function updateCliente(
     }
     if (parsed.posPasseioEnviado !== undefined) updateData.pos_passeio_enviado = parsed.posPasseioEnviado;
     if (parsed.endereco !== undefined) updateData.endereco = parsed.endereco;
+    if (parsed.responsavel !== undefined) updateData.responsavel = parsed.responsavel;
 
     await supabase
         .from("Clientes _WhatsApp")
@@ -587,6 +592,7 @@ export async function createCliente(data: {
     nome: string | null;
     fotoUrl?: string | null;
     canal?: string;
+    responsavel?: string | null;
 }): Promise<{ success: boolean }> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
@@ -607,9 +613,11 @@ export async function createCliente(data: {
         throw new Error("Lead já existe com este telefone");
     }
 
+    const canalLead = data.canal || "alegrando";
     const { data: primeiraColuna } = await supabase
         .from("kanban_columns")
         .select("id")
+        .eq("canal", canalLead)
         .order("position", { ascending: true })
         .limit(1)
         .maybeSingle();
@@ -617,11 +625,12 @@ export async function createCliente(data: {
     const { error } = await supabase.from("Clientes _WhatsApp").insert({
         telefone,
         nome: data.nome || null,
-        ia_ativa: true,
+        ia_ativa: data.canal === "festas" ? false : true,
         status_atendimento: "novo",
         foto_url: data.fotoUrl || null,
         kanban_column_id: primeiraColuna?.id || null,
         canal: data.canal || "alegrando",
+        ...(data.responsavel ? { responsavel: data.responsavel } : {}),
     });
 
     if (error) {
