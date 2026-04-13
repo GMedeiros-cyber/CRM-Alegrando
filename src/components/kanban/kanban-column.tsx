@@ -115,18 +115,18 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
             ref={setSortableRef}
             style={sortableStyle}
             className={cn(
-                "flex flex-col w-[300px] min-w-[300px] rounded-2xl bg-card/50 border-2 border-[#818CF8] shrink-0 transition-all duration-200 group/col",
+                "flex flex-col w-[300px] min-w-[300px] rounded-2xl bg-card/50 border-2 border-[#818CF8] dark:border-[#4a5568] shrink-0 transition-all duration-200 group/col",
                 isOver && "bg-brand-500/10 ring-2 ring-brand-400 ring-inset border-brand-500",
                 isColumnDragging && "opacity-40 shadow-none"
             )}
         >
             {/* Column header */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b-2 border-[#818CF8]">
+            <div className="flex items-center gap-2 px-4 py-3 border-b-2 border-[#818CF8] dark:border-[#4a5568]">
                 {/* Drag handle */}
                 <button
                     {...sortableAttrs}
                     {...sortableListeners}
-                    className="cursor-grab active:cursor-grabbing text-[#9B9A97] hover:text-[#6366F1] transition-colors shrink-0"
+                    className="cursor-grab active:cursor-grabbing text-[#9B9A97] dark:text-[#64748b] hover:text-[#6366F1] dark:hover:text-[#94a3b8] transition-colors shrink-0"
                     title="Arrastar coluna"
                 >
                     <GripVertical className="w-4 h-4" />
@@ -149,7 +149,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                         />
                         <button
                             onClick={handleSaveName}
-                            className="p-1 rounded-lg bg-brand-500 text-[#191918] hover:bg-brand-600 transition-colors"
+                            className="p-1 rounded-lg bg-brand-500 text-[#191918] dark:text-white hover:bg-brand-600 transition-colors"
                         >
                             <Check className="w-3 h-3" />
                         </button>
@@ -161,7 +161,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                         title="Clique para editar o nome"
                     >
                         {name}
-                        <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-[#6366F1]" />
+                        <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-[#6366F1] dark:text-[#94a3b8]" />
                     </h3>
                 )}
 
@@ -173,7 +173,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                 {!isProtected && !confirmingDelete && (
                     <button
                         onClick={() => setConfirmingDelete(true)}
-                        className="opacity-0 group-hover/col:opacity-100 text-[#9B9A97] hover:text-red-400 transition-all shrink-0"
+                        className="opacity-0 group-hover/col:opacity-100 text-[#9B9A97] dark:text-[#64748b] hover:text-red-400 transition-all shrink-0"
                         title="Excluir coluna"
                     >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -190,7 +190,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                     <div className="flex gap-1.5">
                         <button
                             onClick={handleDelete}
-                            className="flex-1 px-2 py-1.5 rounded-lg bg-red-500 text-[#191918] text-xs font-medium hover:bg-red-600 transition-colors"
+                            className="flex-1 px-2 py-1.5 rounded-lg bg-red-500 text-[#191918] dark:text-white text-xs font-medium hover:bg-red-600 transition-colors"
                         >
                             Confirmar
                         </button>
@@ -220,7 +220,7 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                 </SortableContext>
 
                 {leads.length === 0 && (
-                    <div className="flex-1 flex items-center justify-center py-8 text-xs text-muted-foreground border-2 border-dashed border-[#A5B4FC] rounded-xl">
+                    <div className="flex-1 flex items-center justify-center py-8 text-xs text-muted-foreground border-2 border-dashed border-[#A5B4FC] dark:border-[#4a5568] rounded-xl">
                         Arraste leads aqui
                     </div>
                 )}

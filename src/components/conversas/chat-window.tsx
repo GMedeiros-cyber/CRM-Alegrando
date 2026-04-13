@@ -38,8 +38,8 @@ function formatDateLabel(date: Date): string {
 function DateSeparator({ date }: { date: Date }) {
     return (
         <div className="flex items-center justify-center my-3 pointer-events-none select-none">
-            <div className="px-3 py-1 rounded-lg bg-[#EEF2FF]/80 border border-[#C7D2FE]/50 shadow-sm">
-                <span className="text-[11px] font-medium text-[#6366F1] uppercase tracking-wide">
+            <div className="px-3 py-1 rounded-lg bg-[#EEF2FF] dark:bg-[#1e2536]/80 border border-[#C7D2FE] dark:border-[#3d4a60]/50 shadow-sm">
+                <span className="text-[11px] font-medium text-[#6366F1] dark:text-[#94a3b8] uppercase tracking-wide">
                     {formatDateLabel(date)}
                 </span>
             </div>
@@ -56,7 +56,7 @@ function SenderLabel({ message, isClient }: { message: LeadMessage; isClient: bo
             <div className="flex items-center gap-1.5 mb-1">
                 <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#C7D2FE]/30">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#A5B4FC]" />
-                    <span className="text-[11px] font-bold tracking-wide text-[#6366F1]">
+                    <span className="text-[11px] font-bold tracking-wide text-[#6366F1] dark:text-[#94a3b8]">
                         {message.senderName || "Cliente"}
                     </span>
                 </div>
@@ -99,7 +99,7 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
     // Mensagem apagada para todos
     if (message.content === "__DELETED_FOR_ALL__") {
         return (
-            <span className={cn("flex items-center gap-1.5 text-sm italic", isSelf ? "text-[#191918]/50" : "text-[#6366F1]")}>
+            <span className={cn("flex items-center gap-1.5 text-sm italic", isSelf ? "text-[#191918] dark:text-white/50" : "text-[#6366F1] dark:text-[#94a3b8]")}>
                 <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
                 Mensagem apagada
             </span>
@@ -108,7 +108,7 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
 
     if (message.mediaType === "audio") {
         return (
-            <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918]/80" : "bg-[#E0E7FF]/60 text-[#37352F]")}>
+            <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918] dark:text-white/80" : "bg-[#E0E7FF] dark:bg-[#2d3347]/60 text-[#37352F] dark:text-[#cbd5e1]")}>
                 <Mic className="w-4 h-4 shrink-0" />
                 <span>Áudio recebido</span>
             </div>
@@ -120,12 +120,12 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
             return (
                 <div>
                     <img src={url} alt="imagem" className="max-w-[240px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(url, "_blank")} />
-                    {caption && <p className="text-xs mt-1.5 text-[#191918]/70 leading-relaxed">{caption}</p>}
+                    {caption && <p className="text-xs mt-1.5 text-[#191918] dark:text-white/70 leading-relaxed">{caption}</p>}
                 </div>
             );
         }
         return (
-            <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918]/80" : "bg-[#E0E7FF]/60 text-[#37352F]")}>
+            <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918] dark:text-white/80" : "bg-[#E0E7FF] dark:bg-[#2d3347]/60 text-[#37352F] dark:text-[#cbd5e1]")}>
                 <ImageIcon className="w-4 h-4 shrink-0" />
                 <span>Imagem recebida</span>
             </div>
@@ -140,11 +140,11 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
                     <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#191918]/5 hover:bg-[#191918]/10 transition-colors max-w-[240px] border border-[#191918]/10">
                         <FileText className="w-8 h-8 text-brand-400 shrink-0" />
                         <div className="min-w-0">
-                            <p className="text-sm font-medium text-[#191918] truncate">{decodeURIComponent(fileName)}</p>
-                            <p className="text-[10px] text-[#191918]/50">Toque para abrir</p>
+                            <p className="text-sm font-medium text-[#191918] dark:text-white truncate">{decodeURIComponent(fileName)}</p>
+                            <p className="text-[10px] text-[#191918] dark:text-white/50">Toque para abrir</p>
                         </div>
                     </a>
-                    {caption && <p className="text-xs mt-1.5 text-[#191918]/70 leading-relaxed">{caption}</p>}
+                    {caption && <p className="text-xs mt-1.5 text-[#191918] dark:text-white/70 leading-relaxed">{caption}</p>}
                 </div>
             );
         }
@@ -171,7 +171,7 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
     // Detectar JSON blob acidental (payload Z-API vazou como texto)
     if (content && content.startsWith("{") && content.includes("connectedPhone")) {
         return (
-            <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918]/80" : "bg-[#E0E7FF]/60 text-[#37352F]")}>
+            <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918] dark:text-white/80" : "bg-[#E0E7FF] dark:bg-[#2d3347]/60 text-[#37352F] dark:text-[#cbd5e1]")}>
                 <FileText className="w-4 h-4 shrink-0" />
                 <span>Mídia enviada pelo WhatsApp</span>
             </div>
@@ -192,17 +192,17 @@ function ChatSearchBar({ onSearch, matchCount, currentMatch, onPrev, onNext, onC
     useEffect(() => { inputRef.current?.focus(); }, []);
 
     return (
-        <div className="flex items-center gap-2 px-4 py-2 bg-[#EEF2FF]/90 border-b border-[#C7D2FE]/50 animate-in slide-in-from-top-2 duration-200">
-            <Search className="w-4 h-4 text-[#6366F1] shrink-0" />
+        <div className="flex items-center gap-2 px-4 py-2 bg-[#EEF2FF] dark:bg-[#1e2536]/90 border-b border-[#C7D2FE] dark:border-[#3d4a60]/50 animate-in slide-in-from-top-2 duration-200">
+            <Search className="w-4 h-4 text-[#6366F1] dark:text-[#94a3b8] shrink-0" />
             <input ref={inputRef} value={term} onChange={(e) => { setTerm(e.target.value); onSearch(e.target.value); }}
-                placeholder="Buscar na conversa..." className="flex-1 bg-transparent text-sm text-[#191918] placeholder:text-[#6366F1] outline-none"
+                placeholder="Buscar na conversa..." className="flex-1 bg-transparent text-sm text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8] outline-none"
                 onKeyDown={(e) => { if (e.key === "Enter") e.shiftKey ? onPrev() : onNext(); if (e.key === "Escape") onClose(); }} />
-            {term && <span className="text-[11px] text-[#6366F1] shrink-0 tabular-nums">{matchCount > 0 ? `${currentMatch + 1}/${matchCount}` : "0/0"}</span>}
+            {term && <span className="text-[11px] text-[#6366F1] dark:text-[#94a3b8] shrink-0 tabular-nums">{matchCount > 0 ? `${currentMatch + 1}/${matchCount}` : "0/0"}</span>}
             <div className="flex items-center gap-0.5">
-                <button onClick={onPrev} disabled={matchCount === 0} className="p-1 rounded hover:bg-[#E0E7FF] text-[#6366F1] hover:text-[#191918] disabled:opacity-30 transition-colors"><ChevronUp className="w-4 h-4" /></button>
-                <button onClick={onNext} disabled={matchCount === 0} className="p-1 rounded hover:bg-[#E0E7FF] text-[#6366F1] hover:text-[#191918] disabled:opacity-30 transition-colors"><ChevronDown className="w-4 h-4" /></button>
+                <button onClick={onPrev} disabled={matchCount === 0} className="p-1 rounded hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white disabled:opacity-30 transition-colors"><ChevronUp className="w-4 h-4" /></button>
+                <button onClick={onNext} disabled={matchCount === 0} className="p-1 rounded hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white disabled:opacity-30 transition-colors"><ChevronDown className="w-4 h-4" /></button>
             </div>
-            <button onClick={onClose} className="p-1 rounded hover:bg-[#E0E7FF] text-[#6366F1] hover:text-[#191918] transition-colors"><X className="w-4 h-4" /></button>
+            <button onClick={onClose} className="p-1 rounded hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors"><X className="w-4 h-4" /></button>
         </div>
     );
 }
@@ -216,9 +216,9 @@ function PinDurationModal({ onConfirm, onCancel }: { onConfirm: (duration: 1 | 2
 
     return (
         <div className="fixed inset-0 bg-[#191918]/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-[#EEF2FF] border border-[#C7D2FE]/60 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
-                <h3 className="text-base font-semibold text-[#191918] mb-1">Fixar mensagem</h3>
-                <p className="text-sm text-[#6366F1] mb-5">Por quanto tempo a mensagem ficará fixada?</p>
+            <div className="bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60]/60 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
+                <h3 className="text-base font-semibold text-[#191918] dark:text-white mb-1">Fixar mensagem</h3>
+                <p className="text-sm text-[#6366F1] dark:text-[#94a3b8] mb-5">Por quanto tempo a mensagem ficará fixada?</p>
                 <div className="space-y-2 mb-6">
                     {([1, 2, 3] as const).map((d) => (
                         <label
@@ -227,20 +227,20 @@ function PinDurationModal({ onConfirm, onCancel }: { onConfirm: (duration: 1 | 2
                                 "flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border",
                                 duration === d
                                     ? "bg-emerald-500/10 border-emerald-500/40 shadow-sm shadow-emerald-500/10"
-                                    : "bg-[#E0E7FF]/30 border-[#C7D2FE]/40 hover:bg-[#E0E7FF]/50"
+                                    : "bg-[#E0E7FF] dark:bg-[#2d3347]/30 border-[#C7D2FE] dark:border-[#3d4a60]/40 hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347]/50"
                             )}
                         >
-                            <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0", duration === d ? "border-emerald-400" : "border-[#A5B4FC]")}>
+                            <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0", duration === d ? "border-emerald-400" : "border-[#A5B4FC] dark:border-[#4a5568]")}>
                                 {duration === d && <div className="w-2 h-2 rounded-full bg-emerald-400" />}
                             </div>
                             <input type="radio" name="pin-duration" className="sr-only" value={d} checked={duration === d} onChange={() => setDuration(d)} />
-                            <span className="text-sm text-[#191918]">{labels[d]}</span>
+                            <span className="text-sm text-[#191918] dark:text-white">{labels[d]}</span>
                         </label>
                     ))}
                 </div>
                 <div className="flex gap-2 justify-end">
-                    <button onClick={onCancel} className="px-4 py-2 rounded-xl text-sm text-[#6366F1] hover:text-[#191918] hover:bg-[#E0E7FF]/60 transition-colors">Cancelar</button>
-                    <button onClick={() => onConfirm(duration)} className="px-5 py-2 rounded-xl text-sm bg-emerald-600 hover:bg-emerald-500 text-[#191918] font-medium transition-colors shadow-sm shadow-emerald-500/20">Fixar</button>
+                    <button onClick={onCancel} className="px-4 py-2 rounded-xl text-sm text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347]/60 transition-colors">Cancelar</button>
+                    <button onClick={() => onConfirm(duration)} className="px-5 py-2 rounded-xl text-sm bg-emerald-600 hover:bg-emerald-500 text-[#191918] dark:text-white font-medium transition-colors shadow-sm shadow-emerald-500/20">Fixar</button>
                 </div>
             </div>
         </div>
@@ -258,15 +258,15 @@ function RemoveReactionModal({ emoji, onRemove, onChangeReaction, onCancel }: {
 }) {
     return (
         <div className="fixed inset-0 bg-[#191918]/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-[#EEF2FF] border border-[#C7D2FE]/60 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-xs p-5 animate-in zoom-in-95 duration-200">
+            <div className="bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60]/60 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-xs p-5 animate-in zoom-in-95 duration-200">
                 <div className="text-4xl text-center mb-3">{emoji}</div>
-                <h3 className="text-sm font-semibold text-[#191918] text-center mb-1">Sua reação</h3>
-                <p className="text-xs text-[#6366F1] text-center mb-5">O que deseja fazer com esta reação?</p>
+                <h3 className="text-sm font-semibold text-[#191918] dark:text-white text-center mb-1">Sua reação</h3>
+                <p className="text-xs text-[#6366F1] dark:text-[#94a3b8] text-center mb-5">O que deseja fazer com esta reação?</p>
                 <div className="flex flex-col gap-2">
                     <button onClick={onChangeReaction} className="w-full px-4 py-2.5 rounded-xl text-sm bg-violet-500/20 border border-violet-500/30 text-violet-300 hover:bg-violet-500/30 transition-all font-medium">
                         Trocar reação
                     </button>
-                    <button onClick={onCancel} className="w-full px-4 py-2.5 rounded-xl text-sm text-[#6366F1] hover:text-[#37352F] transition-colors">
+                    <button onClick={onCancel} className="w-full px-4 py-2.5 rounded-xl text-sm text-[#6366F1] dark:text-[#94a3b8] hover:text-[#37352F] dark:hover:text-[#cbd5e1] transition-colors">
                         Cancelar
                     </button>
                 </div>
@@ -283,13 +283,13 @@ function DeleteConfirmModal({ onDeleteForAll, onDeleteForMe, onCancel }: {
 }) {
     return (
         <div className="fixed inset-0 bg-[#191918]/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-[#EEF2FF] border border-[#C7D2FE]/60 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
-                <h3 className="text-base font-semibold text-[#191918] mb-2">Apagar mensagem</h3>
-                <p className="text-sm text-[#6366F1] mb-5">Escolha como deseja apagar esta mensagem.</p>
+            <div className="bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60]/60 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
+                <h3 className="text-base font-semibold text-[#191918] dark:text-white mb-2">Apagar mensagem</h3>
+                <p className="text-sm text-[#6366F1] dark:text-[#94a3b8] mb-5">Escolha como deseja apagar esta mensagem.</p>
                 <div className="flex flex-col gap-2">
                     <button onClick={onDeleteForAll} className="w-full px-4 py-2.5 rounded-xl text-sm bg-rose-500/20 border border-rose-500/30 text-rose-300 hover:bg-rose-500/30 hover:text-rose-200 transition-all font-medium">Apagar para todos</button>
-                    <button onClick={onDeleteForMe} className="w-full px-4 py-2.5 rounded-xl text-sm bg-[#E0E7FF]/50 border border-[#A5B4FC]/40 text-[#37352F] hover:bg-[#E0E7FF] transition-all">Apagar para mim</button>
-                    <button onClick={onCancel} className="w-full px-4 py-2.5 rounded-xl text-sm text-[#6366F1] hover:text-[#37352F] transition-colors">Cancelar</button>
+                    <button onClick={onDeleteForMe} className="w-full px-4 py-2.5 rounded-xl text-sm bg-[#E0E7FF] dark:bg-[#2d3347]/50 border border-[#A5B4FC] dark:border-[#4a5568]/40 text-[#37352F] dark:text-[#cbd5e1] hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] transition-all">Apagar para mim</button>
+                    <button onClick={onCancel} className="w-full px-4 py-2.5 rounded-xl text-sm text-[#6366F1] dark:text-[#94a3b8] hover:text-[#37352F] dark:hover:text-[#cbd5e1] transition-colors">Cancelar</button>
                 </div>
             </div>
         </div>
@@ -502,17 +502,17 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
     }, []);
 
     if (loading) {
-        return <div className="flex-1 flex items-center justify-center bg-[#F7F7F5]"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>;
+        return <div className="flex-1 flex items-center justify-center bg-[#F7F7F5] dark:bg-[#0f1829]"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>;
     }
 
     if (messages.length === 0) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center text-center px-8 bg-[#F7F7F5]">
-                <div className="w-16 h-16 rounded-2xl bg-[#EEF2FF] flex items-center justify-center mb-4">
-                    <MessageSquare className="w-8 h-8 text-[#9B9A97]" />
+            <div className="flex-1 flex flex-col items-center justify-center text-center px-8 bg-[#F7F7F5] dark:bg-[#0f1829]">
+                <div className="w-16 h-16 rounded-2xl bg-[#EEF2FF] dark:bg-[#1e2536] flex items-center justify-center mb-4">
+                    <MessageSquare className="w-8 h-8 text-[#9B9A97] dark:text-[#64748b]" />
                 </div>
-                <p className="text-sm font-medium text-[#6366F1]">Nenhuma mensagem ainda</p>
-                <p className="text-xs text-[#9B9A97] mt-1 max-w-[250px]">Nenhuma mensagem recebida ou enviada até o momento.</p>
+                <p className="text-sm font-medium text-[#6366F1] dark:text-[#94a3b8]">Nenhuma mensagem ainda</p>
+                <p className="text-xs text-[#9B9A97] dark:text-[#64748b] mt-1 max-w-[250px]">Nenhuma mensagem recebida ou enviada até o momento.</p>
             </div>
         );
     }
@@ -520,7 +520,7 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
     let lastDateKey = "";
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden bg-[#F7F7F5] relative">
+        <div className="flex-1 flex flex-col overflow-hidden bg-[#F7F7F5] dark:bg-[#0f1829] relative">
             {/* Error toast */}
             {errorMsg && (
                 <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-rose-900/90 border border-rose-700/60 text-rose-200 text-sm shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-200 max-w-[320px] text-center">
@@ -561,8 +561,8 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
             {/* Inline reaction picker (abre quando usuário quer trocar reação) */}
             {reactionPickerFor && (
                 <div className="fixed inset-0 bg-[#191918]/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-[#EEF2FF] border border-[#C7D2FE]/60 rounded-2xl shadow-2xl p-4 animate-in zoom-in-95 duration-200">
-                        <p className="text-xs text-[#6366F1] text-center mb-3">Escolha uma reação</p>
+                    <div className="bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60]/60 rounded-2xl shadow-2xl p-4 animate-in zoom-in-95 duration-200">
+                        <p className="text-xs text-[#6366F1] dark:text-[#94a3b8] text-center mb-3">Escolha uma reação</p>
                         <ReactionPicker
                             onSelect={(emoji) => {
                                 const msg = reactionPickerFor;
@@ -595,7 +595,7 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
                 />
             )}
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-1 bg-[#F7F7F5]">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-1 bg-[#F7F7F5] dark:bg-[#0f1829]">
                 {messages.map((msg, idx) => {
                     const isClient = msg.senderType === "cliente" || msg.senderType === "lead";
                     const isSelf = msg.senderType === "ia" || msg.senderType === "humano" || msg.senderType === "equipe";
@@ -635,7 +635,7 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
                                         className={cn(
                                             "relative px-4 py-2.5 text-sm leading-relaxed",
                                             isClient
-                                                ? "bg-[#EEF2FF] border border-[#C7D2FE] text-[#191918] rounded-2xl rounded-bl-sm"
+                                                ? "bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60] text-[#191918] dark:text-white rounded-2xl rounded-bl-sm"
                                                 : msg.senderType === "ia"
                                                     ? "bg-[rgba(139,92,246,0.10)] border border-[rgba(139,92,246,0.20)] text-[#4c1d95] rounded-2xl rounded-br-sm shadow-sm"
                                                     : "bg-[rgba(34,197,94,0.10)] border border-[rgba(34,197,94,0.25)] text-[#14532d] rounded-2xl rounded-br-sm shadow-sm",
@@ -656,12 +656,12 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
                                             {msg.replyTo && (
                                                 <div className={cn(
                                                     "mb-2 pl-2.5 border-l-2 py-1 rounded-sm",
-                                                    isClient ? "border-[#A5B4FC] bg-[#E0E7FF]/40" : "border-[#191918]/20 bg-[#191918]/5",
+                                                    isClient ? "border-[#A5B4FC] dark:border-[#4a5568] bg-[#E0E7FF] dark:bg-[#2d3347]/40" : "border-[#191918]/20 bg-[#191918]/5",
                                                 )}>
-                                                    <p className={cn("text-[11px] font-semibold mb-0.5", isClient ? "text-[#6366F1]" : "text-[#191918]/60")}>
+                                                    <p className={cn("text-[11px] font-semibold mb-0.5", isClient ? "text-[#6366F1] dark:text-[#94a3b8]" : "text-[#191918] dark:text-white/60")}>
                                                         {msg.replyTo.senderName || "Mensagem"}
                                                     </p>
-                                                    <p className={cn("text-[11px] line-clamp-1", isClient ? "text-[#6366F1]" : "text-[#191918]/50")}>
+                                                    <p className={cn("text-[11px] line-clamp-1", isClient ? "text-[#6366F1] dark:text-[#94a3b8]" : "text-[#191918] dark:text-white/50")}>
                                                         {msg.replyTo.content}
                                                     </p>
                                                 </div>
@@ -669,7 +669,7 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
 
                                             <SenderLabel message={msg} isClient={isClient} />
                                             <MessageContent message={msg} isSelf={isSelf} highlight={searchTerm || undefined} />
-                                            <p className={cn("text-[10px] mt-1 text-right", isClient ? "text-[#6366F1]" : "text-[#191918]/50")}>
+                                            <p className={cn("text-[10px] mt-1 text-right", isClient ? "text-[#6366F1] dark:text-[#94a3b8]" : "text-[#191918] dark:text-white/50")}>
                                                 {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}
                                             </p>
                                         </div>
@@ -710,12 +710,12 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
                                                                 "flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border transition-all text-xs",
                                                                 isMine
                                                                     ? "bg-violet-500/25 border-violet-400/50 hover:bg-violet-500/35 shadow-sm shadow-violet-500/20"
-                                                                    : "bg-[#E0E7FF]/80 border-[#A5B4FC]/60 hover:bg-[#C7D2FE]/80"
+                                                                    : "bg-[#E0E7FF] dark:bg-[#2d3347]/80 border-[#A5B4FC] dark:border-[#4a5568]/60 hover:bg-[#C7D2FE] dark:hover:bg-[#3d4a60]/80"
                                                             )}
                                                         >
                                                             <span>{emoji}</span>
                                                             {(users as string[]).length > 1 && (
-                                                                <span className={cn("text-[10px] ml-0.5", isMine ? "text-violet-300" : "text-[#37352F]")}>
+                                                                <span className={cn("text-[10px] ml-0.5", isMine ? "text-violet-300" : "text-[#37352F] dark:text-[#cbd5e1]")}>
                                                                     {(users as string[]).length}
                                                                 </span>
                                                             )}
