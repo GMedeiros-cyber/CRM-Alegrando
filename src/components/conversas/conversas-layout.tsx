@@ -159,6 +159,7 @@ export function ConversasLayout() {
         linkedin: "",
         facebook: "",
         instagram: "",
+        endereco: "",
         kanbanColumnId: "",
         ultimoPasseio: "",
         followupDias: 45,
@@ -362,6 +363,7 @@ export function ConversasLayout() {
                     linkedin: clienteData.linkedin || "",
                     facebook: clienteData.facebook || "",
                     instagram: clienteData.instagram || "",
+                    endereco: clienteData.endereco || "",
                     kanbanColumnId: clienteData.kanbanColumnId || "",
                     ultimoPasseio: clienteData.ultimoPasseio || "",
                     followupDias: clienteData.followupDias ?? 45,
@@ -460,6 +462,7 @@ export function ConversasLayout() {
                     linkedin,
                     facebook,
                     instagram,
+                    endereco: form.endereco || null,
                     kanbanColumnId: form.kanbanColumnId || null,
                     ultimoPasseio: form.ultimoPasseio || null,
                     followupDias: form.followupDias,
@@ -780,6 +783,18 @@ export function ConversasLayout() {
                             className="rounded-lg h-8 text-sm bg-slate-800/50 border-slate-700 text-slate-400 cursor-not-allowed"
                         />
                     </FieldGroup>
+
+                    {cliente.canal !== "festas" && (
+                        <FieldGroup icon={<MapPin className="w-3 h-3" />} label="Endereço">
+                            <Input
+                                value={form.endereco}
+                                onChange={(e) => setForm((f) => ({ ...f, endereco: e.target.value }))}
+                                onBlur={handleSave}
+                                placeholder="Rua, número, bairro, cidade"
+                                className="rounded-lg h-8 text-sm bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                            />
+                        </FieldGroup>
+                    )}
 
                     <div className="grid grid-cols-2 gap-2">
                         <FieldGroup label="Email">

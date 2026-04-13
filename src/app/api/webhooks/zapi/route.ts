@@ -75,7 +75,10 @@ function extractMessageContent(payload: ZApiWebhookPayload): {
     const caption = payload.document.caption || "";
     return { content: caption ? `${url}|||${caption}` : url, media_type: "document" };
   }
-  return { content: JSON.stringify(payload), media_type: "text" };
+  const tipo = (payload as Record<string, unknown>).type as string || "mensagem";
+  const tipoLabel = tipo === "SentCallback" || tipo === "ReceivedCallback" ? "mídia" : tipo;
+  console.warn("[ZAPI-PROXY] Tipo não tratado:", tipo, Object.keys(payload));
+  return { content: `📎 ${tipoLabel} enviada pelo WhatsApp`, media_type: "document" };
 }
 
 /** Retorna true se o valor é um LID do WhatsApp (ex: "219279655968887@lid") */
