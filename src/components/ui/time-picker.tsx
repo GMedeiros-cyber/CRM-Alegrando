@@ -51,18 +51,18 @@ export function TimePicker({ value, onChange, className }: TimePickerProps) {
                 <Button
                     variant="outline"
                     className={cn(
-                        "justify-start text-left font-normal h-8 text-sm bg-slate-800 border-slate-600 text-white hover:bg-slate-700 hover:text-white",
+                        "justify-start text-left font-normal h-8 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918] hover:bg-[#E0E7FF] hover:text-[#191918]",
                         className
                     )}
                 >
-                    <Clock className="mr-2 h-3.5 w-3.5 text-slate-400" />
+                    <Clock className="mr-2 h-3.5 w-3.5 text-[#6366F1]" />
                     {value || "09:00"}
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-48 p-0 bg-slate-800 border-slate-700" align="start">
+            <PopoverContent className="w-48 p-0 bg-[#EEF2FF] border-[#C7D2FE]" align="start">
                 <div className="flex h-[200px]">
                     {/* Hours */}
-                    <div ref={hourRef} className="flex-1 overflow-y-auto border-r border-slate-700 py-1">
+                    <div ref={hourRef} className="flex-1 overflow-y-auto border-r border-[#C7D2FE] py-1">
                         {hours.map(h => (
                             <button
                                 key={h}
@@ -71,8 +71,8 @@ export function TimePicker({ value, onChange, className }: TimePickerProps) {
                                 className={cn(
                                     "w-full px-3 py-1.5 text-sm text-center transition-colors",
                                     selectedHour === h
-                                        ? "bg-brand-500 text-white font-semibold"
-                                        : "text-slate-300 hover:bg-slate-700"
+                                        ? "bg-brand-500 text-[#191918] font-semibold"
+                                        : "text-[#37352F] hover:bg-[#E0E7FF]"
                                 )}
                             >
                                 {String(h).padStart(2, "0")}
@@ -89,8 +89,8 @@ export function TimePicker({ value, onChange, className }: TimePickerProps) {
                                 className={cn(
                                     "w-full px-3 py-1.5 text-sm text-center transition-colors",
                                     selectedMin === m
-                                        ? "bg-brand-500 text-white font-semibold"
-                                        : "text-slate-300 hover:bg-slate-700"
+                                        ? "bg-brand-500 text-[#191918] font-semibold"
+                                        : "text-[#37352F] hover:bg-[#E0E7FF]"
                                 )}
                             >
                                 {String(m).padStart(2, "0")}
@@ -100,7 +100,7 @@ export function TimePicker({ value, onChange, className }: TimePickerProps) {
                 </div>
                 <button
                     onClick={handleConfirm}
-                    className="w-full py-2 text-sm font-semibold text-white bg-brand-500 hover:bg-brand-600 transition-colors"
+                    className="w-full py-2 text-sm font-semibold text-[#191918] bg-brand-500 hover:bg-brand-600 transition-colors"
                 >
                     Confirmar
                 </button>

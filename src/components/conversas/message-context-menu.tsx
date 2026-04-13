@@ -111,7 +111,7 @@ export function MessageContextMenu({
                 ref={triggerRef}
                 type="button"
                 onClick={toggleOpen}
-                className="opacity-0 group-hover/msg:opacity-100 flex items-center justify-center w-5 h-5 rounded-full bg-black/30 backdrop-blur-sm text-white/80 hover:bg-black/50 hover:text-white transition-all"
+                className="opacity-0 group-hover/msg:opacity-100 flex items-center justify-center w-5 h-5 rounded-full bg-[#191918]/15 backdrop-blur-sm text-white/80 hover:bg-black/50 hover:text-[#191918] transition-all"
                 title="Opções"
             >
                 <ChevronDown className="w-3.5 h-3.5" />
@@ -122,7 +122,7 @@ export function MessageContextMenu({
                 <div
                     ref={menuRef}
                     style={{ position: "fixed", top: menuPos.top, left: menuPos.left, zIndex: 9999, width: MENU_W }}
-                    className="bg-slate-800/95 backdrop-blur-sm border border-slate-600/50 rounded-xl shadow-2xl shadow-black/40 py-1.5 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+                    className="bg-[#EEF2FF]/95 backdrop-blur-sm border border-[#A5B4FC]/50 rounded-xl shadow-2xl shadow-black/40 py-1.5 overflow-hidden animate-in fade-in zoom-in-95 duration-150"
                 >
                     <button
                         type="button"
@@ -139,7 +139,7 @@ export function MessageContextMenu({
                             setOpen(false);
                             setShowReactions(true);
                         }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-violet-500/15 text-slate-300 hover:text-violet-200 transition-colors text-sm group/item"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-violet-500/15 text-[#37352F] hover:text-violet-200 transition-colors text-sm group/item"
                     >
                         <SmilePlus className="h-3.5 w-3.5 text-violet-400 group-hover/item:scale-110 transition-transform" />
                         Reagir
@@ -147,7 +147,7 @@ export function MessageContextMenu({
                     <button
                         type="button"
                         onClick={() => { setOpen(false); onReply(message); }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-sky-500/15 text-slate-300 hover:text-sky-200 transition-colors text-sm group/item"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-sky-500/15 text-[#37352F] hover:text-sky-200 transition-colors text-sm group/item"
                     >
                         <Reply className="h-3.5 w-3.5 text-sky-400 group-hover/item:scale-110 transition-transform" />
                         Responder
@@ -155,15 +155,15 @@ export function MessageContextMenu({
                     <button
                         type="button"
                         onClick={() => { setOpen(false); onCopy(message.content); }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-700/60 text-slate-300 hover:text-slate-100 transition-colors text-sm group/item"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#E0E7FF]/60 text-[#37352F] hover:text-[#191918] transition-colors text-sm group/item"
                     >
-                        <Copy className="h-3.5 w-3.5 text-slate-400 group-hover/item:scale-110 transition-transform" />
+                        <Copy className="h-3.5 w-3.5 text-[#6366F1] group-hover/item:scale-110 transition-transform" />
                         Copiar
                     </button>
                     <button
                         type="button"
                         onClick={() => { setOpen(false); onPin(message, !message.pinned); }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-amber-500/15 text-slate-300 hover:text-amber-200 transition-colors text-sm group/item"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-amber-500/15 text-[#37352F] hover:text-amber-200 transition-colors text-sm group/item"
                     >
                         {message.pinned
                             ? <PinOff className="h-3.5 w-3.5 text-amber-400 group-hover/item:scale-110 transition-transform" />
@@ -173,7 +173,7 @@ export function MessageContextMenu({
                     </button>
                     {isTeam && (
                         <>
-                            <div className="my-1 mx-3 border-t border-slate-700/60" />
+                            <div className="my-1 mx-3 border-t border-[#C7D2FE]/60" />
                             <button
                                 type="button"
                                 onClick={() => { setOpen(false); onDelete(message); }}

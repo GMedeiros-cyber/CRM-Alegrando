@@ -358,7 +358,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 <button
                     onClick={() => loadEvents()}
                     disabled={loadingEvents}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 text-sm hover:bg-slate-600 transition-colors disabled:opacity-40"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#E0E7FF] text-[#37352F] text-sm hover:bg-[#C7D2FE] transition-colors disabled:opacity-40"
                 >
                     <RefreshCw className={`w-3.5 h-3.5 ${loadingEvents ? "animate-spin" : ""}`} />
                     Atualizar
@@ -366,8 +366,8 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
             </div>
             <div className="agenda-dark-calendar relative">
                 {loadingEvents && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/60 rounded-2xl backdrop-blur-sm">
-                        <div className="flex items-center gap-3 text-slate-300">
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#F7F7F5]/60 rounded-2xl backdrop-blur-sm">
+                        <div className="flex items-center gap-3 text-[#37352F]">
                             <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
                             <span className="text-sm font-medium">
                                 Carregando Google Calendar...
@@ -410,18 +410,18 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 <DialogContent
                     className={
                         modalMode === "view"
-                            ? "bg-slate-800 border-2 border-slate-700 text-white max-w-md max-h-[90vh] overflow-y-auto"
-                            : "bg-slate-800 border-2 border-slate-700 text-white max-w-md"
+                            ? "bg-[#EEF2FF] border-2 border-[#C7D2FE] text-[#191918] max-w-md max-h-[90vh] overflow-y-auto"
+                            : "bg-[#EEF2FF] border-2 border-[#C7D2FE] text-[#191918] max-w-md"
                     }
                 >
                     {modalMode === "create" ? (
                         <>
                             <DialogHeader>
-                                <DialogTitle className="font-display text-lg text-white flex items-center gap-2">
+                                <DialogTitle className="font-display text-lg text-[#191918] flex items-center gap-2">
                                     <CalendarDays className="w-5 h-5 text-brand-400" />
                                     Novo Agendamento
                                 </DialogTitle>
-                                <DialogDescription className="text-slate-400">
+                                <DialogDescription className="text-[#6366F1]">
                                     Crie um novo evento no Google Calendar.
                                 </DialogDescription>
                             </DialogHeader>
@@ -429,7 +429,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                             <div className="space-y-4 mt-4">
                                 {/* Título */}
                                 <div className="space-y-1.5">
-                                    <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                    <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider">
                                         Título do Evento
                                     </Label>
                                     <Input
@@ -438,13 +438,13 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             setForm((f) => ({ ...f, titulo: e.target.value }))
                                         }
                                         placeholder="Ex: Excursão Sítio — Colégio Lumiar"
-                                        className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 rounded-xl"
+                                        className="bg-[#F7F7F5] border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1] rounded-xl"
                                     />
                                 </div>
 
                                 {/* Descrição */}
                                 <div className="space-y-1.5">
-                                    <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                    <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider">
                                         Descrição / Pauta
                                     </Label>
                                     <textarea
@@ -452,14 +452,14 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))}
                                         placeholder="Ex: Apresentação do roteiro Hopi Hari para 80 alunos do 5º ano"
                                         rows={2}
-                                        className="w-full rounded-xl bg-slate-900 border border-slate-600 text-white placeholder:text-slate-500 px-3 py-2 text-sm resize-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 outline-none"
+                                        className="w-full rounded-xl bg-[#F7F7F5] border border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1] px-3 py-2 text-sm resize-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 outline-none"
                                     />
                                 </div>
 
                                 {/* Datas */}
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider">
                                             Data Início
                                         </Label>
                                         <DatePicker
@@ -473,7 +473,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider">
                                             Hora Início
                                         </Label>
                                         <TimePicker
@@ -486,7 +486,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
 
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider">
                                             Data Fim
                                         </Label>
                                         <DatePicker
@@ -500,7 +500,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider">
                                             Hora Fim
                                         </Label>
                                         <TimePicker
@@ -513,7 +513,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
 
                                 {/* Cliente select */}
                                 <div className="space-y-1.5">
-                                    <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                    <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider flex items-center gap-1">
                                         <School className="w-3 h-3" />
                                         Vincular a um Cliente
                                     </Label>
@@ -523,10 +523,10 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             setForm((f) => ({ ...f, clienteTelefone: v }))
                                         }
                                     >
-                                        <SelectTrigger className="bg-slate-900 border-slate-600 text-white rounded-xl">
+                                        <SelectTrigger className="bg-[#F7F7F5] border-[#A5B4FC] text-[#191918] rounded-xl">
                                             <SelectValue placeholder="Selecione um cliente..." />
                                         </SelectTrigger>
-                                        <SelectContent className="bg-slate-800 border-slate-700">
+                                        <SelectContent className="bg-[#EEF2FF] border-[#C7D2FE]">
                                             {clientes.map((cliente) => (
                                                 <SelectItem
                                                     key={cliente.telefone}
@@ -558,7 +558,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                 <button
                                     onClick={handleSaveEvent}
                                     disabled={!form.titulo || !form.dataInicio || isPending}
-                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-lg shadow-brand-500/25 mt-2"
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-[#191918] font-medium text-sm hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-lg shadow-brand-500/25 mt-2"
                                 >
                                     {isPending ? (
                                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -572,10 +572,10 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                     ) : selectedEvent ? (
                         <>
                             <DialogHeader>
-                                <DialogTitle className="font-display text-lg text-white">
+                                <DialogTitle className="font-display text-lg text-[#191918]">
                                     {selectedEvent.title}
                                 </DialogTitle>
-                                <DialogDescription className="text-slate-400">
+                                <DialogDescription className="text-[#6366F1]">
                                     Detalhes do agendamento
                                 </DialogDescription>
                             </DialogHeader>
@@ -590,7 +590,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                 {/* Details grid */}
                                 <div className="grid grid-cols-2 gap-3">
                                     {selectedEvent.extendedProps.leadId ? (
-                                        <div className="bg-slate-900/60 rounded-xl p-3 border border-brand-500/30">
+                                        <div className="bg-[#F7F7F5]/60 rounded-xl p-3 border border-brand-500/30">
                                             <div className="flex items-center gap-1.5 mb-1">
                                                 <School className="w-4 h-4 text-brand-400" />
                                                 <span className="text-[10px] font-semibold text-brand-400 uppercase tracking-wider">
@@ -601,7 +601,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         </div>
                                     ) : (
                                         <InfoCard
-                                            icon={<School className="w-4 h-4 text-slate-400" />}
+                                            icon={<School className="w-4 h-4 text-[#6366F1]" />}
                                             label="Título"
                                             value={selectedEvent.extendedProps.nomeEscola || selectedEvent.title}
                                         />
@@ -615,14 +615,14 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         )}
                                     />
                                     {selectedEvent.extendedProps.description && (
-                                        <div className="col-span-2 bg-slate-900/60 rounded-xl p-3 border border-slate-700/50">
+                                        <div className="col-span-2 bg-[#F7F7F5]/60 rounded-xl p-3 border border-[#C7D2FE]/50">
                                             <div className="flex items-center gap-1.5 mb-1">
-                                                <FileText className="w-4 h-4 text-slate-400" />
-                                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                                                <FileText className="w-4 h-4 text-[#6366F1]" />
+                                                <span className="text-[10px] font-semibold text-[#6366F1] uppercase tracking-wider">
                                                     Descrição
                                                 </span>
                                             </div>
-                                            <p className="text-sm text-slate-300 whitespace-pre-line">
+                                            <p className="text-sm text-[#37352F] whitespace-pre-line">
                                                 {selectedEvent.extendedProps.description}
                                             </p>
                                         </div>
@@ -647,16 +647,16 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                 {/* Formulário de edição direto */}
                                 <div className="space-y-3">
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Título</Label>
+                                        <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider">Título</Label>
                                         <Input
                                             value={editForm.titulo}
                                             onChange={(e) => setEditForm(f => ({ ...f, titulo: e.target.value }))}
-                                            className="bg-slate-900 border-slate-600 text-white rounded-xl"
+                                            className="bg-[#F7F7F5] border-[#A5B4FC] text-[#191918] rounded-xl"
                                         />
                                     </div>
                                     {/* Descrição */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider">
                                             Descrição / Pauta
                                         </Label>
                                         <textarea
@@ -664,12 +664,12 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             onChange={(e) => setEditForm((f) => ({ ...f, descricao: e.target.value }))}
                                             placeholder="Descrição do evento..."
                                             rows={2}
-                                            className="w-full rounded-xl bg-slate-900 border border-slate-600 text-white placeholder:text-slate-500 px-3 py-2 text-sm resize-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 outline-none"
+                                            className="w-full rounded-xl bg-[#F7F7F5] border border-[#A5B4FC] text-[#191918] placeholder:text-[#6366F1] px-3 py-2 text-sm resize-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 outline-none"
                                         />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Início</Label>
+                                            <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider">Data Início</Label>
                                             <DatePicker
                                                 value={editForm.dataInicio}
                                                 onChange={(v) => { setDateError(null); setEditForm(f => ({ ...f, dataInicio: v })); }}
@@ -678,7 +678,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             />
                                         </div>
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hora Início</Label>
+                                            <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider">Hora Início</Label>
                                             <TimePicker
                                                 value={editForm.horaInicio}
                                                 onChange={(v) => setEditForm(f => ({ ...f, horaInicio: v }))}
@@ -688,7 +688,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data Fim</Label>
+                                            <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider">Data Fim</Label>
                                             <DatePicker
                                                 value={editForm.dataFim}
                                                 onChange={(v) => { setDateError(null); setEditForm(f => ({ ...f, dataFim: v })); }}
@@ -697,7 +697,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             />
                                         </div>
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hora Fim</Label>
+                                            <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider">Hora Fim</Label>
                                             <TimePicker
                                                 value={editForm.horaFim}
                                                 onChange={(v) => setEditForm(f => ({ ...f, horaFim: v }))}
@@ -707,7 +707,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                     </div>
                                     {/* Cliente select */}
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                        <Label className="text-xs font-semibold text-[#6366F1] uppercase tracking-wider flex items-center gap-1">
                                             <School className="w-3 h-3" />
                                             Vincular a um Cliente
                                         </Label>
@@ -715,10 +715,10 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             value={editForm.clienteTelefone}
                                             onValueChange={(v) => setEditForm((f) => ({ ...f, clienteTelefone: v }))}
                                         >
-                                            <SelectTrigger className="bg-slate-900 border-slate-600 text-white rounded-xl">
+                                            <SelectTrigger className="bg-[#F7F7F5] border-[#A5B4FC] text-[#191918] rounded-xl">
                                                 <SelectValue placeholder="Selecione um cliente..." />
                                             </SelectTrigger>
-                                            <SelectContent className="bg-slate-800 border-slate-700">
+                                            <SelectContent className="bg-[#EEF2FF] border-[#C7D2FE]">
                                                 {clientes.map((c) => (
                                                     <SelectItem key={c.telefone} value={c.telefone}>
                                                         {c.nome || c.telefone}
@@ -750,14 +750,14 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                                 <button
                                                     onClick={() => setConfirmingDelete(false)}
                                                     disabled={isPending}
-                                                    className="flex-1 px-3 py-2 rounded-lg bg-slate-700 text-slate-200 text-sm font-medium hover:bg-slate-600 transition-colors disabled:opacity-40"
+                                                    className="flex-1 px-3 py-2 rounded-lg bg-[#E0E7FF] text-[#191918] text-sm font-medium hover:bg-[#C7D2FE] transition-colors disabled:opacity-40"
                                                 >
                                                     Cancelar
                                                 </button>
                                                 <button
                                                     onClick={() => handleDeleteEvent(selectedEvent.extendedProps.googleEventId)}
                                                     disabled={isPending}
-                                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors disabled:opacity-40"
+                                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-500 text-[#191918] text-sm font-medium hover:bg-red-600 transition-colors disabled:opacity-40"
                                                 >
                                                     {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                                                     Excluir
@@ -769,7 +769,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             <button
                                                 onClick={handleUpdateEvent}
                                                 disabled={isPending}
-                                                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 disabled:opacity-40 transition-colors shadow-lg shadow-brand-500/25"
+                                                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-[#191918] font-medium text-sm hover:bg-brand-600 disabled:opacity-40 transition-colors shadow-lg shadow-brand-500/25"
                                             >
                                                 {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                                 Salvar
@@ -777,7 +777,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             {selectedEvent.extendedProps.leadId && (
                                                 <button
                                                     onClick={() => goToConversas(selectedEvent.extendedProps.leadId)}
-                                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-700 text-slate-200 font-medium text-sm hover:bg-slate-600 transition-colors"
+                                                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#E0E7FF] text-[#191918] font-medium text-sm hover:bg-[#C7D2FE] transition-colors"
                                                 >
                                                     💬 Conversa
                                                 </button>
@@ -836,14 +836,14 @@ function InfoCard({
     value: string;
 }) {
     return (
-        <div className="bg-slate-900/60 rounded-xl p-3 border border-slate-700/50">
+        <div className="bg-[#F7F7F5]/60 rounded-xl p-3 border border-[#C7D2FE]/50">
             <div className="flex items-center gap-1.5 mb-1">
                 {icon}
-                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                <span className="text-[10px] font-semibold text-[#6366F1] uppercase tracking-wider">
                     {label}
                 </span>
             </div>
-            <p className="text-sm font-medium text-slate-200 truncate">{value}</p>
+            <p className="text-sm font-medium text-[#191918] truncate">{value}</p>
         </div>
     );
 }

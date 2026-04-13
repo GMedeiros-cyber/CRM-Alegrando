@@ -46,16 +46,16 @@ export function DatePicker({
                     variant="outline"
                     disabled={disabled}
                     className={cn(
-                        "justify-start text-left font-normal h-8 text-sm bg-slate-800 border-slate-600 text-white hover:bg-slate-700 hover:text-white",
-                        !value && "text-slate-500",
+                        "justify-start text-left font-normal h-8 text-sm bg-[#EEF2FF] border-[#A5B4FC] text-[#191918] hover:bg-[#E0E7FF] hover:text-[#191918]",
+                        !value && "text-[#6366F1]",
                         className
                     )}
                 >
-                    <CalendarDays className="mr-2 h-3.5 w-3.5 text-slate-400" />
+                    <CalendarDays className="mr-2 h-3.5 w-3.5 text-[#6366F1]" />
                     {date ? format(date, "dd/MM/yyyy", { locale: ptBR }) : placeholder}
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[280px] p-0 bg-slate-800 border-slate-700" align="start">
+            <PopoverContent className="w-[280px] p-0 bg-[#EEF2FF] border-[#C7D2FE]" align="start">
                 <Calendar
                     mode="single"
                     selected={date}

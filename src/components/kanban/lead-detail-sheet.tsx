@@ -315,7 +315,7 @@ export function LeadDetailSheet({
                         <div className="w-[55%] border-r border-border/30 overflow-y-auto p-6 space-y-5">
                             {/* Nome */}
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                                <Label className="text-xs font-semibold text-[#37352F] uppercase tracking-wide flex items-center gap-1.5">
                                     <User className="w-3.5 h-3.5" />
                                     Nome
                                 </Label>
@@ -330,7 +330,7 @@ export function LeadDetailSheet({
 
                             {/* Telefone (readonly) */}
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                                <Label className="text-xs font-semibold text-[#37352F] uppercase tracking-wide flex items-center gap-1.5">
                                     <Phone className="w-3.5 h-3.5" />
                                     Telefone
                                 </Label>
@@ -344,7 +344,7 @@ export function LeadDetailSheet({
                             {/* Email + CPF */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
-                                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                    <Label className="text-xs font-semibold text-[#37352F] uppercase tracking-wide">
                                         ✉️ Email
                                     </Label>
                                     <Input
@@ -358,7 +358,7 @@ export function LeadDetailSheet({
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                    <Label className="text-xs font-semibold text-[#37352F] uppercase tracking-wide">
                                         🪪 CPF
                                     </Label>
                                     <Input
@@ -375,7 +375,7 @@ export function LeadDetailSheet({
                             {/* Status + Status Atendimento */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
-                                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                    <Label className="text-xs font-semibold text-[#37352F] uppercase tracking-wide">
                                         📋 Status
                                     </Label>
                                     <Input
@@ -389,7 +389,7 @@ export function LeadDetailSheet({
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                    <Label className="text-xs font-semibold text-[#37352F] uppercase tracking-wide">
                                         🔄 Status (Kanban)
                                     </Label>
                                     <Select
@@ -419,7 +419,7 @@ export function LeadDetailSheet({
                             <div className="pt-3 border-t border-border/30">
                                 <div className="flex items-center gap-1.5 mb-2">
                                     <Share2 className="w-3.5 h-3.5 text-brand-400/70" />
-                                    <h4 className="text-xs font-semibold text-slate-300 tracking-tight">
+                                    <h4 className="text-xs font-semibold text-[#37352F] tracking-tight">
                                         Redes Sociais
                                     </h4>
                                 </div>
@@ -485,7 +485,7 @@ export function LeadDetailSheet({
                             <button
                                 onClick={handleSave}
                                 disabled={isPending}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-md shadow-brand-500/20"
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-500 text-[#191918] font-medium text-sm hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-md shadow-brand-500/20"
                             >
                                 {isPending ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -500,11 +500,11 @@ export function LeadDetailSheet({
                             <div className="pt-4 border-t border-border/30">
                                 <div className="flex items-center gap-1.5 mb-3">
                                     <ListTodo className="w-3.5 h-3.5 text-brand-400/70" />
-                                    <h4 className="text-xs font-semibold text-slate-300 tracking-tight flex-1">
+                                    <h4 className="text-xs font-semibold text-[#37352F] tracking-tight flex-1">
                                         Tarefas
                                     </h4>
                                     {tasks.length > 0 && (
-                                        <span className="text-[10px] bg-slate-700/80 text-slate-400 px-1.5 py-0.5 rounded-full font-medium">
+                                        <span className="text-[10px] bg-[#E0E7FF]/80 text-[#6366F1] px-1.5 py-0.5 rounded-full font-medium">
                                             {pendingTasks.length} pendentes
                                         </span>
                                     )}
@@ -535,7 +535,7 @@ export function LeadDetailSheet({
                                                 )}
                                             >
                                                 {task.done && (
-                                                    <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none">
+                                                    <svg className="w-2.5 h-2.5 text-[#191918]" viewBox="0 0 12 12" fill="none">
                                                         <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                                     </svg>
                                                 )}
@@ -574,7 +574,7 @@ export function LeadDetailSheet({
                                     {newTaskText.trim() && (
                                         <button
                                             onClick={handleAddTask}
-                                            className="p-2 rounded-xl bg-brand-500 text-white hover:bg-brand-600 transition-colors shrink-0"
+                                            className="p-2 rounded-xl bg-brand-500 text-[#191918] hover:bg-brand-600 transition-colors shrink-0"
                                         >
                                             <Plus className="w-4 h-4" />
                                         </button>
@@ -664,7 +664,7 @@ export function LeadDetailSheet({
                                     <button
                                         onClick={handleSendMessage}
                                         disabled={isPending || !chatMessage.trim()}
-                                        className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-sm shrink-0"
+                                        className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500 text-[#191918] hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-sm shrink-0"
                                     >
                                         {isPending ? (
                                             <Loader2 className="w-4 h-4 animate-spin" />

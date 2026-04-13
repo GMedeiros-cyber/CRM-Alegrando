@@ -311,7 +311,7 @@ export function KanbanBoard({
 
                     {/* Inline Add Column */}
                     {addingColumn ? (
-                        <div className="flex flex-col w-[300px] min-w-[300px] rounded-2xl bg-slate-800/50 border-2 border-dashed border-brand-500/50 p-4 shrink-0">
+                        <div className="flex flex-col w-[300px] min-w-[300px] rounded-2xl bg-[#EEF2FF]/50 border-2 border-dashed border-brand-500/50 p-4 shrink-0">
                             <input
                                 ref={newColRef}
                                 value={newColName}
@@ -324,18 +324,18 @@ export function KanbanBoard({
                                     }
                                 }}
                                 placeholder="Nome da coluna..."
-                                className="bg-slate-900 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:ring-2 focus:ring-brand-400 mb-3"
+                                className="bg-[#F7F7F5] border border-[#A5B4FC] rounded-xl px-3 py-2 text-sm text-[#191918] placeholder:text-[#6366F1] outline-none focus:ring-2 focus:ring-brand-400 mb-3"
                             />
                             <div className="flex gap-2">
                                 <button
                                     onClick={handleAddColumn}
-                                    className="flex-1 px-3 py-2 rounded-xl bg-brand-500 text-white text-sm font-medium hover:bg-brand-600 transition-colors"
+                                    className="flex-1 px-3 py-2 rounded-xl bg-brand-500 text-[#191918] text-sm font-medium hover:bg-brand-600 transition-colors"
                                 >
                                     Criar
                                 </button>
                                 <button
                                     onClick={() => { setAddingColumn(false); setNewColName(""); }}
-                                    className="px-3 py-2 rounded-xl bg-slate-700 text-slate-300 text-sm font-medium hover:bg-slate-600 transition-colors"
+                                    className="px-3 py-2 rounded-xl bg-[#E0E7FF] text-[#37352F] text-sm font-medium hover:bg-[#C7D2FE] transition-colors"
                                 >
                                     Cancelar
                                 </button>
@@ -344,7 +344,7 @@ export function KanbanBoard({
                     ) : (
                         <button
                             onClick={() => setAddingColumn(true)}
-                            className="flex flex-col items-center justify-center gap-2 w-[300px] min-w-[300px] min-h-[120px] rounded-2xl border-2 border-dashed border-slate-700 hover:border-brand-500/50 hover:bg-brand-500/5 text-slate-500 hover:text-brand-400 transition-all shrink-0 cursor-pointer"
+                            className="flex flex-col items-center justify-center gap-2 w-[300px] min-w-[300px] min-h-[120px] rounded-2xl border-2 border-dashed border-[#C7D2FE] hover:border-brand-500/50 hover:bg-brand-500/5 text-[#6366F1] hover:text-brand-400 transition-all shrink-0 cursor-pointer"
                         >
                             <Plus className="w-6 h-6" />
                             <span className="text-sm font-medium">Adicionar Coluna</span>
@@ -356,7 +356,7 @@ export function KanbanBoard({
             <DragOverlay dropAnimation={null}>
                 {activeCard ? <KanbanCard lead={activeCard} isOverlay /> : null}
                 {activeColumnId ? (
-                    <div className="w-[300px] h-16 rounded-2xl bg-slate-700/80 border-2 border-brand-400 flex items-center justify-center text-sm font-semibold text-brand-400 shadow-xl">
+                    <div className="w-[300px] h-16 rounded-2xl bg-[#E0E7FF]/80 border-2 border-brand-400 flex items-center justify-center text-sm font-semibold text-brand-400 shadow-xl">
                         {columns.find((c) => c.id === activeColumnId)?.name || "Coluna"}
                     </div>
                 ) : null}

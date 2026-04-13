@@ -76,11 +76,11 @@ export default function AgendaPage() {
         <div className="space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between bento-enter pl-4 pr-4 lg:px-0">
-                <div>
-                    <h1 className="font-display text-3xl font-bold text-white tracking-tight">
+                <div className="px-6 py-4 rounded-xl bg-[#EEF2FF] border-2 border-[#818CF8] shadow-sm flex flex-col gap-1 w-fit min-w-[320px]">
+                    <h1 className="text-2xl font-bold text-[#191918] tracking-tight">
                         Agenda
                     </h1>
-                    <p className="text-slate-400 mt-1">
+                    <p className="text-sm font-medium text-[#6366F1]">
                         Calendário de excursões e eventos — clique em um dia para agendar
                     </p>
                 </div>
@@ -89,7 +89,7 @@ export default function AgendaPage() {
                     onClick={() => {
                         window.dispatchEvent(new CustomEvent("agenda:create"));
                     }}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-white font-medium text-sm hover:bg-brand-600 transition-colors shadow-lg shadow-brand-500/25"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500 text-[#191918] font-medium text-sm hover:bg-brand-600 transition-colors shadow-lg shadow-brand-500/25"
                 >
                     <Plus className="w-4 h-4" />
                     Novo Agendamento
@@ -105,11 +105,11 @@ export default function AgendaPage() {
             {upcomingEvents.length > 0 && (
                 <div className="bento-card p-6 bento-enter [animation-delay:300ms] mx-4 lg:mx-0">
                     <div className="mb-4">
-                        <h3 className="font-display text-lg font-semibold text-white flex items-center gap-2">
+                        <h3 className="font-display text-lg font-semibold text-[#191918] flex items-center gap-2">
                             <CalendarDays className="w-5 h-5 text-brand-400" />
                             Próximos Eventos
                         </h3>
-                        <p className="text-sm text-slate-400 mt-0.5">
+                        <p className="text-sm text-[#6366F1] mt-0.5">
                             {upcomingEvents.length} evento{upcomingEvents.length !== 1 ? "s" : ""} agendado{upcomingEvents.length !== 1 ? "s" : ""}
                         </p>
                     </div>
@@ -119,7 +119,7 @@ export default function AgendaPage() {
                             <div
                                 key={evt.id}
                                 onClick={() => handleEventCardClick(evt.id)}
-                                className="flex items-center gap-4 p-3.5 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-700/50 transition-colors duration-200 group cursor-pointer"
+                                className="flex items-center gap-4 p-3.5 rounded-xl bg-[#F7F7F5]/60 hover:bg-[#F7F7F5] border border-[#C7D2FE]/50 transition-colors duration-200 group cursor-pointer"
                             >
                                 {/* Color bar + date */}
                                 <div className="flex items-center gap-3 shrink-0">
@@ -128,10 +128,10 @@ export default function AgendaPage() {
                                         style={{ backgroundColor: evt.backgroundColor }}
                                     />
                                     <div className="flex flex-col items-center justify-center w-14">
-                                        <span className="text-lg font-bold text-white leading-tight">
+                                        <span className="text-lg font-bold text-[#191918] leading-tight">
                                             {new Date(evt.start).getDate()}
                                         </span>
-                                        <span className="text-[10px] font-semibold text-slate-400 uppercase">
+                                        <span className="text-[10px] font-semibold text-[#6366F1] uppercase">
                                             {new Date(evt.start).toLocaleDateString("pt-BR", { month: "short" })}
                                         </span>
                                     </div>
@@ -139,7 +139,7 @@ export default function AgendaPage() {
 
                                 {/* Event info */}
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-slate-200 truncate group-hover:text-brand-400 transition-colors">
+                                    <p className="text-sm font-semibold text-[#191918] truncate group-hover:text-brand-400 transition-colors">
                                         {evt.title}
                                         {evt.extendedProps.leadId && (
                                             <span className="ml-1.5 text-[9px] font-bold text-brand-400 bg-brand-500/15 px-1 py-0.5 rounded">
@@ -148,31 +148,31 @@ export default function AgendaPage() {
                                         )}
                                     </p>
                                     <div className="flex items-center gap-3 mt-0.5">
-                                        <span className="text-xs text-slate-500">
+                                        <span className="text-xs text-[#6366F1]">
                                             {formatEventDate(evt.start)}
                                         </span>
                                         {evt.extendedProps.destino && (
-                                            <span className="text-xs text-slate-500 flex items-center gap-1">
+                                            <span className="text-xs text-[#6366F1] flex items-center gap-1">
                                                 <MapPin className="w-3 h-3" />
                                                 {evt.extendedProps.destino}
                                             </span>
                                         )}
                                         {(evt.extendedProps.quantidadeAlunos ?? 0) > 0 && (
-                                            <span className="text-xs text-slate-500 flex items-center gap-1">
+                                            <span className="text-xs text-[#6366F1] flex items-center gap-1">
                                                 <Users className="w-3 h-3" />
                                                 {evt.extendedProps.quantidadeAlunos}
                                             </span>
                                         )}
                                     </div>
                                     {evt.extendedProps.description && (
-                                        <p className="text-xs text-slate-500 mt-1 truncate max-w-[300px]" title={evt.extendedProps.description}>
+                                        <p className="text-xs text-[#6366F1] mt-1 truncate max-w-[300px]" title={evt.extendedProps.description}>
                                             {evt.extendedProps.description}
                                         </p>
                                     )}
                                 </div>
 
                                 {/* Days until badge */}
-                                <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-slate-700 text-slate-300 shrink-0">
+                                <span className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-[#E0E7FF] text-[#37352F] shrink-0">
                                     {daysUntil(evt.start)}
                                 </span>
 
@@ -189,13 +189,13 @@ export default function AgendaPage() {
                                         <span className="text-[10px] uppercase font-bold text-red-400 px-1">Excluir?</span>
                                         <button
                                             onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}
-                                            className="px-2 py-1 bg-slate-700 text-slate-300 text-xs rounded hover:bg-slate-600 transition-colors"
+                                            className="px-2 py-1 bg-[#E0E7FF] text-[#37352F] text-xs rounded hover:bg-[#C7D2FE] transition-colors"
                                         >
                                             Não
                                         </button>
                                         <button
                                             onClick={(e) => { e.stopPropagation(); handleDeleteEventConfirm(evt.id, evt.extendedProps.googleEventId); }}
-                                            className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors font-medium"
+                                            className="px-2 py-1 bg-red-500 text-[#191918] text-xs rounded hover:bg-red-600 transition-colors font-medium"
                                         >
                                             Sim
                                         </button>

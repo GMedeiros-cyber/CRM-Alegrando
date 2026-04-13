@@ -97,7 +97,7 @@ export function LeadsPorMesChart() {
                 </div>
             ) : (
                 <div className="h-[260px] flex items-center justify-center">
-                    <p className="text-sm text-slate-400">Nenhum lead registrado nos últimos 6 meses.</p>
+                    <p className="text-sm text-[#6366F1]">Nenhum lead registrado nos últimos 6 meses.</p>
                 </div>
             )}
         </div>
@@ -153,7 +153,7 @@ export function TopDestinosChart() {
             ) : (
                 <div className="h-[220px] flex flex-col items-center justify-center gap-2">
                     <span className="text-3xl">📍</span>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm text-[#6366F1]">
                         Nenhuma menção registrada este mês.
                     </p>
                 </div>
