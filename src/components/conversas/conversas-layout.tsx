@@ -1801,6 +1801,7 @@ export function ConversasLayout() {
                         {/* Messages — Realtime via Supabase */}
                         <ChatWindow
                             telefone={cliente.telefone}
+                            canal={cliente.canal}
                             onReady={(fns) => { addOptimisticRef.current = fns.addOptimisticMessage; }}
                             onReply={(msg) => setReplyTo(msg)}
                         />

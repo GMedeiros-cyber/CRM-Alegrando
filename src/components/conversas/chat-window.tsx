@@ -16,6 +16,7 @@ export interface ChatWindowHandles {
 
 interface ChatWindowProps {
     telefone: string;
+    canal?: string;
     onReady?: (fns: ChatWindowHandles) => void;
     onReply?: (msg: LeadMessage) => void;
 }
@@ -302,7 +303,7 @@ const MY_USER_ID = "crm-user";
 // =============================================
 // CHAT WINDOW
 // =============================================
-export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
+export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProps) {
     const { messages, loading, addOptimisticMessage, updateMessageById, removeMessageById } = useLeadMessages(telefone);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const messageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -370,6 +371,7 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
                 emoji,  // "" = remover, qualquer outro = adicionar/substituir
                 telefone,
                 userId: MY_USER_ID,
+                canal,
             });
             console.log("[REACT] server action retornou:", result);
 

@@ -303,6 +303,7 @@ export async function reactToMessage(payload: {
     emoji: string;  // "" para remover
     telefone: string;
     userId: string;
+    canal?: string;
 }): Promise<{ success: boolean; newReactions?: Record<string, string[]>; error?: string }> {
     await requireAuth();
 
@@ -331,21 +332,19 @@ export async function reactToMessage(payload: {
 
     // Detecta canal e envia reação para a API correta
     if (payload.zapiMessageId) {
-        const { data: leadRow } = await supabase
-            .from("Clientes _WhatsApp")
-            .select("canal")
-            .eq("telefone", payload.telefone)
-            .maybeSingle();
-        const isFestas = (leadRow?.canal ?? "alegrando") === "festas";
+        const isFestas = (payload.canal ?? "alegrando") === "festas";
 
         if (isFestas) {
             const { sendEvolutionReaction } = await import("@/lib/whatsapp/sender");
-            await sendEvolutionReaction(payload.telefone, payload.zapiMessageId, payload.emoji);
+            const result = await sendEvolutionReaction(payload.telefone, payload.zapiMessageId, payload.emoji);
+            if (!result.success) {
+                console.error("[reactToMessage] Evolution reaction falhou:", result.error);
+            }
         } else {
             const { sendWhatsAppReaction } = await import("@/lib/whatsapp/sender");
             const result = await sendWhatsAppReaction(payload.telefone, payload.zapiMessageId, payload.emoji);
             if (!result.success) {
-                console.error("[reactToMessage] Z-API falhou:", result.error);
+                console.error("[reactToMessage] Z-API reaction falhou:", result.error);
             }
         }
     }
