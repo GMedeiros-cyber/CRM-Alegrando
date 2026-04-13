@@ -32,6 +32,11 @@ export default function RootLayout({
     >
       <html lang="pt-BR">
         <body className="antialiased">
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `(function(){try{var t=localStorage.getItem('crm-theme');if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');}}catch(e){}})();`,
+            }}
+          />
           <TooltipProvider delayDuration={200}>
             {children}
           </TooltipProvider>

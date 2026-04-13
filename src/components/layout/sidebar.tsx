@@ -16,6 +16,7 @@ import {
     X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/hooks/useTheme";
 
 const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -30,6 +31,7 @@ export function Sidebar() {
     const pathname = usePathname();
     const [expanded, setExpanded] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const { theme, toggleTheme, isMounted } = useTheme();
 
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth < 768);
@@ -109,6 +111,29 @@ export function Sidebar() {
                     );
                 })}
             </nav>
+
+            {/* Theme toggle */}
+            {isMounted && (
+                <div className="w-full px-2 pb-2">
+                    <button
+                        onClick={toggleTheme}
+                        className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-all duration-200 hover:bg-black/10 active:scale-95 overflow-hidden"
+                        title={theme === "light" ? "Mudar para modo escuro" : "Mudar para modo claro"}
+                    >
+                        <span className="text-xl leading-none shrink-0">
+                            {theme === "light" ? "🌙" : "☀️"}
+                        </span>
+                        <span
+                            className={cn(
+                                "text-sm font-medium text-slate-900 select-none whitespace-nowrap transition-all duration-300 overflow-hidden",
+                                expanded ? "w-auto opacity-100" : "w-0 opacity-0"
+                            )}
+                        >
+                            {theme === "light" ? "Modo escuro" : "Modo claro"}
+                        </span>
+                    </button>
+                </div>
+            )}
 
             {/* User section — foto maior */}
             <div className="w-full px-2 pt-4 border-t border-black/10">
