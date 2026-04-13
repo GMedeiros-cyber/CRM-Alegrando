@@ -110,7 +110,7 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
             {...listeners}
             className={cn(
                 "group bg-card rounded-xl border-2 border-[#818CF8] dark:border-[#4a5568] p-3.5 cursor-grab active:cursor-grabbing shadow-sm",
-                "hover:shadow-md hover:border-[#6366F1] transition-all duration-200",
+                "hover:shadow-md hover:border-[#6366F1] dark:hover:border-[#94a3b8] transition-all duration-200",
                 isDragging && "opacity-30 shadow-none",
                 isOverlay && "shadow-xl rotate-[2deg] scale-105 border-brand-400"
             )}

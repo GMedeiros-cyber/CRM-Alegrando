@@ -54,8 +54,8 @@ function SenderLabel({ message, isClient }: { message: LeadMessage; isClient: bo
     if (isClient) {
         return (
             <div className="flex items-center gap-1.5 mb-1">
-                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#C7D2FE]/30">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#A5B4FC]" />
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#C7D2FE]/30 dark:bg-[#3d4a60]/40">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#A5B4FC] dark:bg-[#94a3b8]" />
                     <span className="text-[11px] font-bold tracking-wide text-[#6366F1] dark:text-[#94a3b8]">
                         {message.senderName || "Cliente"}
                     </span>
@@ -137,7 +137,7 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
             const fileName = url.split("/").pop()?.split("?")[0] || "Documento";
             return (
                 <div>
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#191918]/5 hover:bg-[#191918]/10 transition-colors max-w-[240px] border border-[#191918]/10">
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#191918]/5 dark:bg-white/5 hover:bg-[#191918]/10 dark:hover:bg-white/10 transition-colors max-w-[240px] border border-[#191918]/10 dark:border-white/10">
                         <FileText className="w-8 h-8 text-brand-400 shrink-0" />
                         <div className="min-w-0">
                             <p className="text-sm font-medium text-[#191918] dark:text-white truncate">{decodeURIComponent(fileName)}</p>
@@ -215,7 +215,7 @@ function PinDurationModal({ onConfirm, onCancel }: { onConfirm: (duration: 1 | 2
     const labels: Record<1 | 2 | 3, string> = { 1: "24 horas", 2: "7 dias", 3: "30 dias" };
 
     return (
-        <div className="fixed inset-0 bg-[#191918]/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[#191918]/30 dark:bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60]/60 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
                 <h3 className="text-base font-semibold text-[#191918] dark:text-white mb-1">Fixar mensagem</h3>
                 <p className="text-sm text-[#6366F1] dark:text-[#94a3b8] mb-5">Por quanto tempo a mensagem ficará fixada?</p>
@@ -257,7 +257,7 @@ function RemoveReactionModal({ emoji, onRemove, onChangeReaction, onCancel }: {
     onCancel: () => void;
 }) {
     return (
-        <div className="fixed inset-0 bg-[#191918]/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[#191918]/30 dark:bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60]/60 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-xs p-5 animate-in zoom-in-95 duration-200">
                 <div className="text-4xl text-center mb-3">{emoji}</div>
                 <h3 className="text-sm font-semibold text-[#191918] dark:text-white text-center mb-1">Sua reação</h3>
@@ -282,7 +282,7 @@ function DeleteConfirmModal({ onDeleteForAll, onDeleteForMe, onCancel }: {
     onDeleteForAll: () => void; onDeleteForMe: () => void; onCancel: () => void;
 }) {
     return (
-        <div className="fixed inset-0 bg-[#191918]/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[#191918]/30 dark:bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60]/60 rounded-2xl shadow-2xl shadow-black/50 w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
                 <h3 className="text-base font-semibold text-[#191918] dark:text-white mb-2">Apagar mensagem</h3>
                 <p className="text-sm text-[#6366F1] dark:text-[#94a3b8] mb-5">Escolha como deseja apagar esta mensagem.</p>
@@ -560,7 +560,7 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
             )}
             {/* Inline reaction picker (abre quando usuário quer trocar reação) */}
             {reactionPickerFor && (
-                <div className="fixed inset-0 bg-[#191918]/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-[#191918]/20 dark:bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60]/60 rounded-2xl shadow-2xl p-4 animate-in zoom-in-95 duration-200">
                         <p className="text-xs text-[#6366F1] dark:text-[#94a3b8] text-center mb-3">Escolha uma reação</p>
                         <ReactionPicker
@@ -637,8 +637,8 @@ export function ChatWindow({ telefone, onReady, onReply }: ChatWindowProps) {
                                             isClient
                                                 ? "bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60] text-[#191918] dark:text-white rounded-2xl rounded-bl-sm"
                                                 : msg.senderType === "ia"
-                                                    ? "bg-[rgba(139,92,246,0.10)] border border-[rgba(139,92,246,0.20)] text-[#4c1d95] rounded-2xl rounded-br-sm shadow-sm"
-                                                    : "bg-[rgba(34,197,94,0.10)] border border-[rgba(34,197,94,0.25)] text-[#14532d] rounded-2xl rounded-br-sm shadow-sm",
+                                                    ? "bg-[rgba(139,92,246,0.10)] border border-[rgba(139,92,246,0.20)] text-[#4c1d95] dark:text-[#c4b5fd] rounded-2xl rounded-br-sm shadow-sm"
+                                                    : "bg-[rgba(34,197,94,0.10)] border border-[rgba(34,197,94,0.25)] text-[#14532d] dark:text-[#bbf7d0] rounded-2xl rounded-br-sm shadow-sm",
                                             isSearchMatch && !isCurrentMatch && "ring-1 ring-yellow-500/30",
                                         )}
                                     >

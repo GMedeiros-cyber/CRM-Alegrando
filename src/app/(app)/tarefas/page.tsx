@@ -598,7 +598,7 @@ function TrelloList({
                                     >
                                         <span>Mover lista</span>
                                     </button>
-                                    <div className="h-px bg-[#C7D2FE] my-1 mx-2" />
+                                    <div className="h-px bg-[#C7D2FE] dark:bg-[#3d4a60] my-1 mx-2" />
                                     <button 
                                         onClick={() => setShowDeleteConfirm(true)}
                                         className="w-full text-left px-2 py-1.5 hover:bg-red-500/20 text-red-400 rounded"
