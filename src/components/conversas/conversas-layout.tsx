@@ -175,7 +175,7 @@ export function ConversasLayout() {
 
     // Chat
     const [chatMessage, setChatMessage] = useState("");
-    const addOptimisticRef = useRef<((content: string) => void) | null>(null);
+    const addOptimisticRef = useRef<((content: string, senderName?: string) => void) | null>(null);
     const [replyTo, setReplyTo] = useState<import("@/lib/actions/leads").LeadMessage | null>(null);
 
     // Tasks
