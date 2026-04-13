@@ -958,7 +958,7 @@ export function ConversasLayout() {
                                         });
                                     }
                                 }}
-                                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-[#C7D2FE]"
+                                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-[#C7D2FE] dark:data-[state=unchecked]:bg-[#3d4a60]"
                             />
                         </div>
                     </FieldGroup>}
@@ -1082,7 +1082,7 @@ export function ConversasLayout() {
                                         });
                                     }
                                 }}
-                                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-[#C7D2FE]"
+                                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-[#C7D2FE] dark:data-[state=unchecked]:bg-[#3d4a60]"
                             />
                         </div>
                     </FieldGroup>
@@ -1944,7 +1944,7 @@ export function ConversasLayout() {
 
             {/* =================== NEW LEAD MODAL =================== */}
             {showNewLeadModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#191918]/30 backdrop-blur-sm animate-in fade-in">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#191918]/30 dark:bg-black/60 backdrop-blur-sm animate-in fade-in">
                     <div className="bg-[#F7F7F5] dark:bg-[#0f1829] border-2 border-[#C7D2FE] dark:border-[#3d4a60] rounded-2xl shadow-2xl w-[380px] max-w-[90vw] p-6 animate-in zoom-in-95">
                         <div className="flex items-center justify-between mb-5">
                             <div className="flex items-center gap-2">
@@ -1985,7 +1985,7 @@ export function ConversasLayout() {
                                 {newLeadPhoto ? (
                                     <>
                                         <img src={newLeadPhoto.preview} alt="foto" className="w-full h-full object-cover" />
-                                        <div className="absolute inset-0 bg-[#191918]/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <div className="absolute inset-0 bg-[#191918]/20 dark:bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                             <Plus className="w-5 h-5 text-[#191918] dark:text-white" />
                                         </div>
                                     </>
