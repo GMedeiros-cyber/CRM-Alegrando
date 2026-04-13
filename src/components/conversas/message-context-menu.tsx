@@ -74,6 +74,9 @@ export function MessageContextMenu({
             const target = e.target as Node;
             const inMenu = menuRef.current?.contains(target);
             const inTrigger = triggerRef.current?.contains(target);
+            // Quando showReactions=true, o menu já foi desmontado (menuRef.current=null)
+            // O picker tem seu próprio listener — não fechar showReactions aqui
+            if (showReactions) return;
             if (!inMenu && !inTrigger) {
                 setOpen(false);
                 setShowReactions(false);
