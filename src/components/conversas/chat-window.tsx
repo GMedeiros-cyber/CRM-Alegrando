@@ -372,6 +372,7 @@ export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProp
                 telefone,
                 userId: MY_USER_ID,
                 canal,
+                currentReactions: prevReactions,
             });
             console.log("[REACT] server action retornou:", result);
 
@@ -389,7 +390,7 @@ export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProp
             console.error("[REACT] exceção:", err);
             showError("Erro ao reagir: " + String(err));
         }
-    }, [telefone, updateMessageById, showError]);
+    }, [telefone, canal, updateMessageById, showError]);
 
     // Clicking an existing reaction chip → open remove modal if it's mine
     const handleReactionChipClick = useCallback((msg: LeadMessage, emoji: string) => {
@@ -407,13 +408,13 @@ export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProp
         if (!pin) {
             // Optimistic unpin immediately
             updateMessageById(msg.id, { pinned: false });
-            pinMessage({ dbMessageId: msg.id, zapiMessageId: msg.zapiMessageId ?? null, telefone, pin: false })
+            pinMessage({ dbMessageId: msg.id, zapiMessageId: msg.zapiMessageId ?? null, telefone, pin: false, canal })
                 .then((r) => { if (!r.success) { updateMessageById(msg.id, { pinned: true }); showError("Falha ao desafixar."); } })
                 .catch(() => { updateMessageById(msg.id, { pinned: true }); showError("Erro ao desafixar."); });
             return;
         }
         setPinModal({ msg });
-    }, [telefone, updateMessageById, showError]);
+    }, [telefone, canal, updateMessageById, showError]);
 
     const confirmPin = useCallback(async (duration: 1 | 2 | 3) => {
         if (!pinModal) return;
@@ -422,7 +423,7 @@ export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProp
         // Optimistic pin immediately
         updateMessageById(msg.id, { pinned: true });
         try {
-            const result = await pinMessage({ dbMessageId: msg.id, zapiMessageId: msg.zapiMessageId ?? null, telefone, pin: true, duration });
+            const result = await pinMessage({ dbMessageId: msg.id, zapiMessageId: msg.zapiMessageId ?? null, telefone, pin: true, duration, canal });
             if (!result.success) {
                 updateMessageById(msg.id, { pinned: false });
                 showError("Falha ao fixar a mensagem.");
@@ -431,7 +432,7 @@ export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProp
             updateMessageById(msg.id, { pinned: false });
             showError("Erro ao fixar: " + String(err));
         }
-    }, [pinModal, telefone, updateMessageById, showError]);
+    }, [pinModal, telefone, canal, updateMessageById, showError]);
 
     // Delete: show modal
     const handleDeleteClick = useCallback((msg: LeadMessage) => {
@@ -452,7 +453,7 @@ export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProp
         }
 
         try {
-            const result = await deleteMessage({ dbMessageId: msg.id, zapiMessageId: msg.zapiMessageId ?? null, telefone, owner });
+            const result = await deleteMessage({ dbMessageId: msg.id, zapiMessageId: msg.zapiMessageId ?? null, telefone, owner, canal });
             if (!result.success) {
                 // Revert
                 if (owner) {
@@ -465,7 +466,7 @@ export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProp
         } catch (err) {
             showError("Erro ao apagar: " + String(err));
         }
-    }, [deleteModal, telefone, removeMessageById, updateMessageById, showError]);
+    }, [deleteModal, telefone, canal, removeMessageById, updateMessageById, showError]);
 
     const handleReply = useCallback((msg: LeadMessage) => { onReply?.(msg); }, [onReply]);
 

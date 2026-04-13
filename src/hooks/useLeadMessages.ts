@@ -194,7 +194,8 @@ async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> 
         .from("messages")
         .select("id, sender_type, sender_name, content, media_type, created_at, created_by, metadata, pinned, reactions")
         .eq("telefone", telefone)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .limit(100);
 
     if (error) {
         return [];
@@ -215,5 +216,5 @@ async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> 
             pinned: row.pinned === true,
             replyTo: (meta?.replyTo as { content: string; senderName: string | null }) ?? null,
         };
-    });
+    }).reverse();
 }

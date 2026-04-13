@@ -530,6 +530,7 @@ export function ConversasLayout() {
                         replyToZapiId: currentReply.zapiMessageId ?? null,
                         replyToContent: currentReply.content,
                         replyToSenderName: currentReply.senderName ?? null,
+                        canal: cliente.canal,
                     });
                 } else {
                     await sendMessage({
@@ -537,6 +538,7 @@ export function ConversasLayout() {
                         mensagem: text,
                         sender_name: cliente.canal === "festas" ? "Márcia" : "Equipe",
                         iaAtiva: cliente.iaAtiva,
+                        canal: cliente.canal,
                     });
                 }
             } catch (err) {
@@ -711,6 +713,7 @@ export function ConversasLayout() {
                     formData.append("telefone", cliente.telefone);
                     formData.append("sender_name", cliente.canal === "festas" ? "Márcia" : "Equipe");
                     formData.append("caption", att.caption);
+                    formData.append("canal", cliente.canal ?? "alegrando");
                     const res = await sendFileMessage(formData);
                     if (!res.success) {
                         setToast({ type: "error", text: res.error || "Erro ao enviar arquivo." });
