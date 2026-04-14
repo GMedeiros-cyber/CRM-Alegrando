@@ -24,6 +24,24 @@ export async function getTotalLeads(): Promise<number> {
     return count || 0;
 }
 
+export async function getTotalLeadsByCanal(): Promise<{
+    total: number;
+    alegrando: number;
+    festas: number;
+}> {
+    await requireAuth();
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("canal");
+
+    if (error || !data) return { total: 0, alegrando: 0, festas: 0 };
+
+    const alegrando = data.filter((r) => r.canal === "alegrando" || !r.canal).length;
+    const festas = data.filter((r) => r.canal === "festas").length;
+    return { total: data.length, alegrando, festas };
+}
+
 /**
  * Leads agrupados por mês (últimos 6 meses).
  */
