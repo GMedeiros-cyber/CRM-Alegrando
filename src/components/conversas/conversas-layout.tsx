@@ -128,6 +128,8 @@ function formatLastMessageTime(date: Date | null): string {
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+const AGENDAMENTOS_TTL = 60_000; // 1 minuto
+
 export function ConversasLayout() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -179,6 +181,8 @@ export function ConversasLayout() {
     // Chat
     const [chatMessage, setChatMessage] = useState("");
     const addOptimisticRef = useRef<((content: string, senderName?: string) => void) | null>(null);
+    const loadClienteVersionRef = useRef(0);
+    const agendamentosCache = useRef<{ data: AgendamentoEvent[]; ts: number } | null>(null);
     const [replyTo, setReplyTo] = useState<import("@/lib/actions/leads").LeadMessage | null>(null);
 
     // Tasks
@@ -335,6 +339,7 @@ export function ConversasLayout() {
 
     // Load selected cliente
     const loadCliente = useCallback(async (telefone: string) => {
+        const version = ++loadClienteVersionRef.current;
         setLoadingCliente(true);
         setLoadingAgendamentos(true);
         setTasks([]);
@@ -349,9 +354,20 @@ export function ConversasLayout() {
             const [clienteData, tasksData, todosAgendamentos, historico] = await Promise.all([
                 getClienteByTelefone(telefone),
                 !isNaN(tel) ? getLeadTasks(tel) : Promise.resolve([]),
-                getAgendamentos(),
+                (() => {
+                    const cache = agendamentosCache.current;
+                    if (cache && Date.now() - cache.ts < AGENDAMENTOS_TTL) {
+                        return Promise.resolve(cache.data);
+                    }
+                    return getAgendamentos().then(data => {
+                        agendamentosCache.current = { data, ts: Date.now() };
+                        return data;
+                    });
+                })(),
                 getPasseiosHistorico(telefone),
             ]);
+
+            if (loadClienteVersionRef.current !== version) return;
 
             setPaseiosHistorico(historico);
 
@@ -414,17 +430,14 @@ export function ConversasLayout() {
             setReplyTo(null);
             router.push(`/conversas?telefone=${telefone}`, { scroll: false });
 
-            // Marcar como lida localmente e no banco
-            try {
-                await markAsRead(telefone);
-                setClientesList((prev) =>
+            // Fire-and-forget — não bloqueia a navegação
+            markAsRead(telefone)
+                .then(() => setClientesList((prev) =>
                     prev.map((c) =>
                         String(c.telefone) === String(telefone) ? { ...c, unreadCount: 0 } : c
                     )
-                );
-            } catch (err) {
-                console.error("[conversas] Erro ao marcar como lida:", err);
-            }
+                ))
+                .catch((err) => console.error("[conversas] Erro ao marcar como lida:", err));
         },
         [router]
     );
@@ -1803,6 +1816,7 @@ export function ConversasLayout() {
 
                         {/* Messages — Realtime via Supabase */}
                         <ChatWindow
+                            key={cliente.telefone}
                             telefone={cliente.telefone}
                             canal={cliente.canal}
                             onReady={(fns) => { addOptimisticRef.current = fns.addOptimisticMessage; }}
