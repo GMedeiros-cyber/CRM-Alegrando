@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import { Plus, X, MoreHorizontal, User as UserIcon, Trash2, SquarePen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { 
@@ -181,7 +182,7 @@ function TrelloCard({
                                             )}
                                         >
                                             {assignedUser.avatarUrl ? (
-                                                <img src={assignedUser.avatarUrl} alt={assignedUser.name} className="w-full h-full object-cover" />
+                                                <Image src={assignedUser.avatarUrl} alt={assignedUser.name} width={24} height={24} className="w-full h-full object-cover" />
                                             ) : (
                                                 <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-[#191918] dark:text-white font-bold">
                                                     {assignedUser.name.charAt(0).toUpperCase()}
@@ -281,7 +282,7 @@ function TrelloCard({
                                             >
                                                 <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-[#A5B4FC] dark:border-[#4a5568]">
                                                     {user.avatarUrl ? (
-                                                        <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                                                        <Image src={user.avatarUrl} alt={user.name} width={24} height={24} className="w-full h-full object-cover" />
                                                     ) : (
                                                         <div className="w-full h-full bg-brand-500 flex items-center justify-center text-[9px] text-[#191918] dark:text-white font-bold">
                                                             {user.name.charAt(0).toUpperCase()}

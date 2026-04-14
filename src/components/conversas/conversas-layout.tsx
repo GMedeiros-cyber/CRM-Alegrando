@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useTransition, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { ChatWindow } from "./chat-window";
@@ -886,11 +887,14 @@ export function ConversasLayout() {
                                 <div className="flex items-center gap-3 min-w-0">
                                     <div className="w-10 h-10 rounded-full bg-[#E0E7FF] dark:bg-[#2d3347] shrink-0 border border-[#A5B4FC] dark:border-[#4a5568] overflow-hidden flex items-center justify-center text-sm font-bold text-[#191918] dark:text-white">
                                         {cliente.fotoUrl ? (
-                                            <img
+                                            <Image
                                                 src={cliente.fotoUrl}
                                                 alt={cliente.nome || "avatar"}
+                                                width={40}
+                                                height={40}
                                                 className="w-full h-full object-cover"
                                                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                                                unoptimized={cliente.fotoUrl.includes("pps.whatsapp.net")}
                                             />
                                         ) : (
                                             (cliente.nome || String(cliente.telefone)).charAt(0).toUpperCase()

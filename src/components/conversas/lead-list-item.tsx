@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import Image from "next/image";
 import type { ClienteListItem } from "@/lib/actions/leads";
 import { cn } from "@/lib/utils";
 
@@ -54,15 +55,18 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
                 {/* Avatar */}
                 <div className="w-9 h-9 rounded-full bg-[#E0E7FF] dark:bg-[#2d3347] shrink-0 border border-[#A5B4FC] dark:border-[#4a5568] overflow-hidden flex items-center justify-center text-sm font-bold text-[#191918] dark:text-white">
                     {item.fotoUrl ? (
-                        <img
+                        <Image
                             src={item.fotoUrl}
                             alt={item.nome || "avatar"}
+                            width={36}
+                            height={36}
                             className="w-full h-full object-cover"
                             onError={(e) => {
                                 (e.currentTarget as HTMLImageElement).style.display = "none";
                                 const fallback = e.currentTarget.parentElement;
                                 if (fallback) fallback.textContent = (item.nome || String(item.telefone)).charAt(0).toUpperCase();
                             }}
+                            unoptimized={item.fotoUrl.includes("pps.whatsapp.net")}
                         />
                     ) : (
                         (item.nome || String(item.telefone)).charAt(0).toUpperCase()
