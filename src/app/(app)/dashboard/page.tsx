@@ -11,7 +11,7 @@ import {
 import Link from "next/link";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { LeadsPorMesChart } from "@/components/dashboard/charts";
-import { getTotalLeads, getEventosDoMes, getFollowupsAtivos } from "@/lib/actions/dashboard";
+import { getTotalLeadsByCanal, getEventosDoMes, getFollowupsAtivos } from "@/lib/actions/dashboard";
 import { updateCliente } from "@/lib/actions/leads";
 import { getAgendamentos } from "@/lib/actions/agenda";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
@@ -110,7 +110,11 @@ function FollowupsAtivosCard({ onDesativado }: { onDesativado?: () => void }) {
 // DASHBOARD PAGE
 // =============================================
 export default function DashboardPage() {
-    const [totalLeads, setTotalLeads] = useState<number | null>(null);
+    const [leadsData, setLeadsData] = useState<{
+        total: number;
+        alegrando: number;
+        festas: number;
+    } | null>(null);
     const [eventosDoMes, setEventosDoMes] = useState<number | null>(null);
     const [followupsAtivos, setFollowupsAtivos] = useState<number | null>(null);
     const [proximosEventos, setProximosEventos] = useState<AgendamentoEvent[]>([]);
@@ -119,7 +123,7 @@ export default function DashboardPage() {
     const mesAtual = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
     useEffect(() => {
-        getTotalLeads().then(setTotalLeads);
+        getTotalLeadsByCanal().then(setLeadsData);
         getEventosDoMes().then(setEventosDoMes);
         getFollowupsAtivos().then(data => setFollowupsAtivos(data.length));
         getAgendamentos()
@@ -155,8 +159,12 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 <MetricCard
                     title="Total de Leads"
-                    value={totalLeads !== null ? totalLeads : "..."}
-                    subtitle="Acumulado geral"
+                    value={leadsData !== null ? leadsData.total : "..."}
+                    subtitle={
+                        leadsData !== null
+                            ? `🎒 ${leadsData.alegrando} Alegrando · 🎉 ${leadsData.festas} Festas`
+                            : "Acumulado geral"
+                    }
                     icon={Users}
                     gradient="kpi-gradient-coral"
                     iconColor="text-brand-500"

@@ -647,8 +647,8 @@ export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProp
                                             isClient
                                                 ? "bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60] text-[#191918] dark:text-white rounded-2xl rounded-bl-sm"
                                                 : msg.senderType === "ia"
-                                                    ? "bg-[rgba(139,92,246,0.10)] border border-[rgba(139,92,246,0.20)] text-[#4c1d95] dark:text-[#c4b5fd] rounded-2xl rounded-br-sm shadow-sm"
-                                                    : "bg-[rgba(34,197,94,0.10)] border border-[rgba(34,197,94,0.25)] text-[#14532d] dark:text-[#bbf7d0] rounded-2xl rounded-br-sm shadow-sm",
+                                                    ? "bg-[rgba(139,92,246,0.10)] border border-[rgba(139,92,246,0.20)] text-[#4c1d95] dark:text-white rounded-2xl rounded-br-sm shadow-sm"
+                                                    : "bg-[rgba(34,197,94,0.10)] border border-[rgba(34,197,94,0.25)] text-[#14532d] dark:text-white rounded-2xl rounded-br-sm shadow-sm",
                                             isSearchMatch && !isCurrentMatch && "ring-1 ring-yellow-500/30",
                                         )}
                                     >
