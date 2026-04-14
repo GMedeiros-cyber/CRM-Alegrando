@@ -120,7 +120,14 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
         if (url.startsWith("http")) {
             return (
                 <div>
-                    <img src={url} alt="imagem" className="max-w-[240px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(url, "_blank")} />
+                    <img src={url} alt="imagem" className="max-w-[240px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => {
+                        try {
+                            const parsed = new URL(url);
+                            if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+                                window.open(url, "_blank", "noopener,noreferrer");
+                            }
+                        } catch {}
+                    }} />
                     {caption && <p className="text-xs mt-1.5 text-[#191918] dark:text-white/70 leading-relaxed">{caption}</p>}
                 </div>
             );

@@ -268,7 +268,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             content,
             media_type,
             created_at: sentAt,
-            metadata: { messageId: payload.messageId, chatLid, raw: payload },
+            metadata: { messageId: payload.messageId, chatLid },
           });
 
           if (insertErr) {
