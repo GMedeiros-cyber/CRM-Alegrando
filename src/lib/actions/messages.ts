@@ -173,9 +173,6 @@ export async function sendFileMessage(
     const caption = (formData.get("caption") as string) || "";
     const canal = (formData.get("canal") as string) || "alegrando";
 
-    console.log("[sendFileMessage] telefone:", telefone);
-    console.log("[sendFileMessage] arquivo:", file?.name, "tamanho:", file?.size);
-
     if (!file || !telefone) {
         return { success: false, error: "Arquivo e telefone são obrigatórios." };
     }
@@ -209,7 +206,6 @@ export async function sendFileMessage(
         .getPublicUrl(storagePath);
 
     const publicUrl = urlData.publicUrl;
-    console.log("[sendFileMessage] fileUrl:", publicUrl);
 
     const isFestas = canal === "festas";
 

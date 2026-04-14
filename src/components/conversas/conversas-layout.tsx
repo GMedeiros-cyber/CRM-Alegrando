@@ -16,6 +16,9 @@ import {
 } from "@/components/ui/select";
 import { ChatWindow } from "./chat-window";
 import { EmojiPickerInput } from "./emoji-picker-input";
+import { NovoLeadModal } from "./novo-lead-modal";
+import { LeadListItem } from "./lead-list-item";
+import { AttachmentPreview } from "./attachment-preview";
 import {
     listClientes,
     getClienteByTelefone,
@@ -105,28 +108,6 @@ function isRecentlyCreated(createdAt: Date | null): boolean {
 // =============================================
 // MAIN COMPONENT
 // =============================================
-function formatLastMessageTime(date: Date | null): string {
-    if (!date) return "";
-    const now = new Date();
-    const d = new Date(date);
-
-    // Comparar dias-calendário no timezone local (não ms brutos)
-    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dMidnight    = new Date(d.getFullYear(),   d.getMonth(),   d.getDate());
-    const diffDays = Math.round(
-        (todayMidnight.getTime() - dMidnight.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    if (diffDays === 0) {
-        return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    }
-    if (diffDays === 1) return "Ontem";
-    if (diffDays <= 6) {
-        const dias = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
-        return dias[d.getDay()];
-    }
-    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
 
 const AGENDAMENTOS_TTL = 60_000; // 1 minuto
 
@@ -223,12 +204,6 @@ export function ConversasLayout() {
 
     // New lead modal
     const [showNewLeadModal, setShowNewLeadModal] = useState(false);
-    const [newLeadForm, setNewLeadForm] = useState({ telefone: "", nome: "" });
-    const [newLeadCanal, setNewLeadCanal] = useState<"alegrando" | "festas">("alegrando");
-    const [newLeadResponsavel, setNewLeadResponsavel] = useState("");
-    const [newLeadPhoto, setNewLeadPhoto] = useState<{ file: File; preview: string } | null>(null);
-    const newLeadPhotoRef = useRef<HTMLInputElement>(null);
-    const [isCreatingLead, startCreatingLead] = useTransition();
 
     // File attachments (preview before send)
     const [attachments, setAttachments] = useState<Array<{
@@ -644,51 +619,6 @@ export function ConversasLayout() {
                 setToast({ type: "success", text: "Conversas apagadas." });
             } else {
                 setToast({ type: "error", text: result.error || "Erro ao limpar." });
-            }
-        });
-    }
-
-    // ========= New Lead handler =========
-    function handleCreateLead() {
-        const tel = newLeadForm.telefone.replace(/\D/g, "").trim();
-        if (!tel || tel.length < 8) {
-            setToast({ type: "error", text: "Telefone inválido." });
-            return;
-        }
-        startCreatingLead(async () => {
-            try {
-                let fotoUrl: string | null = null;
-
-                // Upload photo via server action if selected
-                if (newLeadPhoto) {
-                    const fd = new FormData();
-                    fd.append("file", newLeadPhoto.file);
-                    fd.append("telefone", tel);
-                    const uploadResult = await uploadContactPhoto(fd);
-                    if (uploadResult.success && uploadResult.url) {
-                        fotoUrl = uploadResult.url;
-                    } else {
-                        setToast({ type: "error", text: `Foto não salva: ${uploadResult.error || "erro desconhecido"}` });
-                    }
-                }
-
-                await createCliente({
-                    telefone: tel,
-                    nome: newLeadForm.nome.trim() || null,
-                    fotoUrl,
-                    canal: newLeadCanal,
-                    responsavel: newLeadResponsavel.trim() || null,
-                });
-                setShowNewLeadModal(false);
-                setNewLeadForm({ telefone: "", nome: "" });
-                setNewLeadCanal("alegrando");
-                setNewLeadResponsavel("");
-                setNewLeadPhoto(null);
-                setToast({ type: "success", text: "Lead criado com sucesso!" });
-                loadList();
-                handleSelectCliente(tel);
-            } catch (err) {
-                setToast({ type: "error", text: `Erro ao criar lead: ${err}` });
             }
         });
     }
@@ -1589,76 +1519,13 @@ export function ConversasLayout() {
                     ) : (
                         <div className="space-y-1.5 flex flex-col">
                             {clientesFiltrados.map((item) => (
-                                <button
+                                <LeadListItem
                                     key={item.telefone.toString()}
+                                    item={item}
+                                    isSelected={selectedTelefone === item.telefone.toString()}
                                     onClick={() => handleSelectCliente(item.telefone.toString())}
-                                    className={cn(
-                                        "w-full text-left px-3 py-3 rounded-xl transition-all duration-150 border-2",
-                                        selectedTelefone === item.telefone.toString()
-                                            ? "bg-card border-brand-500 shadow-lg shadow-brand-500/15"
-                                            : "bg-card/60 border-border/50 hover:bg-card hover:border-muted-foreground/40"
-                                    )}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        {/* Avatar */}
-                                        <div className="w-9 h-9 rounded-full bg-[#E0E7FF] dark:bg-[#2d3347] shrink-0 border border-[#A5B4FC] dark:border-[#4a5568] overflow-hidden flex items-center justify-center text-sm font-bold text-[#191918] dark:text-white">
-                                            {item.fotoUrl ? (
-                                                <img
-                                                    src={item.fotoUrl}
-                                                    alt={item.nome || "avatar"}
-                                                    className="w-full h-full object-cover"
-                                                    onError={(e) => {
-                                                        (e.currentTarget as HTMLImageElement).style.display = "none";
-                                                        const fallback = e.currentTarget.parentElement;
-                                                        if (fallback) fallback.textContent = (item.nome || String(item.telefone)).charAt(0).toUpperCase();
-                                                    }}
-                                                />
-                                            ) : (
-                                                (item.nome || String(item.telefone)).charAt(0).toUpperCase()
-                                            )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center justify-between gap-1">
-                                                <p className={cn(
-                                                    "text-sm font-bold truncate",
-                                                    selectedTelefone === item.telefone.toString()
-                                                        ? "text-brand-400"
-                                                        : "text-[#191918] dark:text-white"
-                                                )}>
-                                                    {item.nome || item.telefone}
-                                                </p>
-                                                <span className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] shrink-0 ml-auto">
-                                                    {formatLastMessageTime(item.lastMessageAt)}
-                                                </span>
-                                                {item.unreadCount > 0 && (
-                                                    <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-[#191918] dark:text-white text-[10px] font-bold flex items-center justify-center shrink-0 animate-in zoom-in-50">
-                                                        {item.unreadCount > 99 ? "99+" : item.unreadCount}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <p className="text-[11px] font-mono text-[#191918] dark:text-white font-medium truncate mt-0.5">
-                                                {item.telefone}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-2 flex justify-end gap-1.5 min-h-[20px]">
-                                        {item.statusAtendimento === "novo" && isRecentlyCreated(item.createdAt) && (
-                                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40">
-                                                NOVO
-                                            </span>
-                                        )}
-                                        {!item.iaAtiva && item.canal !== "festas" && (
-                                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-200 text-orange-800 border border-orange-400">
-                                                Manual
-                                            </span>
-                                        )}
-                                        {item.canal === "festas" && (
-                                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-pink-200 text-pink-800 border border-pink-400">
-                                                🎉 Festas
-                                            </span>
-                                        )}
-                                    </div>
-                                </button>
+                                    tick={tick}
+                                />
                             ))}
                             {clientesList.length < totalClientes && (
                                 <button
@@ -1825,51 +1692,15 @@ export function ConversasLayout() {
 
                         {/* Attachment preview area */}
                         {attachments.length > 0 && (
-                            <div className="px-5 py-3 border-t border-border/50 bg-[#F7F7F5] dark:bg-[#0f1829]/80">
-                                <div className="flex gap-3 overflow-x-auto pb-2">
-                                    {attachments.map((att, idx) => (
-                                        <div key={att.id}
-                                            className="relative shrink-0 w-52 rounded-xl border border-[#C7D2FE] dark:border-[#3d4a60] bg-[#EEF2FF] dark:bg-[#1e2536]/80 overflow-hidden flex flex-col">
-                                            <button
-                                                onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))}
-                                                className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-[#191918]/30 text-[#191918] dark:text-white flex items-center justify-center hover:bg-black/80 transition-colors">
-                                                <X className="w-3 h-3" />
-                                            </button>
-                                            {att.preview ? (
-                                                <img src={att.preview} alt={att.file.name}
-                                                    className="w-full h-28 object-cover" />
-                                            ) : (
-                                                <div className="w-full h-28 flex flex-col items-center justify-center gap-1 bg-[#F7F7F5] dark:bg-[#0f1829]/60">
-                                                    <FileText className="w-8 h-8 text-brand-400" />
-                                                    <p className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] px-2 text-center truncate w-full">{att.file.name}</p>
-                                                </div>
-                                            )}
-                                            <textarea
-                                                ref={idx === 0 ? firstCaptionRef : undefined}
-                                                rows={2}
-                                                value={att.caption}
-                                                onChange={(e) => {
-                                                    const el = e.currentTarget;
-                                                    el.style.height = "auto";
-                                                    el.style.height = el.scrollHeight + "px";
-                                                    setAttachments(prev =>
-                                                        prev.map(a => a.id === att.id ? { ...a, caption: e.target.value } : a));
-                                                }}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === "Enter" && !e.shiftKey) {
-                                                        e.preventDefault();
-                                                        handleSendAttachments();
-                                                    }
-                                                }}
-                                                placeholder="Adicionar legenda... (Enter para enviar)"
-                                                className="w-full px-2 py-1.5 text-xs bg-transparent text-[#37352F] dark:text-[#cbd5e1] placeholder:text-[#6366F1] dark:text-[#94a3b8] outline-none border-t border-[#C7D2FE] dark:border-[#3d4a60]/50 resize-none leading-relaxed" />
-                                        </div>
-                                    ))}
-                                </div>
-                                <p className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] mt-1">
-                                    {attachments.length} arquivo{attachments.length !== 1 ? "s" : ""} — Enter na legenda ou clique em enviar
-                                </p>
-                            </div>
+                            <AttachmentPreview
+                                attachments={attachments}
+                                firstCaptionRef={firstCaptionRef}
+                                onRemove={(id) => setAttachments(prev => prev.filter(a => a.id !== id))}
+                                onCaptionChange={(id, caption) => setAttachments(prev =>
+                                    prev.map(a => a.id === id ? { ...a, caption } : a)
+                                )}
+                                onSend={handleSendAttachments}
+                            />
                         )}
 
                         {/* Reply preview */}
@@ -1995,154 +1826,11 @@ export function ConversasLayout() {
 
             {/* =================== NEW LEAD MODAL =================== */}
             {showNewLeadModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#191918]/30 dark:bg-black/60 backdrop-blur-sm animate-in fade-in">
-                    <div className="bg-[#F7F7F5] dark:bg-[#0f1829] border-2 border-[#C7D2FE] dark:border-[#3d4a60] rounded-2xl shadow-2xl w-[380px] max-w-[90vw] p-6 animate-in zoom-in-95">
-                        <div className="flex items-center justify-between mb-5">
-                            <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-lg bg-brand-500/20 flex items-center justify-center">
-                                    <UserPlus className="w-4 h-4 text-brand-400" />
-                                </div>
-                                <h3 className="font-display text-base font-bold text-[#191918] dark:text-white">
-                                    Novo Lead
-                                </h3>
-                            </div>
-                            <button
-                                onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); setNewLeadCanal("alegrando"); setNewLeadResponsavel(""); }}
-                                className="p-1.5 rounded-lg hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-
-                        {/* Avatar picker */}
-                        <div className="flex justify-center mb-4">
-                            <input
-                                ref={newLeadPhotoRef}
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) setNewLeadPhoto({ file, preview: URL.createObjectURL(file) });
-                                    e.target.value = "";
-                                }}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => newLeadPhotoRef.current?.click()}
-                                className="relative w-20 h-20 rounded-full border-2 border-dashed border-[#A5B4FC] dark:border-[#4a5568] hover:border-brand-500 bg-[#EEF2FF] dark:bg-[#1e2536]/60 hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] transition-colors overflow-hidden group"
-                                title="Adicionar foto"
-                            >
-                                {newLeadPhoto ? (
-                                    <>
-                                        <img src={newLeadPhoto.preview} alt="foto" className="w-full h-full object-cover" />
-                                        <div className="absolute inset-0 bg-[#191918]/20 dark:bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <Plus className="w-5 h-5 text-[#191918] dark:text-white" />
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center gap-1 h-full text-[#6366F1] dark:text-[#94a3b8] group-hover:text-brand-400 transition-colors">
-                                        <Plus className="w-6 h-6" />
-                                        <span className="text-[10px] font-medium">Foto</span>
-                                    </div>
-                                )}
-                            </button>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div className="space-y-1">
-                                <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
-                                    <Phone className="w-3 h-3" />
-                                    Telefone *
-                                </Label>
-                                <Input
-                                    value={newLeadForm.telefone}
-                                    onChange={(e) => setNewLeadForm((f) => ({ ...f, telefone: e.target.value }))}
-                                    placeholder="5511999999999"
-                                    className="rounded-lg h-9 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
-                                    autoFocus
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
-                                    <User className="w-3 h-3" />
-                                    Nome
-                                </Label>
-                                <Input
-                                    value={newLeadForm.nome}
-                                    onChange={(e) => setNewLeadForm((f) => ({ ...f, nome: e.target.value }))}
-                                    placeholder="Nome do contato (opcional)"
-                                    className="rounded-lg h-9 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") handleCreateLead();
-                                    }}
-                                />
-                            </div>
-                            {newLeadCanal !== "festas" && (
-                                <div className="space-y-1">
-                                    <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
-                                        <UserRound className="w-3 h-3" />
-                                        Responsável
-                                    </Label>
-                                    <Input
-                                        value={newLeadResponsavel}
-                                        onChange={(e) => setNewLeadResponsavel(e.target.value)}
-                                        placeholder="Nome do responsável"
-                                        className="rounded-lg h-9 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter") handleCreateLead();
-                                        }}
-                                    />
-                                </div>
-                            )}
-                            <div className="space-y-1">
-                                <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
-                                    Canal
-                                </Label>
-                                <div className="flex gap-2">
-                                    {(["alegrando", "festas"] as const).map((c) => (
-                                        <button
-                                            key={c}
-                                            type="button"
-                                            onClick={() => setNewLeadCanal(c)}
-                                            className={cn(
-                                                "flex-1 h-8 rounded-lg text-xs font-semibold border-2 transition-colors",
-                                                newLeadCanal === c
-                                                    ? "bg-brand-500/20 text-brand-400 border-brand-500/40"
-                                                    : "bg-[#EEF2FF] dark:bg-[#1e2536]/40 text-[#6366F1] dark:text-[#94a3b8] border-[#C7D2FE] dark:border-[#3d4a60]/40 hover:text-[#37352F] dark:hover:text-[#cbd5e1]"
-                                            )}
-                                        >
-                                            {c === "alegrando" ? "🎒 Alegrando" : "🎉 Festas"}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2 mt-5">
-                            <button
-                                onClick={() => { setShowNewLeadModal(false); setNewLeadPhoto(null); setNewLeadForm({ telefone: "", nome: "" }); setNewLeadCanal("alegrando"); setNewLeadResponsavel(""); }}
-                                className="flex-1 h-9 rounded-lg border border-[#A5B4FC] dark:border-[#4a5568] text-sm font-medium text-[#37352F] dark:text-[#cbd5e1] hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] transition-colors"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={handleCreateLead}
-                                disabled={isCreatingLead || !newLeadForm.telefone.trim()}
-                                className="flex-1 h-9 rounded-lg bg-brand-500 text-[#191918] dark:text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 flex items-center justify-center gap-1.5"
-                            >
-                                {isCreatingLead ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                    <>
-                                        <Plus className="w-3.5 h-3.5" />
-                                        Criar Lead
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <NovoLeadModal
+                    onClose={() => { setShowNewLeadModal(false); }}
+                    onCreated={(tel) => { loadList(); handleSelectCliente(tel); }}
+                    onToast={setToast}
+                />
             )}
         </div>
     );

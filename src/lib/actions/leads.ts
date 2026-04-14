@@ -516,7 +516,10 @@ export async function deletePasseioHistorico(id: string, telefone: string): Prom
     await requireAuth();
     const supabase = createServerSupabaseClient();
 
-    await supabase.from("passeios_historico").delete().eq("id", id);
+    await supabase.from("passeios_historico")
+        .delete()
+        .eq("id", id)
+        .eq("telefone", telefone);
 
     // Recalcular ultimo_passeio
     const { data: maisRecente } = await supabase
