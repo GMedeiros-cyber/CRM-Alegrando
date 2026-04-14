@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { RefObject } from "react";
 import { FileText, X } from "lucide-react";
 
@@ -18,7 +19,7 @@ interface AttachmentPreviewProps {
     onSend: () => void;
 }
 
-export function AttachmentPreview({
+const AttachmentPreviewInner = function AttachmentPreview({
     attachments,
     firstCaptionRef,
     onRemove,
@@ -71,4 +72,6 @@ export function AttachmentPreview({
             </p>
         </div>
     );
-}
+};
+
+export const AttachmentPreview = memo(AttachmentPreviewInner);

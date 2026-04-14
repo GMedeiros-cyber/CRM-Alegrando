@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -131,7 +132,7 @@ export interface ClienteDetailPanelProps {
     onToast: (toast: { type: "success" | "error"; text: string }) => void;
 }
 
-export function ClienteDetailPanel({
+const ClienteDetailPanelInner = function ClienteDetailPanel({
     cliente,
     selectedTelefone,
     form,
@@ -892,7 +893,9 @@ export function ClienteDetailPanel({
             </div>
         </div>
     );
-}
+};
+
+export const ClienteDetailPanel = memo(ClienteDetailPanelInner);
 
 function FieldGroup({
     icon,

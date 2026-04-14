@@ -1,23 +1,32 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { LeadMessage } from "@/lib/actions/leads";
 
 export function useLeadMessages(telefone: string) {
     const [messages, setMessages] = useState<LeadMessage[]>([]);
     const [loading, setLoading] = useState(true);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const oldestCreatedAt = useRef<string | null>(null);
 
     useEffect(() => {
         let isMounted = true;
         setMessages([]);
+        setHasMore(false);
+        oldestCreatedAt.current = null;
 
         async function fetchInitial() {
             try {
                 setLoading(true);
-                // Busca inicial via server action (ainda usa leadId internamente por enquanto)
-                // TODO: refatorar getLeadMessages para aceitar telefone quando o backend estiver pronto
-                const data = await getLeadMessagesByPhone(telefone);
-                if (isMounted) {
-                    setMessages(data);
+                const { data, error } = await fetchMessagePage(telefone, null);
+                if (isMounted && !error && data) {
+                    if (data.length === 100) {
+                        setHasMore(true);
+                        oldestCreatedAt.current = data[data.length - 1].created_at as string;
+                    } else {
+                        setHasMore(false);
+                    }
+                    setMessages(mapRows(data).reverse());
                 }
             } catch (err) {
                 console.error("[messages] Erro ao carregar mensagens:", err);
@@ -160,6 +169,26 @@ export function useLeadMessages(telefone: string) {
         };
     }, [telefone]);
 
+    const loadOlder = useCallback(async () => {
+        if (!hasMore || loadingMore || !oldestCreatedAt.current) return;
+        setLoadingMore(true);
+        try {
+            const { data, error } = await fetchMessagePage(telefone, oldestCreatedAt.current);
+            if (!error && data) {
+                const mapped = mapRows(data).reverse();
+                setMessages((prev) => [...mapped, ...prev]);
+                if (data.length === 100) {
+                    oldestCreatedAt.current = data[data.length - 1].created_at as string;
+                } else {
+                    setHasMore(false);
+                    oldestCreatedAt.current = null;
+                }
+            }
+        } finally {
+            setLoadingMore(false);
+        }
+    }, [telefone, hasMore, loadingMore]);
+
     const addOptimisticMessage = useCallback((content: string, senderName?: string) => {
         const optimistic: LeadMessage = {
             id: `optimistic-${Date.now()}`,
@@ -184,25 +213,14 @@ export function useLeadMessages(telefone: string) {
         setMessages((prev) => prev.filter((m) => m.id !== id));
     }, []);
 
-    return { messages, loading, addOptimisticMessage, updateMessageById, removeMessageById };
+    return { messages, loading, hasMore, loadingMore, loadOlder, addOptimisticMessage, updateMessageById, removeMessageById };
 }
 
 /**
- * Busca mensagens diretamente pelo telefone via Supabase client (SELECT only).
+ * Mapeia uma linha do banco para LeadMessage.
  */
-async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> {
-    const { data, error } = await supabase
-        .from("messages")
-        .select("id, sender_type, sender_name, content, media_type, created_at, created_by, metadata, pinned, reactions")
-        .eq("telefone", telefone)
-        .order("created_at", { ascending: false })
-        .limit(100);
-
-    if (error) {
-        return [];
-    }
-
-    return (data || []).map((row: Record<string, unknown>) => {
+function mapRows(rows: Record<string, unknown>[]): LeadMessage[] {
+    return rows.map((row) => {
         const meta = row.metadata as Record<string, unknown> | null;
         return {
             id: row.id as string,
@@ -217,5 +235,24 @@ async function getLeadMessagesByPhone(telefone: string): Promise<LeadMessage[]> 
             pinned: row.pinned === true,
             replyTo: (meta?.replyTo as { content: string; senderName: string | null }) ?? null,
         };
-    }).reverse();
+    });
+}
+
+/**
+ * Busca uma página de 100 mensagens, opcionalmente antes de `before` (ISO string).
+ * Retorna rows brutas (ordem descendente do servidor) para inspecionar created_at.
+ */
+async function fetchMessagePage(telefone: string, before: string | null) {
+    let query = supabase
+        .from("messages")
+        .select("id, sender_type, sender_name, content, media_type, created_at, created_by, metadata, pinned, reactions")
+        .eq("telefone", telefone)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+    if (before) {
+        query = query.lt("created_at", before);
+    }
+
+    return query;
 }
