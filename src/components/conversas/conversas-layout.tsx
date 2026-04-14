@@ -294,15 +294,35 @@ export function ConversasLayout() {
         loadList();
     }, [loadList]);
 
-    // Realtime: atualiza lista quando nova mensagem é inserida na tabela messages
+    // Realtime: atualiza apenas o lead afetado em vez de rebuscar tudo
     useEffect(() => {
         const channel = supabase
             .channel("conversas-list-realtime")
             .on(
                 "postgres_changes",
                 { event: "INSERT", schema: "public", table: "messages" },
-                () => {
-                    loadList();
+                (payload) => {
+                    const newMsg = payload.new;
+                    const telefone = String(newMsg.telefone);
+                    const isFromCliente =
+                        newMsg.sender_type === "cliente" || newMsg.sender_type === "lead";
+
+                    setClientesList((prev) =>
+                        prev.map((c) => {
+                            if (String(c.telefone) !== telefone) return c;
+                            return {
+                                ...c,
+                                lastMessageAt: newMsg.created_at
+                                    ? new Date(newMsg.created_at)
+                                    : c.lastMessageAt,
+                                unreadCount:
+                                    isFromCliente &&
+                                    String(selectedTelefone) !== telefone
+                                        ? (c.unreadCount || 0) + 1
+                                        : c.unreadCount,
+                            };
+                        })
+                    );
                 }
             )
             .subscribe();
@@ -310,7 +330,7 @@ export function ConversasLayout() {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [loadList]);
+    }, [selectedTelefone]);
 
     // Load selected cliente
     const loadCliente = useCallback(async (telefone: string) => {
@@ -465,7 +485,13 @@ export function ConversasLayout() {
                     followupAtivo: form.followupAtivo,
                 });
                 setToast({ type: "success", text: "Cliente atualizado!" });
-                loadList();
+                setClientesList((prev) =>
+                    prev.map((c) =>
+                        String(c.telefone) === String(selectedTelefone)
+                            ? { ...c, nome: form.nome || c.nome }
+                            : c
+                    )
+                );
             } catch (err) {
                 setToast({ type: "error", text: `Erro ao salvar: ${err}` });
             }
@@ -808,7 +834,6 @@ export function ConversasLayout() {
                                                 kanbanColumnId: val || null,
                                             });
                                             setToast({ type: "success", text: "Cliente atualizado!" });
-                                            loadList();
                                         } catch (err) {
                                             setToast({ type: "error", text: `Erro ao salvar: ${err}` });
                                         }
@@ -930,7 +955,6 @@ export function ConversasLayout() {
                                             try {
                                                 await updateCliente(selectedTelefone, { followupAtivo: checked });
                                                 setToast({ type: "success", text: checked ? "Follow-up ativado!" : "Follow-up desativado!" });
-                                                loadList();
                                             } catch {
                                                 setToast({ type: "error", text: "Erro ao atualizar follow-up" });
                                             }
@@ -982,7 +1006,6 @@ export function ConversasLayout() {
                                                     await updateCliente(selectedTelefone, { followupAtivo: false });
                                                     setForm(f => ({ ...f, followupAtivo: false, followupEnviado: false, followupEnviadoEm: "" }));
                                                     setToast({ type: "success", text: "Follow-up resetado." });
-                                                    loadList();
                                                 } catch {
                                                     setToast({ type: "error", text: "Erro ao resetar follow-up" });
                                                 }
@@ -1053,7 +1076,6 @@ export function ConversasLayout() {
                                             try {
                                                 await updateCliente(selectedTelefone, { posPasseioAtivo: checked });
                                                 setToast({ type: "success", text: checked ? "Pós-Passeio ativado!" : "Pós-Passeio desativado!" });
-                                                loadList();
                                                 if (!checked) setPosPasseioLink("");
                                             } catch {
                                                 setToast({ type: "error", text: "Erro ao atualizar pós-passeio" });
@@ -1092,7 +1114,6 @@ export function ConversasLayout() {
                                                         if (result.success) {
                                                             setToast({ type: "success", text: "Mensagem de fotos enviada!" });
                                                             setForm(f => ({ ...f, posPasseioEnviado: true, posPasseioEnviadoEm: new Date().toISOString() }));
-                                                            loadList();
                                                         } else {
                                                             setToast({ type: "error", text: result.error || "Erro ao enviar." });
                                                         }
@@ -1125,7 +1146,6 @@ export function ConversasLayout() {
                                                     await updateCliente(selectedTelefone, { posPasseioAtivo: false });
                                                     setForm(f => ({ ...f, posPasseioAtivo: false, posPasseioEnviado: false, posPasseioEnviadoEm: "" }));
                                                     setPosPasseioLink("");
-                                                    loadList();
                                                 } catch {
                                                     setToast({ type: "error", text: "Erro ao resetar pós-passeio" });
                                                 }
