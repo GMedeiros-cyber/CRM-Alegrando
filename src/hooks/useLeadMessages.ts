@@ -8,6 +8,7 @@ export function useLeadMessages(telefone: string) {
 
     useEffect(() => {
         let isMounted = true;
+        setMessages([]);
 
         async function fetchInitial() {
             try {
