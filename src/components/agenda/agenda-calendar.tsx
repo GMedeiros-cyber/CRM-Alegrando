@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -104,7 +104,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     // =============================================
     // DATA LOADING
     // =============================================
-    async function loadEvents() {
+    const loadEvents = useCallback(async () => {
         try {
             setLoadingEvents(true);
             setErrorMsg(null);
@@ -116,22 +116,22 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         } finally {
             setLoadingEvents(false);
         }
-    }
+    }, [onEventsChange]);
 
-    async function loadClientes() {
+    const loadClientes = useCallback(async () => {
         try {
             const result = await listClientes({ limit: 1000 });
             setClientes(result.data);
         } catch (err) {
             console.error("[agenda] Erro ao carregar clientes:", err);
         }
-    }
+    }, []);
 
     // Load initial data
     useEffect(() => {
         loadEvents();
         loadClientes();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [loadEvents, loadClientes]);
 
     // Reset confirmingDelete when modal closes or event changes
     useEffect(() => {
@@ -166,7 +166,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     // MODAL HANDLERS
     // =============================================
 
-    function openCreateModal() {
+    const openCreateModal = useCallback(() => {
         const todayStr = format(new Date(), "yyyy-MM-dd");
         setModalMode("create");
         setSelectedEvent(null);
@@ -182,15 +182,16 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
             clienteTelefone: "",
         });
         setModalOpen(true);
-    }
+    }, []);
+
+    const handleCreateEvent = useCallback(() => {
+        openCreateModal();
+    }, [openCreateModal]);
 
     useEffect(() => {
-        function handler() {
-            openCreateModal();
-        }
-        window.addEventListener("agenda:create", handler);
-        return () => window.removeEventListener("agenda:create", handler);
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+        window.addEventListener("agenda:create", handleCreateEvent);
+        return () => window.removeEventListener("agenda:create", handleCreateEvent);
+    }, [handleCreateEvent]);
 
     // Listener para abrir evento a partir da lista de Próximos Eventos
     useEffect(() => {
