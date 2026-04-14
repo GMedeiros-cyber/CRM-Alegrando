@@ -3,7 +3,22 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { CalendarDays, Plus, MapPin, Users, MessageSquare, ArrowRight, Trash2 } from "lucide-react";
-import { AgendaCalendar } from "@/components/agenda/agenda-calendar";
+import dynamic from "next/dynamic";
+
+const AgendaCalendar = dynamic(
+    () => import("@/components/agenda/agenda-calendar").then(m => ({ default: m.AgendaCalendar })),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="flex items-center justify-center h-96">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 rounded-full border-2 border-brand-500/30 border-t-brand-500 animate-spin" />
+                    <p className="text-sm text-muted-foreground">Carregando agenda...</p>
+                </div>
+            </div>
+        ),
+    }
+);
 import { deleteAgendamento } from "@/lib/actions/agenda";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
 import Link from "next/link";
