@@ -123,24 +123,28 @@ export default function DashboardPage() {
     const mesAtual = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
     useEffect(() => {
-        getTotalLeadsByCanal().then(setLeadsData);
-        getEventosDoMes().then(setEventosDoMes);
-        getFollowupsAtivos().then(data => setFollowupsAtivos(data.length));
-        getAgendamentos()
-            .then((evts) => {
-                // Filtrar próximos 7 dias
-                const now = new Date();
-                const in7Days = new Date();
-                in7Days.setDate(now.getDate() + 7);
-                const upcoming = evts
-                    .filter((e) => {
-                        const d = new Date(e.start);
-                        return d >= now && d <= in7Days;
-                    })
-                    .slice(0, 4);
-                setProximosEventos(upcoming);
-            })
-            .finally(() => setLoadingEventos(false));
+        Promise.all([
+            getTotalLeadsByCanal(),
+            getEventosDoMes(),
+            getFollowupsAtivos(),
+            getAgendamentos(),
+        ]).then(([leads, eventos, followups, agendamentos]) => {
+            setLeadsData(leads);
+            setEventosDoMes(eventos);
+            setFollowupsAtivos(followups.length);
+
+            const now = new Date();
+            const in7Days = new Date();
+            in7Days.setDate(now.getDate() + 7);
+            const upcoming = agendamentos
+                .filter((e) => {
+                    const d = new Date(e.start);
+                    return d >= now && d <= in7Days;
+                })
+                .slice(0, 4);
+            setProximosEventos(upcoming);
+            setLoadingEventos(false);
+        });
     }, []);
 
     return (

@@ -311,7 +311,7 @@ const MY_USER_ID = "crm-user";
 // CHAT WINDOW
 // =============================================
 export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProps) {
-    const { messages, loading, addOptimisticMessage, updateMessageById, removeMessageById } = useLeadMessages(telefone);
+    const { messages, loading, hasMore, loadingMore, loadOlder, addOptimisticMessage, updateMessageById, removeMessageById } = useLeadMessages(telefone);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const messageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
     const messageIdRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -606,6 +606,22 @@ export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProp
             )}
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-1 bg-[#F7F7F5] dark:bg-[#0f1829]">
+                {hasMore && (
+                    <div className="flex justify-center py-3">
+                        <button
+                            onClick={loadOlder}
+                            disabled={loadingMore}
+                            className="flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-medium bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors disabled:opacity-40"
+                        >
+                            {loadingMore ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                                <ChevronUp className="w-3 h-3" />
+                            )}
+                            {loadingMore ? "Carregando..." : "Mensagens anteriores"}
+                        </button>
+                    </div>
+                )}
                 {messages.map((msg, idx) => {
                     const isClient = msg.senderType === "cliente" || msg.senderType === "lead";
                     const isSelf = msg.senderType === "ia" || msg.senderType === "humano" || msg.senderType === "equipe";

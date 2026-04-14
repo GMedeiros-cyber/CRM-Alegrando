@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { ClienteListItem } from "@/lib/actions/leads";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +39,7 @@ interface LeadListItemProps {
     tick: number;
 }
 
-export function LeadListItem({ item, isSelected, onClick }: LeadListItemProps) {
+const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: LeadListItemProps) {
     return (
         <button
             onClick={onClick}
@@ -110,4 +111,6 @@ export function LeadListItem({ item, isSelected, onClick }: LeadListItemProps) {
             </div>
         </button>
     );
-}
+};
+
+export const LeadListItem = memo(LeadListItemInner);
