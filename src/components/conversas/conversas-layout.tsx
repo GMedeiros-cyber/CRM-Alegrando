@@ -222,7 +222,15 @@ export function ConversasLayout() {
     const loadList = useCallback(async () => {
         try {
             const result = await listClientes({ search: searchTerm || undefined, page: 1, limit: CLIENTES_LIMIT });
-            setClientesList(result.data);
+            // Deduplicar por telefone (previne duplicatas caso o backend retorne)
+            const seen = new Set<string>();
+            const unique = result.data.filter(c => {
+                const key = String(c.telefone);
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+            setClientesList(unique);
             setTotalClientes(result.total);
         } catch (err) {
             console.error("[conversas] Erro ao carregar lista:", err);
@@ -238,8 +246,8 @@ export function ConversasLayout() {
         try {
             const result = await listClientes({ search: searchTerm || undefined, page: nextPage, limit: CLIENTES_LIMIT });
             setClientesList(prev => {
-                const existentes = new Set(prev.map(c => c.telefone));
-                const novos = result.data.filter(c => !existentes.has(c.telefone));
+                const existentes = new Set(prev.map(c => String(c.telefone)));
+                const novos = result.data.filter(c => !existentes.has(String(c.telefone)));
                 return [...prev, ...novos];
             });
             setTotalClientes(result.total);
