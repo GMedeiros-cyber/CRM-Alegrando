@@ -123,10 +123,11 @@ export async function listClientes(params?: {
     const to = from + limit - 1;
 
     // 1. Buscar clientes com contagem total
+    // IMPORTANTE: order() e range() DEVEM vir após os filtros eq/ilike
+    // para paginação correta com canal filter
     let query = supabase
         .from("Clientes _WhatsApp")
-        .select("telefone, nome, email, status, status_atendimento, ia_ativa, last_seen_at, created_at, foto_url, canal", { count: "exact" })
-        .order("created_at", { ascending: false });
+        .select("telefone, nome, email, status, status_atendimento, ia_ativa, last_seen_at, created_at, foto_url, canal", { count: "exact" });
 
     if (search) {
         query = query.ilike("nome", `%${search}%`);
@@ -136,9 +137,18 @@ export async function listClientes(params?: {
         query = query.eq("canal", params.canal);
     }
 
-    const { data: clients, error: clientsError, count } = await query.range(from, to);
+    const { data: clients, error: clientsError, count } = await query
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
-    if (clientsError || !clients || clients.length === 0) return { data: [], total: count || 0 };
+    // PGRST103 = range além dos limites — tratar como lista vazia mas manter total
+    if (clientsError) {
+        const supaErr = clientsError as { code?: string };
+        if (supaErr.code === "PGRST103") return { data: [], total: count || 0 };
+        console.error("[listClientes] Erro:", clientsError.message);
+        return { data: [], total: 0 };
+    }
+    if (!clients || clients.length === 0) return { data: [], total: count || 0 };
 
     // 2. Buscar mensagens dos telefones retornados para calcular lastMessageAt e unreadCount
     const telefones = clients.map(c => c.telefone);
