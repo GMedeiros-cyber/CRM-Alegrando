@@ -171,6 +171,7 @@ export function ConversasLayout() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const firstCaptionRef = useRef<HTMLTextAreaElement>(null);
     const loadMoreRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const loadedCountRef = useRef(0);
     const loadMoreFnRef = useRef<() => void>(() => {});
 
@@ -285,7 +286,11 @@ export function ConversasLayout() {
                     loadMoreFnRef.current();
                 }
             },
-            { threshold: 0.1 }
+            {
+                root: scrollContainerRef.current,
+                threshold: 0.1,
+                rootMargin: "0px 0px 100px 0px",
+            }
         );
         observer.observe(loadMoreRef.current);
         return () => observer.disconnect();
@@ -851,7 +856,7 @@ export function ConversasLayout() {
                 </div>
 
                 {/* List */}
-                <div className="flex-1 overflow-y-auto px-2 py-2">
+                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-2">
                     {loading ? (
                         <div className="flex items-center justify-center py-12">
                             <Loader2 className="w-5 h-5 animate-spin text-[#6366F1] dark:text-[#94a3b8]" />
