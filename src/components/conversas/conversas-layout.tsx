@@ -170,6 +170,7 @@ export function ConversasLayout() {
     }>>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const firstCaptionRef = useRef<HTMLTextAreaElement>(null);
+    const loadMoreRef = useRef<HTMLDivElement>(null);
 
     // NOVO badge ticker
     const [tick, setTick] = useState(0);
@@ -213,15 +214,10 @@ export function ConversasLayout() {
         return 0;
     });
 
-    // Filtro por canal
-    const clientesFiltrados = canalFiltro === "todos"
-        ? sortedLeads
-        : sortedLeads.filter(c => c.canal === canalFiltro);
-
     // Load clientes list (page 1)
     const loadList = useCallback(async () => {
         try {
-            const result = await listClientes({ search: searchTerm || undefined, page: 1, limit: CLIENTES_LIMIT });
+            const result = await listClientes({ search: searchTerm || undefined, page: 1, limit: CLIENTES_LIMIT, canal: canalFiltro });
             // Deduplicar por telefone (previne duplicatas caso o backend retorne)
             const seen = new Set<string>();
             const unique = result.data.filter(c => {
@@ -237,14 +233,14 @@ export function ConversasLayout() {
         } finally {
             setLoading(false);
         }
-    }, [searchTerm]);
+    }, [searchTerm, canalFiltro]);
 
     // Load more clientes (next page)
     async function loadMore() {
         const nextPage = Math.floor(clientesList.length / CLIENTES_LIMIT) + 1;
         setLoadingMore(true);
         try {
-            const result = await listClientes({ search: searchTerm || undefined, page: nextPage, limit: CLIENTES_LIMIT });
+            const result = await listClientes({ search: searchTerm || undefined, page: nextPage, limit: CLIENTES_LIMIT, canal: canalFiltro });
             setClientesList(prev => {
                 const existentes = new Set(prev.map(c => String(c.telefone)));
                 const novos = result.data.filter(c => !existentes.has(String(c.telefone)));
@@ -261,6 +257,24 @@ export function ConversasLayout() {
     useEffect(() => {
         loadList();
     }, [loadList]);
+
+    useEffect(() => {
+        if (!loadMoreRef.current) return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (
+                    entries[0].isIntersecting &&
+                    !loadingMore &&
+                    clientesList.length < totalClientes
+                ) {
+                    loadMore();
+                }
+            },
+            { threshold: 0.1 }
+        );
+        observer.observe(loadMoreRef.current);
+        return () => observer.disconnect();
+    }, [loadingMore, clientesList.length, totalClientes]);
 
     // Realtime: atualiza apenas o lead afetado em vez de rebuscar tudo
     useEffect(() => {
@@ -833,7 +847,7 @@ export function ConversasLayout() {
                         </div>
                     ) : (
                         <div className="space-y-1.5 flex flex-col">
-                            {clientesFiltrados.map((item) => (
+                            {sortedLeads.map((item) => (
                                 <LeadListItem
                                     key={item.telefone.toString()}
                                     item={item}
@@ -843,20 +857,14 @@ export function ConversasLayout() {
                                 />
                             ))}
                             {clientesList.length < totalClientes && (
-                                <button
-                                    onClick={loadMore}
-                                    disabled={loadingMore}
-                                    className="w-full mt-2 py-2 text-xs font-medium text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white bg-[#EEF2FF] dark:bg-[#1e2536]/60 hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] rounded-xl border border-[#C7D2FE] dark:border-[#3d4a60]/50 transition-colors disabled:opacity-40"
-                                >
-                                    {loadingMore ? (
-                                        <span className="flex items-center justify-center gap-1.5">
+                                <div ref={loadMoreRef} className="flex justify-center py-4">
+                                    {loadingMore && (
+                                        <span className="flex items-center gap-1.5 text-xs text-[#6366F1] dark:text-[#94a3b8]">
                                             <Loader2 className="w-3 h-3 animate-spin" />
                                             Carregando...
                                         </span>
-                                    ) : (
-                                        `Carregar mais (${clientesList.length}/${totalClientes})`
                                     )}
-                                </button>
+                                </div>
                             )}
                         </div>
                     )}

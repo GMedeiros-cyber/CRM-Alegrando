@@ -112,6 +112,7 @@ export async function listClientes(params?: {
     search?: string;
     page?: number;
     limit?: number;
+    canal?: string;
 }): Promise<{ data: ClienteListItem[]; total: number }> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
@@ -129,6 +130,10 @@ export async function listClientes(params?: {
 
     if (search) {
         query = query.ilike("nome", `%${search}%`);
+    }
+
+    if (params?.canal && params.canal !== "todos") {
+        query = query.eq("canal", params.canal);
     }
 
     const { data: clients, error: clientsError, count } = await query.range(from, to);
