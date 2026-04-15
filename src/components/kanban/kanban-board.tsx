@@ -278,10 +278,19 @@ export function KanbanBoard({
     );
 
     const handleLeadClick = useCallback(
-        () => {
-            router.push(`/conversas`);
+        (leadId: string) => {
+            const allLeads = Object.values(leadsMap).flat();
+            const lead = allLeads.find(l => l.id === leadId);
+            if (lead?.telefone) {
+                if (canal) {
+                    localStorage.setItem("crm_canal_filtro", canal);
+                }
+                router.push(`/conversas?telefone=${lead.telefone}`);
+            } else {
+                router.push(`/conversas`);
+            }
         },
-        [router]
+        [router, leadsMap, canal]
     );
 
     const columnSortableIds = sortedColumns.map((c) => `col-sortable-${c.id}`);

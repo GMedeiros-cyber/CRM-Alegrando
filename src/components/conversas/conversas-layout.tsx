@@ -216,6 +216,9 @@ export function ConversasLayout() {
 
     // Load clientes list (page 1)
     const loadList = useCallback(async () => {
+        setClientesList([]);
+        setTotalClientes(0);
+        setLoading(true);
         try {
             const result = await listClientes({ search: searchTerm || undefined, page: 1, limit: CLIENTES_LIMIT, canal: canalFiltro });
             // Deduplicar por telefone (previne duplicatas caso o backend retorne)
@@ -236,11 +239,16 @@ export function ConversasLayout() {
     }, [searchTerm, canalFiltro]);
 
     // Load more clientes (next page)
-    async function loadMore() {
+    const loadMore = useCallback(async () => {
         const nextPage = Math.floor(clientesList.length / CLIENTES_LIMIT) + 1;
         setLoadingMore(true);
         try {
-            const result = await listClientes({ search: searchTerm || undefined, page: nextPage, limit: CLIENTES_LIMIT, canal: canalFiltro });
+            const result = await listClientes({
+                search: searchTerm || undefined,
+                page: nextPage,
+                limit: CLIENTES_LIMIT,
+                canal: canalFiltro,
+            });
             setClientesList(prev => {
                 const existentes = new Set(prev.map(c => String(c.telefone)));
                 const novos = result.data.filter(c => !existentes.has(String(c.telefone)));
@@ -252,7 +260,7 @@ export function ConversasLayout() {
         } finally {
             setLoadingMore(false);
         }
-    }
+    }, [clientesList.length, searchTerm, canalFiltro]);
 
     useEffect(() => {
         loadList();
@@ -274,7 +282,7 @@ export function ConversasLayout() {
         );
         observer.observe(loadMoreRef.current);
         return () => observer.disconnect();
-    }, [loadingMore, clientesList.length, totalClientes]);
+    }, [loadingMore, clientesList.length, totalClientes, loadMore]);
 
     // Realtime: atualiza apenas o lead afetado em vez de rebuscar tudo
     useEffect(() => {
