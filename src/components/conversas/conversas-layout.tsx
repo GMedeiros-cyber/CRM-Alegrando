@@ -171,6 +171,8 @@ export function ConversasLayout() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const firstCaptionRef = useRef<HTMLTextAreaElement>(null);
     const loadMoreRef = useRef<HTMLDivElement>(null);
+    const loadedCountRef = useRef(0);
+    const loadMoreFnRef = useRef<() => void>(() => {});
 
     // NOVO badge ticker
     const [tick, setTick] = useState(0);
@@ -230,6 +232,7 @@ export function ConversasLayout() {
                 return true;
             });
             setClientesList(unique);
+            loadedCountRef.current = unique.length;
             setTotalClientes(result.total);
         } catch (err) {
             console.error("[conversas] Erro ao carregar lista:", err);
@@ -240,7 +243,7 @@ export function ConversasLayout() {
 
     // Load more clientes (next page)
     const loadMore = useCallback(async () => {
-        const nextPage = Math.floor(clientesList.length / CLIENTES_LIMIT) + 1;
+        const nextPage = Math.floor(loadedCountRef.current / CLIENTES_LIMIT) + 1;
         setLoadingMore(true);
         try {
             const result = await listClientes({
@@ -252,7 +255,9 @@ export function ConversasLayout() {
             setClientesList(prev => {
                 const existentes = new Set(prev.map(c => String(c.telefone)));
                 const novos = result.data.filter(c => !existentes.has(String(c.telefone)));
-                return [...prev, ...novos];
+                const merged = [...prev, ...novos];
+                loadedCountRef.current = merged.length;
+                return merged;
             });
             setTotalClientes(result.total);
         } catch (err) {
@@ -260,11 +265,13 @@ export function ConversasLayout() {
         } finally {
             setLoadingMore(false);
         }
-    }, [clientesList.length, searchTerm, canalFiltro]);
+    }, [searchTerm, canalFiltro]);
 
     useEffect(() => {
         loadList();
     }, [loadList]);
+
+    useEffect(() => { loadMoreFnRef.current = loadMore; }, [loadMore]);
 
     useEffect(() => {
         if (!loadMoreRef.current) return;
@@ -275,14 +282,14 @@ export function ConversasLayout() {
                     !loadingMore &&
                     clientesList.length < totalClientes
                 ) {
-                    loadMore();
+                    loadMoreFnRef.current();
                 }
             },
             { threshold: 0.1 }
         );
         observer.observe(loadMoreRef.current);
         return () => observer.disconnect();
-    }, [loadingMore, clientesList.length, totalClientes, loadMore]);
+    }, [loadingMore, clientesList.length, totalClientes]);
 
     // Realtime: atualiza apenas o lead afetado em vez de rebuscar tudo
     useEffect(() => {
