@@ -237,7 +237,11 @@ export function ConversasLayout() {
         setLoadingMore(true);
         try {
             const result = await listClientes({ search: searchTerm || undefined, page: nextPage, limit: CLIENTES_LIMIT });
-            setClientesList(prev => [...prev, ...result.data]);
+            setClientesList(prev => {
+                const existentes = new Set(prev.map(c => c.telefone));
+                const novos = result.data.filter(c => !existentes.has(c.telefone));
+                return [...prev, ...novos];
+            });
             setTotalClientes(result.total);
         } catch (err) {
             console.error("[conversas] Erro ao carregar mais:", err);
