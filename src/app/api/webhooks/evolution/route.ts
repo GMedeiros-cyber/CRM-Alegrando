@@ -3,69 +3,78 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
     const payload = await req.json();
+    console.log(`[EVO-WEBHOOK] event=${payload.event}`);
+    if (payload.event === "messages.reaction") return handleReaction(payload);
+    if (payload.event === "messages.upsert") return handleUpsert(payload);
+    return NextResponse.json({ status: "skipped", event: payload.event });
+}
 
-    // Só processar messages.upsert enviadas pela Márcia (fromMe=true)
-    if (payload.event !== "messages.upsert") {
-        return NextResponse.json({ status: "skipped" });
-    }
+async function handleReaction(payload: Record<string, unknown>): Promise<NextResponse> {
+    try {
+        const reactionData = (payload as { data?: Record<string, unknown> }).data;
+        const key = (reactionData as { key?: Record<string, unknown> } | undefined)?.key;
+        const rawReactPhone = ((key?.remoteJid as string | undefined) ?? "").replace(/@.*$/, "");
+        const isReactFromMe = key?.fromMe === true;
 
-    // Processar reações do lead (evento messages.reaction)
-    if (payload.event === "messages.reaction") {
-        try {
-            const reactionData = payload.data;
-            const rawReactPhone = reactionData?.key?.remoteJid?.replace(/@.*$/, "") ?? "";
-            const isReactFromMe = reactionData?.key?.fromMe === true;
+        // Só processar reações do lead (não da Márcia)
+        if (isReactFromMe || !rawReactPhone) return NextResponse.json({ status: "skipped" });
 
-            // Só processar reações do lead (não da Márcia)
-            if (isReactFromMe || !rawReactPhone) return NextResponse.json({ status: "skipped" });
+        const reactDigits = rawReactPhone.replace(/\D/g, "");
+        const reactPhone = reactDigits.startsWith("55") && reactDigits.length >= 12 ? reactDigits : `55${reactDigits}`;
 
-            const reactDigits = rawReactPhone.replace(/\D/g, "");
-            const reactPhone = reactDigits.startsWith("55") && reactDigits.length >= 12 ? reactDigits : `55${reactDigits}`;
+        const reaction = (reactionData as { reaction?: { key?: { id?: string }; text?: string } } | undefined)?.reaction;
+        const targetMessageId = reaction?.key?.id || "";
+        const reactionEmoji = reaction?.text || "";
 
-            const targetMessageId = reactionData?.reaction?.key?.id as string || "";
-            const reactionEmoji = reactionData?.reaction?.text as string || "";
+        if (!targetMessageId) return NextResponse.json({ status: "skipped" });
 
-            if (!targetMessageId) return NextResponse.json({ status: "skipped" });
+        const supabaseReact = createServerSupabaseClient();
 
-            const supabaseReact = createServerSupabaseClient();
+        const { data: targetMsg } = await supabaseReact
+            .from("messages")
+            .select("id, reactions")
+            .eq("telefone", reactPhone)
+            .eq("metadata->>messageId", targetMessageId)
+            .maybeSingle();
 
-            const { data: targetMsg } = await supabaseReact
-                .from("messages")
-                .select("id, reactions")
-                .eq("telefone", reactPhone)
-                .eq("metadata->>messageId", targetMessageId)
-                .maybeSingle();
+        if (targetMsg) {
+            const reactions = (targetMsg.reactions as Record<string, string[]>) || {};
+            const reacterKey = "lead";
 
-            if (targetMsg) {
-                const reactions = (targetMsg.reactions as Record<string, string[]>) || {};
-                const reacterKey = "lead";
-
-                const newReactions: Record<string, string[]> = {};
-                for (const [e, users] of Object.entries(reactions)) {
-                    const filtered = (users as string[]).filter((u) => u !== reacterKey);
-                    if (filtered.length > 0) newReactions[e] = filtered;
-                }
-                if (reactionEmoji) {
-                    newReactions[reactionEmoji] = [...(newReactions[reactionEmoji] ?? []), reacterKey];
-                }
-
-                await supabaseReact
-                    .from("messages")
-                    .update({ reactions: newReactions })
-                    .eq("id", targetMsg.id);
+            const newReactions: Record<string, string[]> = {};
+            for (const [e, users] of Object.entries(reactions)) {
+                const filtered = (users as string[]).filter((u) => u !== reacterKey);
+                if (filtered.length > 0) newReactions[e] = filtered;
+            }
+            if (reactionEmoji) {
+                newReactions[reactionEmoji] = [...(newReactions[reactionEmoji] ?? []), reacterKey];
             }
 
-            return NextResponse.json({ status: "ok" });
-        } catch (err) {
-            console.error("[EVO-WEBHOOK] Erro ao processar reação:", err);
-            return NextResponse.json({ status: "error" });
+            await supabaseReact
+                .from("messages")
+                .update({ reactions: newReactions })
+                .eq("id", targetMsg.id);
         }
-    }
 
-    const data = payload.data;
+        return NextResponse.json({ status: "ok" });
+    } catch (err) {
+        console.error("[EVO-WEBHOOK] Erro ao processar reação:", err);
+        return NextResponse.json({ status: "error" });
+    }
+}
+
+async function handleUpsert(payload: Record<string, unknown>): Promise<NextResponse> {
+    const data = (payload as { data?: Record<string, unknown> }).data as
+        | {
+              key?: { fromMe?: boolean; remoteJid?: string; id?: string };
+              pushName?: string;
+              message?: { conversation?: string; extendedTextMessage?: { text?: string } };
+              messageTimestamp?: number;
+          }
+        | undefined;
     const isFromMe = data?.key?.fromMe === true;
 
-    const rawPhone = data?.key?.remoteJid?.replace(/@.*$/, "") ?? "";
+    const rawPhone = (data?.key?.remoteJid ?? "").replace(/@.*$/, "");
     if (!rawPhone || rawPhone.includes("@g.us")) {
         return NextResponse.json({ status: "skipped" }); // ignorar grupos
     }
