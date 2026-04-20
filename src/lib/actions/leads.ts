@@ -33,6 +33,32 @@ const updateClienteSchema = z.object({
     segundoNumero: z.string().max(20).nullable().optional(),
 }).strict();
 
+const createClienteSchema = z.object({
+    telefone: z.string().min(8).max(20),
+    nome: z.string().max(200).nullable(),
+    fotoUrl: z.string().url().nullable().optional(),
+    canal: z.enum(["alegrando", "festas"]).optional(),
+    responsavel: z.string().max(200).nullable().optional(),
+});
+
+/** Normaliza telefone BR: retorna sempre com prefixo 55, ou throw se
+    fora do padrão. Aceita 10 ou 11 dígitos sem 55 (DDD+numero) e
+    12 ou 13 dígitos com 55. */
+function normalizeTelefoneBR(telefoneRaw: string): string {
+    const digits = telefoneRaw.replace(/\D/g, "");
+    let withPrefix: string;
+    if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {
+        withPrefix = digits;
+    } else if (!digits.startsWith("55") && (digits.length === 10 || digits.length === 11)) {
+        withPrefix = `55${digits}`;
+    } else {
+        throw new Error(
+            `Telefone inválido: "${telefoneRaw}". Use DDD + número (ex: 11987654321).`
+        );
+    }
+    return withPrefix;
+}
+
 // =============================================
 // TYPES
 // =============================================
@@ -619,25 +645,31 @@ export async function createCliente(data: {
     responsavel?: string | null;
 }): Promise<{ success: boolean }> {
     await requireAuth();
+
+    const parsed = createClienteSchema.parse({
+        telefone: data.telefone,
+        nome: data.nome,
+        fotoUrl: data.fotoUrl ?? null,
+        canal: data.canal,
+        responsavel: data.responsavel ?? null,
+    });
+
+    const telefoneCompleto = normalizeTelefoneBR(parsed.telefone);
+    const telefoneCurto = telefoneCompleto.slice(2);
+
     const supabase = createServerSupabaseClient();
 
-    const telefone = data.telefone.replace(/\D/g, "").trim();
-    if (!telefone || telefone.length < 8) {
-        throw new Error("Telefone inválido");
-    }
-
-    // Check if already exists
     const { data: existing } = await supabase
         .from("Clientes _WhatsApp")
         .select("telefone")
-        .eq("telefone", telefone)
+        .or(`telefone.eq.${telefoneCompleto},telefone.eq.${telefoneCurto}`)
         .maybeSingle();
 
     if (existing) {
         throw new Error("Lead já existe com este telefone");
     }
 
-    const canalLead = data.canal || "alegrando";
+    const canalLead = parsed.canal || "alegrando";
     const { data: primeiraColuna } = await supabase
         .from("kanban_columns")
         .select("id")
@@ -647,20 +679,17 @@ export async function createCliente(data: {
         .maybeSingle();
 
     const { error } = await supabase.from("Clientes _WhatsApp").insert({
-        telefone,
-        nome: data.nome || null,
-        ia_ativa: data.canal === "festas" ? false : true,
+        telefone: telefoneCompleto,
+        nome: parsed.nome || null,
+        ia_ativa: canalLead === "festas" ? false : true,
         status_atendimento: "novo",
-        foto_url: data.fotoUrl || null,
+        foto_url: parsed.fotoUrl || null,
         kanban_column_id: primeiraColuna?.id || null,
-        canal: data.canal || "alegrando",
-        ...(data.responsavel ? { responsavel: data.responsavel } : {}),
+        canal: canalLead,
+        ...(parsed.responsavel ? { responsavel: parsed.responsavel } : {}),
     });
 
-    if (error) {
-        throw new Error(error.message);
-    }
-
+    if (error) throw new Error(error.message);
     return { success: true };
 }
 
