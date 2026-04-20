@@ -90,7 +90,8 @@ export type LeadMessage = {
     senderType: string;
     senderName: string | null;
     content: string;
-    mediaType: "text" | "audio" | "image" | "document" | null;
+    mediaType: "text" | "audio" | "image" | "document" | "video"
+             | "sticker" | "location" | "contact" | null;
     createdAt: Date | null;
     createdBy?: string | null;
     zapiMessageId?: string | null;

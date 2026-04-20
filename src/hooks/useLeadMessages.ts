@@ -227,7 +227,7 @@ function mapRows(rows: Record<string, unknown>[]): LeadMessage[] {
             senderType: row.sender_type as string,
             senderName: (row.sender_name as string) || null,
             content: row.content as string,
-            mediaType: (row.media_type as "text" | "audio" | "image" | "document") || "text",
+            mediaType: (row.media_type as "text" | "audio" | "image" | "document" | "video" | "sticker" | "location" | "contact") || "text",
             createdAt: row.created_at ? new Date(row.created_at as string) : null,
             createdBy: (row.created_by as string) ?? null,
             zapiMessageId: (meta?.messageId as string) ?? null,
