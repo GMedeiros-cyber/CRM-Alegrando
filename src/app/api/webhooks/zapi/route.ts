@@ -25,6 +25,9 @@ const MESSAGE_EVENT_TYPES = new Set([
   "ReactionCallback",
 ]);
 
+type MediaType = "text" | "image" | "document" | "audio" | "video"
+               | "sticker" | "location" | "contact";
+
 interface ZApiTextPayload {
   message: string;
 }
@@ -38,6 +41,31 @@ interface ZApiDocumentPayload {
   documentUrl?: string;
   fileName?: string;
   caption?: string;
+}
+
+interface ZApiAudioPayload {
+  audioUrl?: string;
+  mimeType?: string;
+}
+
+interface ZApiVideoPayload {
+  videoUrl?: string;
+  caption?: string;
+}
+
+interface ZApiStickerPayload {
+  stickerUrl?: string;
+}
+
+interface ZApiContactPayload {
+  displayName?: string;
+  vCard?: string;
+}
+
+interface ZApiLocationPayload {
+  latitude?: number;
+  longitude?: number;
+  address?: string;
 }
 
 interface ZApiWebhookPayload {
@@ -56,12 +84,17 @@ interface ZApiWebhookPayload {
   text?: ZApiTextPayload;
   image?: ZApiImagePayload;
   document?: ZApiDocumentPayload;
+  audio?: ZApiAudioPayload;
+  video?: ZApiVideoPayload;
+  sticker?: ZApiStickerPayload;
+  contact?: ZApiContactPayload;
+  location?: ZApiLocationPayload;
   [key: string]: unknown;
 }
 
 function extractMessageContent(payload: ZApiWebhookPayload): {
   content: string;
-  media_type: "text" | "image" | "document" | "audio" | "video";
+  media_type: MediaType;
 } {
   if (payload.text?.message) {
     return { content: payload.text.message, media_type: "text" };
@@ -71,15 +104,36 @@ function extractMessageContent(payload: ZApiWebhookPayload): {
     const caption = payload.image.caption || "";
     return { content: caption ? `${url}|||${caption}` : url, media_type: "image" };
   }
+  if (payload.video) {
+    const url = payload.video.videoUrl || "";
+    const caption = payload.video.caption || "";
+    return { content: caption ? `${url}|||${caption}` : url, media_type: "video" };
+  }
+  if (payload.audio) {
+    return { content: payload.audio.audioUrl || "", media_type: "audio" };
+  }
   if (payload.document) {
     const url = payload.document.documentUrl || "";
     const caption = payload.document.caption || "";
     return { content: caption ? `${url}|||${caption}` : url, media_type: "document" };
   }
+  if (payload.sticker) {
+    return { content: payload.sticker.stickerUrl || "", media_type: "sticker" };
+  }
+  if (payload.location) {
+    const { latitude = 0, longitude = 0, address = "" } = payload.location;
+    return { content: `${latitude},${longitude}|||${address}`, media_type: "location" };
+  }
+  if (payload.contact) {
+    return { content: payload.contact.displayName || "Contato", media_type: "contact" };
+  }
   const tipo = (payload as Record<string, unknown>).type as string || "mensagem";
-  const tipoLabel = tipo === "SentCallback" || tipo === "ReceivedCallback" ? "mídia" : tipo;
-  console.warn("[ZAPI-PROXY] Tipo não tratado:", tipo, Object.keys(payload));
-  return { content: `📎 ${tipoLabel} enviada pelo WhatsApp`, media_type: "document" };
+  console.error(
+    "[ZAPI-PROXY] Tipo não reconhecido — fallback document:",
+    tipo, "keys=", Object.keys(payload),
+    "payload_preview=", JSON.stringify(payload).slice(0, 500)
+  );
+  return { content: `📎 ${tipo} enviada pelo WhatsApp`, media_type: "document" };
 }
 
 /** Retorna true se o valor é um LID do WhatsApp (ex: "219279655968887@lid") */
@@ -198,7 +252,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // --- 3. Mensagens da equipe (fromMe=true, fromApi=false): salvar no banco ---
-  if (isFromMe && !isFromApi && payload.messageId) {
+  if (isFromMe && !isFromApi && payload.messageId && eventType !== "ReactionCallback") {
     try {
       let phone: string | null = null;
 
