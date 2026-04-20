@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useLeadMessages } from "@/hooks/useLeadMessages";
 import type { LeadMessage } from "@/lib/actions/leads";
-import { MessageSquare, Loader2, Search, X, ChevronUp, ChevronDown, FileText, Image as ImageIcon, Mic, Pin } from "lucide-react";
+import { MessageSquare, Loader2, Search, X, ChevronUp, ChevronDown, FileText, Image as ImageIcon, Mic, Pin, Video, MapPin, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MessageContextMenu } from "./message-context-menu";
 import { PinnedMessageBanner } from "./pinned-message-banner";
@@ -136,6 +136,53 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
             <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918] dark:text-white/80" : "bg-[#E0E7FF] dark:bg-[#2d3347]/60 text-[#37352F] dark:text-[#cbd5e1]")}>
                 <ImageIcon className="w-4 h-4 shrink-0" />
                 <span>Imagem recebida</span>
+            </div>
+        );
+    }
+    if (message.mediaType === "video") {
+        const { url, caption } = parseMediaContent(message.content || "");
+        if (url.startsWith("http")) {
+            return (
+                <div>
+                    <video controls src={url} width={320} className="rounded-xl max-w-[320px]" />
+                    {caption && <p className="text-xs mt-1.5 text-[#191918] dark:text-white/70 leading-relaxed">{caption}</p>}
+                </div>
+            );
+        }
+        return (
+            <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918] dark:text-white/80" : "bg-[#E0E7FF] dark:bg-[#2d3347]/60 text-[#37352F] dark:text-[#cbd5e1]")}>
+                <Video className="w-4 h-4 shrink-0" />
+                <span>Vídeo recebido</span>
+            </div>
+        );
+    }
+    if (message.mediaType === "sticker") {
+        const url = message.content || "";
+        if (url.startsWith("http")) {
+            return <img src={url} alt="sticker" width={120} height={120} className="object-contain" />;
+        }
+        return (
+            <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918] dark:text-white/80" : "bg-[#E0E7FF] dark:bg-[#2d3347]/60 text-[#37352F] dark:text-[#cbd5e1]")}>
+                <ImageIcon className="w-4 h-4 shrink-0" />
+                <span>Sticker</span>
+            </div>
+        );
+    }
+    if (message.mediaType === "location") {
+        const { url: latLng, caption: address } = parseMediaContent(message.content || "");
+        const href = `https://maps.google.com/?q=${latLng}`;
+        return (
+            <a href={href} target="_blank" rel="noopener noreferrer" className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918] dark:text-white/80" : "bg-[#E0E7FF] dark:bg-[#2d3347]/60 text-[#37352F] dark:text-[#cbd5e1]")}>
+                <MapPin className="w-4 h-4 shrink-0" />
+                <span>{address || "Ver localização"}</span>
+            </a>
+        );
+    }
+    if (message.mediaType === "contact") {
+        return (
+            <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918] dark:text-white/80" : "bg-[#E0E7FF] dark:bg-[#2d3347]/60 text-[#37352F] dark:text-[#cbd5e1]")}>
+                <User className="w-4 h-4 shrink-0" />
+                <span>{message.content || "Contato"}</span>
             </div>
         );
     }
