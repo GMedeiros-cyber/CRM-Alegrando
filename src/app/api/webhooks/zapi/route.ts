@@ -167,6 +167,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         });
     }
 
+    // Se não veio senderPhoto, busca proativamente na Z-API quando lead
+    // já existe mas ainda não tem foto (fire-and-forget)
+    if (!payload.senderPhoto) {
+      supabase
+        .from("Clientes _WhatsApp")
+        .select("telefone, foto_url")
+        .or(`telefone.eq.${realPhone},telefone.eq.${phoneWithout55}`)
+        .is("foto_url", null)
+        .maybeSingle()
+        .then(async ({ data: leadSemFoto }) => {
+          if (!leadSemFoto) return;
+          const { fetchZapiProfilePicture } = await import("@/lib/whatsapp/sender");
+          const url = await fetchZapiProfilePicture(String(leadSemFoto.telefone));
+          if (url) {
+            supabase
+              .from("Clientes _WhatsApp")
+              .update({ foto_url: url })
+              .eq("telefone", leadSemFoto.telefone)
+              .then(({ error }) => {
+                if (error) console.error("[ZAPI-PROXY] Falha backfill foto:", error.message);
+              });
+          }
+        });
+    }
+
     // Salvar messageId da mensagem do cliente para permitir reações futuras
     if (payload.messageId && eventType === "ReceivedCallback") {
       const { content, media_type } = extractMessageContent(payload);

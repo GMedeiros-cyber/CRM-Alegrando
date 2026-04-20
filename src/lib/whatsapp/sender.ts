@@ -341,6 +341,38 @@ export async function sendWhatsAppMessage(
   }
 }
 
+/**
+ * Busca a foto de perfil de um número via Z-API.
+ * Retorna a URL da foto ou null se indisponível.
+ */
+export async function fetchZapiProfilePicture(telefone: string): Promise<string | null> {
+  const instance = process.env.ZAPI_INSTANCE;
+  const token = process.env.ZAPI_TOKEN;
+  const clientToken = process.env.ZAPI_CLIENT_TOKEN;
+  if (!instance || !token || !clientToken) {
+    console.warn("[ZAPI-PIC] Credenciais Z-API ausentes");
+    return null;
+  }
+  const phone = formatPhoneZapi(telefone);
+  if (!phone || phone.length < 10) return null;
+
+  try {
+    const res = await fetch(
+      `${zapiBase(instance, token)}/profile-picture?phone=${phone}`,
+      { headers: buildZapiHeaders(clientToken) }
+    );
+    if (!res.ok) {
+      console.warn(`[ZAPI-PIC] ${res.status} para ${phone}`);
+      return null;
+    }
+    const body = (await res.json()) as { link?: string };
+    return body.link || null;
+  } catch (err) {
+    console.error("[ZAPI-PIC] erro:", err);
+    return null;
+  }
+}
+
 // =============================================
 // EVOLUTION API (canal festas)
 // =============================================
