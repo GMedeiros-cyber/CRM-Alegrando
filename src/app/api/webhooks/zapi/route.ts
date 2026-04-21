@@ -70,7 +70,14 @@ interface ZApiLocationPayload {
 
 interface ZApiReactionPayload {
   value?: string;       // emoji
-  messageId?: string;   // id da msg-alvo que está sendo reagida
+  time?: number;
+  reactionBy?: string;  // lid de quem reagiu
+  referencedMessage?: {
+    messageId?: string; // id da msg-alvo que está sendo reagida
+    fromMe?: boolean;
+    phone?: string;
+    participant?: string | null;
+  };
 }
 
 interface ZApiWebhookPayload {
@@ -137,14 +144,8 @@ function extractMessageContent(payload: ZApiWebhookPayload): {
   console.error(
     "[ZAPI-PROXY] Tipo não reconhecido — fallback document:",
     tipo, "keys=", Object.keys(payload),
-    "payload_preview=", JSON.stringify(payload).slice(0, 3000)
+    "payload_preview=", JSON.stringify(payload).slice(0, 500)
   );
-  if ((payload as Record<string, unknown>).reaction !== undefined) {
-    console.error(
-      "[ZAPI-PROXY] DEBUG reaction shape:",
-      JSON.stringify((payload as Record<string, unknown>).reaction)
-    );
-  }
   return { content: `📎 ${tipo} enviada pelo WhatsApp`, media_type: "document" };
 }
 
@@ -244,9 +245,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const supabase = createServerSupabaseClient();
 
   // --- 1.5. Reação embutida em ReceivedCallback/SentCallback ---
-  // Z-API às vezes envia reações como ReceivedCallback com objeto .reaction (não como ReactionCallback).
-  // Early return para não cair no fallback que gera "📎 ReceivedCallback enviada pelo WhatsApp".
-  if (payload.reaction && payload.reaction.messageId) {
+  // Z-API envia reações como ReceivedCallback com reaction.referencedMessage.messageId
+  // (não como ReactionCallback). Early return para não cair no fallback que gera
+  // "📎 ReceivedCallback enviada pelo WhatsApp".
+  const embeddedTargetId = payload.reaction?.referencedMessage?.messageId;
+  if (payload.reaction && embeddedTargetId) {
     const realPhone = rawPhone && !isLid(rawPhone) ? normalizePhone(rawPhone) : null;
     const phoneWithout55 = realPhone && realPhone.startsWith("55")
       ? realPhone.slice(2) : realPhone;
@@ -257,7 +260,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     await processReaction(
       supabase,
       telefoneCandidates,
-      payload.reaction.messageId,
+      embeddedTargetId,
       payload.reaction.value || "",
       isFromMe
     );
