@@ -31,6 +31,7 @@ const updateClienteSchema = z.object({
     endereco: z.string().max(500).nullable().optional(),
     responsavel: z.string().max(200).nullable().optional(),
     segundoNumero: z.string().max(20).nullable().optional(),
+    aniversariante: z.string().max(200).nullable().optional(),
 }).strict();
 
 const createClienteSchema = z.object({
@@ -39,6 +40,7 @@ const createClienteSchema = z.object({
     fotoUrl: z.string().url().nullable().optional(),
     canal: z.enum(["alegrando", "festas"]).optional(),
     responsavel: z.string().max(200).nullable().optional(),
+    aniversariante: z.string().max(200).nullable().optional(),
 });
 
 /** Normaliza telefone BR: retorna sempre com prefixo 55, ou throw se
@@ -108,6 +110,7 @@ export type ClienteDetail = {
     canal: string;
     responsavel: string | null;
     segundoNumero: string | null;
+    aniversariante: string | null;
 };
 
 /** Mensagem individual do chat */
@@ -286,6 +289,7 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
         canal: (data.canal as string) || "alegrando",
         responsavel: data.responsavel || null,
         segundoNumero: data.segundo_numero || null,
+        aniversariante: data.aniversariante || null,
     };
 }
 
@@ -329,6 +333,7 @@ export async function updateCliente(
         endereco?: string | null;
         responsavel?: string | null;
         segundoNumero?: string | null;
+        aniversariante?: string | null;
     }
 ) {
     const userId = await requireAuth();
@@ -370,6 +375,7 @@ export async function updateCliente(
     if (parsed.endereco !== undefined) updateData.endereco = parsed.endereco;
     if (parsed.responsavel !== undefined) updateData.responsavel = parsed.responsavel;
     if (parsed.segundoNumero !== undefined) updateData.segundo_numero = parsed.segundoNumero;
+    if (parsed.aniversariante !== undefined) updateData.aniversariante = parsed.aniversariante;
 
     await supabase
         .from("Clientes _WhatsApp")
@@ -643,6 +649,7 @@ export async function createCliente(data: {
     fotoUrl?: string | null;
     canal?: string;
     responsavel?: string | null;
+    aniversariante?: string | null;
 }): Promise<{ success: boolean }> {
     await requireAuth();
 
@@ -652,6 +659,7 @@ export async function createCliente(data: {
         fotoUrl: data.fotoUrl ?? null,
         canal: data.canal,
         responsavel: data.responsavel ?? null,
+        aniversariante: data.aniversariante ?? null,
     });
 
     const telefoneCompleto = normalizeTelefoneBR(parsed.telefone);
@@ -686,6 +694,7 @@ export async function createCliente(data: {
         foto_url: parsed.fotoUrl || null,
         kanban_column_id: primeiraColuna?.id || null,
         canal: canalLead,
+        aniversariante: parsed.aniversariante || null,
         ...(parsed.responsavel ? { responsavel: parsed.responsavel } : {}),
     });
 
