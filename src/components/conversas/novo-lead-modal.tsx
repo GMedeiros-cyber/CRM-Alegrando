@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { createCliente } from "@/lib/actions/leads";
 import { uploadContactPhoto } from "@/lib/actions/messages";
 import { cn } from "@/lib/utils";
-import { Phone, User, UserRound, UserPlus, Plus, X, Loader2 } from "lucide-react";
+import { Phone, User, UserRound, UserPlus, Plus, X, Loader2, Cake } from "lucide-react";
 
 interface NovoLeadModalProps {
     onClose: () => void;
@@ -18,6 +18,7 @@ export function NovoLeadModal({ onClose, onCreated, onToast }: NovoLeadModalProp
     const [newLeadForm, setNewLeadForm] = useState({ telefone: "", nome: "" });
     const [newLeadCanal, setNewLeadCanal] = useState<"alegrando" | "festas">("alegrando");
     const [newLeadResponsavel, setNewLeadResponsavel] = useState("");
+    const [aniversariante, setAniversariante] = useState("");
     const [newLeadPhoto, setNewLeadPhoto] = useState<{ file: File; preview: string } | null>(null);
     const newLeadPhotoRef = useRef<HTMLInputElement>(null);
     const [isCreatingLead, startCreatingLead] = useTransition();
@@ -27,6 +28,7 @@ export function NovoLeadModal({ onClose, onCreated, onToast }: NovoLeadModalProp
         setNewLeadForm({ telefone: "", nome: "" });
         setNewLeadCanal("alegrando");
         setNewLeadResponsavel("");
+        setAniversariante("");
         onClose();
     }
 
@@ -59,10 +61,12 @@ export function NovoLeadModal({ onClose, onCreated, onToast }: NovoLeadModalProp
                     fotoUrl,
                     canal: newLeadCanal,
                     responsavel: newLeadResponsavel.trim() || null,
+                    aniversariante: newLeadCanal === "festas" ? (aniversariante.trim() || null) : null,
                 });
                 setNewLeadForm({ telefone: "", nome: "" });
                 setNewLeadCanal("alegrando");
                 setNewLeadResponsavel("");
+                setAniversariante("");
                 setNewLeadPhoto(null);
                 onToast({ type: "success", text: "Lead criado com sucesso!" });
                 onClose();
@@ -196,6 +200,20 @@ export function NovoLeadModal({ onClose, onCreated, onToast }: NovoLeadModalProp
                             ))}
                         </div>
                     </div>
+                    {newLeadCanal === "festas" && (
+                        <div className="space-y-1">
+                            <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
+                                <Cake className="w-3 h-3" />
+                                Aniversariante
+                            </Label>
+                            <Input
+                                value={aniversariante}
+                                onChange={(e) => setAniversariante(e.target.value)}
+                                placeholder="Nome do aniversariante (opcional)"
+                                className="rounded-lg h-9 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex gap-2 mt-5">
