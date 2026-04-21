@@ -68,6 +68,11 @@ interface ZApiLocationPayload {
   address?: string;
 }
 
+interface ZApiReactionPayload {
+  value?: string;       // emoji
+  messageId?: string;   // id da msg-alvo que está sendo reagida
+}
+
 interface ZApiWebhookPayload {
   instanceId?: string;
   messageId?: string;
@@ -89,6 +94,7 @@ interface ZApiWebhookPayload {
   sticker?: ZApiStickerPayload;
   contact?: ZApiContactPayload;
   location?: ZApiLocationPayload;
+  reaction?: ZApiReactionPayload;
   [key: string]: unknown;
 }
 
@@ -157,6 +163,54 @@ function forwardToN8n(payload: ZApiWebhookPayload, n8nUrl: string): void {
   });
 }
 
+async function processReaction(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  telefoneCandidates: { realPhone: string; phoneWithout55: string } | null,
+  targetMessageId: string,
+  reactionEmoji: string,
+  isFromMe: boolean
+): Promise<void> {
+  if (!targetMessageId) return;
+
+  let query = supabase
+    .from("messages")
+    .select("id, reactions")
+    .eq("metadata->>messageId", targetMessageId);
+
+  if (telefoneCandidates) {
+    query = query.or(
+      `telefone.eq.${telefoneCandidates.realPhone},` +
+      `telefone.eq.${telefoneCandidates.phoneWithout55}`
+    );
+  }
+
+  const { data: targetMsg } = await query.maybeSingle();
+  if (!targetMsg) {
+    console.warn(`[ZAPI-PROXY] Reação ignorada — msg ${targetMessageId} não encontrada`);
+    return;
+  }
+
+  const reactions = (targetMsg.reactions as Record<string, string[]>) || {};
+  const reacterKey = isFromMe ? "equipe" : "lead";
+
+  // Remove reação anterior do mesmo autor (WhatsApp só permite uma por usuário)
+  const newReactions: Record<string, string[]> = {};
+  for (const [e, users] of Object.entries(reactions)) {
+    const filtered = (users as string[]).filter((u) => u !== reacterKey);
+    if (filtered.length > 0) newReactions[e] = filtered;
+  }
+  if (reactionEmoji) {
+    newReactions[reactionEmoji] = [...(newReactions[reactionEmoji] ?? []), reacterKey];
+  }
+
+  await supabase
+    .from("messages")
+    .update({ reactions: newReactions })
+    .eq("id", targetMsg.id);
+
+  console.log(`[ZAPI-PROXY] Reação ${reactionEmoji} (${reacterKey}) salva em ${targetMsg.id}`);
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   let payload: ZApiWebhookPayload;
 
@@ -182,6 +236,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const isFromApi = payload.fromApi === true;
 
   const supabase = createServerSupabaseClient();
+
+  // --- 1.5. Reação embutida em ReceivedCallback/SentCallback ---
+  // Z-API às vezes envia reações como ReceivedCallback com objeto .reaction (não como ReactionCallback).
+  // Early return para não cair no fallback que gera "📎 ReceivedCallback enviada pelo WhatsApp".
+  if (payload.reaction && payload.reaction.messageId) {
+    const realPhone = rawPhone && !isLid(rawPhone) ? normalizePhone(rawPhone) : null;
+    const phoneWithout55 = realPhone && realPhone.startsWith("55")
+      ? realPhone.slice(2) : realPhone;
+    const telefoneCandidates = realPhone && phoneWithout55
+      ? { realPhone, phoneWithout55 }
+      : null;
+
+    await processReaction(
+      supabase,
+      telefoneCandidates,
+      payload.reaction.messageId,
+      payload.reaction.value || "",
+      isFromMe
+    );
+
+    if (n8nWebhookUrl) forwardToN8n(payload, n8nWebhookUrl);
+    return NextResponse.json({ status: "ok", type: "reaction-embedded" });
+  }
 
   // --- 2. Mensagens do cliente (fromMe=false) com número real: atualiza chat_lid no lead ---
   // Isso cria o mapeamento LID → telefone que usaremos para mensagens do celular físico.
@@ -377,33 +454,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ status: "skipped", reason: "no reactionMessageId" });
       }
 
-      const { data: targetMsg } = await supabase
-        .from("messages")
-        .select("id, reactions")
-        .or(`telefone.eq.${normalizedPhone},telefone.eq.${phoneWithout55}`)
-        .eq("metadata->>messageId", targetMessageId)
-        .maybeSingle();
-
-      if (targetMsg) {
-        const reactions = (targetMsg.reactions as Record<string, string[]>) || {};
-        const reacterKey = "lead";
-
-        const newReactions: Record<string, string[]> = {};
-        for (const [e, users] of Object.entries(reactions)) {
-          const filtered = (users as string[]).filter((u) => u !== reacterKey);
-          if (filtered.length > 0) newReactions[e] = filtered;
-        }
-        if (reactionEmoji) {
-          newReactions[reactionEmoji] = [...(newReactions[reactionEmoji] ?? []), reacterKey];
-        }
-
-        await supabase
-          .from("messages")
-          .update({ reactions: newReactions })
-          .eq("id", targetMsg.id);
-
-        console.log(`[ZAPI-PROXY] Reação do lead salva: ${reactionEmoji} em ${targetMsg.id}`);
-      }
+      await processReaction(
+        supabase,
+        { realPhone: normalizedPhone, phoneWithout55 },
+        targetMessageId,
+        reactionEmoji,
+        false
+      );
     } catch (err) {
       console.error("[ZAPI-PROXY] Erro ao processar reação:", err);
     }
