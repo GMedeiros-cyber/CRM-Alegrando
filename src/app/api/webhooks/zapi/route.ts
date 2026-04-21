@@ -15,6 +15,7 @@
  */
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { proxyAudioToStorage } from "@/lib/whatsapp/audio-storage";
 import { NextRequest, NextResponse } from "next/server";
 
 // Tipos de evento que representam uma mensagem real chegando.
@@ -334,7 +335,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     // Salvar messageId da mensagem do cliente para permitir reações futuras
     if (payload.messageId && eventType === "ReceivedCallback") {
-      const { content, media_type } = extractMessageContent(payload);
+      const { content: rawContent, media_type } = extractMessageContent(payload);
       const sentAt = payload.momment
         ? new Date(payload.momment).toISOString()
         : new Date().toISOString();
@@ -347,6 +348,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         .maybeSingle();
 
       if (!existingMsg) {
+        let content = rawContent;
+        if (media_type === "audio" && rawContent.startsWith("http")) {
+          const proxied = await proxyAudioToStorage(
+            supabase, rawContent, realPhone, payload.messageId
+          );
+          if (proxied) content = proxied;
+        }
+
         supabase.from("messages").insert({
           telefone: realPhone,
           sender_type: "cliente",
@@ -421,10 +430,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         if (existing) {
           console.log(`[ZAPI-PROXY] Mensagem ${payload.messageId} já registrada. Ignorando duplicata.`);
         } else {
-          const { content, media_type } = extractMessageContent(payload);
+          const { content: rawContent, media_type } = extractMessageContent(payload);
           const sentAt = payload.momment
             ? new Date(payload.momment).toISOString()
             : new Date().toISOString();
+
+          let content = rawContent;
+          if (media_type === "audio" && rawContent.startsWith("http")) {
+            const proxied = await proxyAudioToStorage(
+              supabase, rawContent, phone, payload.messageId
+            );
+            if (proxied) content = proxied;
+          }
 
           const { error: insertErr } = await supabase.from("messages").insert({
             telefone: phone,
