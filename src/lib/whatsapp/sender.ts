@@ -62,6 +62,57 @@ export async function sendWhatsAppImage(
 }
 
 /**
+ * Envia áudio via WhatsApp usando endpoint /send-audio da Z-API.
+ * Aceita URL pública do áudio (o Z-API faz o fetch).
+ */
+export async function sendWhatsAppAudio(
+  telefone: string,
+  audioUrl: string
+): Promise<{ success: boolean; zapiMessageId?: string; error?: string }> {
+  const instance = process.env.ZAPI_INSTANCE;
+  const token = process.env.ZAPI_TOKEN;
+  const clientToken = process.env.ZAPI_CLIENT_TOKEN;
+
+  if (!instance || !token || !clientToken) {
+    console.error("[ZAPI-AUDIO] Variáveis ausentes");
+    return { success: false, error: "Variáveis Z-Api não configuradas" };
+  }
+
+  const phone = formatPhoneZapi(telefone);
+  if (!phone || phone.length < 10) {
+    return { success: false, error: "Telefone inválido: " + telefone };
+  }
+
+  console.log("[ZAPI-AUDIO] Enviando para:", phone, "url:", audioUrl);
+
+  try {
+    const response = await fetch(`${zapiBase(instance, token)}/send-audio`, {
+      method: "POST",
+      headers: buildZapiHeaders(clientToken),
+      body: JSON.stringify({ phone, audio: audioUrl }),
+    });
+
+    const body = await response.text();
+    if (!response.ok) {
+      console.error(`[ZAPI-AUDIO] Erro ${response.status}:`, body);
+      return { success: false, error: `Z-Api audio ${response.status}: ${body}` };
+    }
+
+    let zapiMessageId: string | undefined;
+    try {
+      const parsed = JSON.parse(body) as Record<string, unknown>;
+      zapiMessageId = (parsed.messageId as string) || undefined;
+    } catch { /* ignore */ }
+
+    console.log("[ZAPI-AUDIO] Sucesso:", zapiMessageId ?? body);
+    return { success: true, zapiMessageId };
+  } catch (err) {
+    console.error("[ZAPI-AUDIO] Exceção:", err);
+    return { success: false, error: String(err) };
+  }
+}
+
+/**
  * Envia documento (PDF, etc.) via WhatsApp como arquivo real (base64).
  * O destinatário vê o arquivo para download, não uma referência URL.
  */
@@ -450,6 +501,47 @@ export async function sendEvolutionReply(
     if (!res.ok) return { success: false, error: `Evolution reply ${res.status}` };
     return { success: true, evoMessageId: (body as Record<string, unknown>)?.key ? ((body as Record<string, Record<string, unknown>>).key.id as string) : undefined };
   } catch (err) {
+    return { success: false, error: String(err) };
+  }
+}
+
+/**
+ * Envia áudio via Evolution API (canal festas).
+ * Endpoint: /message/sendWhatsAppAudio/{instance}
+ * Body: { number, audio: base64 (sem prefixo data:) }
+ */
+export async function sendEvolutionAudio(
+  telefone: string,
+  audioBase64: string
+): Promise<{ success: boolean; evoMessageId?: string; error?: string }> {
+  const url = process.env.EVOLUTION_API_URL;
+  const instance = process.env.EVOLUTION_INSTANCE;
+  const key = process.env.EVOLUTION_API_KEY;
+  if (!url || !instance || !key) {
+    return { success: false, error: "Evolution API não configurada" };
+  }
+
+  const digits = telefone.replace(/\D/g, "");
+  const normalized = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
+
+  try {
+    const res = await fetch(`${url}/message/sendWhatsAppAudio/${instance}`, {
+      method: "POST",
+      headers: buildEvoHeaders(key),
+      body: JSON.stringify({
+        number: normalized,
+        audio: audioBase64,
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error(`[EVO-AUDIO] ${res.status}:`, body);
+      return { success: false, error: `Evolution audio ${res.status}` };
+    }
+    const evoMessageId = (body as Record<string, Record<string, unknown>>)?.key?.id as string | undefined;
+    return { success: true, evoMessageId };
+  } catch (err) {
+    console.error("[EVO-AUDIO] Exceção:", err);
     return { success: false, error: String(err) };
   }
 }
