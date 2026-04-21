@@ -137,8 +137,14 @@ function extractMessageContent(payload: ZApiWebhookPayload): {
   console.error(
     "[ZAPI-PROXY] Tipo não reconhecido — fallback document:",
     tipo, "keys=", Object.keys(payload),
-    "payload_preview=", JSON.stringify(payload).slice(0, 500)
+    "payload_preview=", JSON.stringify(payload).slice(0, 3000)
   );
+  if ((payload as Record<string, unknown>).reaction !== undefined) {
+    console.error(
+      "[ZAPI-PROXY] DEBUG reaction shape:",
+      JSON.stringify((payload as Record<string, unknown>).reaction)
+    );
+  }
   return { content: `📎 ${tipo} enviada pelo WhatsApp`, media_type: "document" };
 }
 
