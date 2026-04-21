@@ -10,6 +10,7 @@ import { EmojiPickerInput } from "./emoji-picker-input";
 import { NovoLeadModal } from "./novo-lead-modal";
 import { LeadListItem } from "./lead-list-item";
 import { AttachmentPreview } from "./attachment-preview";
+import { AudioPlayer } from "./audio-player";
 import { ClienteDetailPanel, INITIAL_FORM } from "./cliente-detail-panel";
 import type { FormState, TaskItem } from "./cliente-detail-panel";
 import {
@@ -1093,15 +1094,7 @@ export function ConversasLayout() {
                         {/* Audio preview */}
                         {audioAttachment && (
                             <div className="px-5 py-3 border-t border-border/50 bg-[#F7F7F5] dark:bg-[#0f1829]/60 flex items-center gap-3">
-                                <Mic className="w-4 h-4 text-brand-400 shrink-0" />
-                                <audio
-                                    controls
-                                    preload="metadata"
-                                    src={audioAttachment.previewUrl}
-                                    className="h-9 flex-1 min-w-0"
-                                >
-                                    Seu navegador não suporta áudio HTML.
-                                </audio>
+                                <AudioPlayer src={audioAttachment.previewUrl} variant="sent" className="flex-1" />
                                 <button
                                     onClick={handleCancelAudio}
                                     disabled={isSendingAudio}

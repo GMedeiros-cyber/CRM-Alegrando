@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { MessageContextMenu } from "./message-context-menu";
 import { PinnedMessageBanner } from "./pinned-message-banner";
 import { ReactionPicker } from "./reaction-picker";
+import { AudioPlayer } from "./audio-player";
 import { reactToMessage, deleteMessage, pinMessage } from "@/lib/actions/messages";
 
 export interface ChatWindowHandles {
@@ -118,13 +119,7 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
                 </div>
             );
         }
-        return (
-            <div className={cn("flex items-center gap-2 px-2 py-1.5 rounded-xl", isSelf ? "bg-[#191918]/5" : "bg-[#E0E7FF] dark:bg-[#2d3347]/60")}>
-                <audio controls preload="metadata" src={url} className="h-9 max-w-[240px]">
-                    Seu navegador não suporta áudio HTML.
-                </audio>
-            </div>
-        );
+        return <AudioPlayer src={url} variant={isSelf ? "sent" : "received"} />;
     }
     if (message.mediaType === "image") {
         const { url, caption } = parseMediaContent(message.content || "");
