@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "backfill:pics": "tsx scripts/backfill-profile-pictures.ts"
+    "backfill:pics": "tsx scripts/backfill-profile-pictures.ts",
+    "backfill:audios": "tsx scripts/backfill-audio-storage.ts"
   },
   "dependencies": {
     "@clerk/localizations": "^3.37.0",
