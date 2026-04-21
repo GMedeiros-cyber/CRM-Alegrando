@@ -108,10 +108,21 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
     }
 
     if (message.mediaType === "audio") {
+        const url = (message.content || "").trim();
+        const isUrl = url.startsWith("http://") || url.startsWith("https://");
+        if (!isUrl) {
+            return (
+                <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918] dark:text-white/80" : "bg-[#E0E7FF] dark:bg-[#2d3347]/60 text-[#37352F] dark:text-[#cbd5e1]")}>
+                    <Mic className="w-4 h-4 shrink-0" />
+                    <span>Áudio recebido</span>
+                </div>
+            );
+        }
         return (
-            <div className={cn("flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium", isSelf ? "bg-[#191918]/5 text-[#191918] dark:text-white/80" : "bg-[#E0E7FF] dark:bg-[#2d3347]/60 text-[#37352F] dark:text-[#cbd5e1]")}>
-                <Mic className="w-4 h-4 shrink-0" />
-                <span>Áudio recebido</span>
+            <div className={cn("flex items-center gap-2 px-2 py-1.5 rounded-xl", isSelf ? "bg-[#191918]/5" : "bg-[#E0E7FF] dark:bg-[#2d3347]/60")}>
+                <audio controls preload="metadata" src={url} className="h-9 max-w-[240px]">
+                    Seu navegador não suporta áudio HTML.
+                </audio>
             </div>
         );
     }
