@@ -86,7 +86,7 @@ function eventToAgendamento(event: {
 // =============================================
 
 /**
- * Busca eventos do Google Calendar dos próximos 90 dias.
+ * Busca eventos do Google Calendar dos próximos 540 dias (~18 meses).
  */
 export async function getAgendamentos(): Promise<AgendamentoEvent[]> {
     await requireAuth();
@@ -96,7 +96,7 @@ export async function getAgendamentos(): Promise<AgendamentoEvent[]> {
 
         const now = new Date();
         const future = new Date();
-        future.setDate(future.getDate() + 90);
+        future.setDate(future.getDate() + 540);
 
         const response = await calendar.events.list({
             calendarId,
