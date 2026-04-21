@@ -33,6 +33,7 @@ import {
     Send,
     Share2,
     CheckCircle2,
+    Cake,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { updateCliente } from "@/lib/actions/leads";
@@ -53,6 +54,7 @@ export type FormState = {
     endereco: string;
     responsavel: string;
     segundoNumero: string;
+    aniversariante: string;
     kanbanColumnId: string;
     ultimoPasseio: string;
     followupDias: number;
@@ -76,6 +78,7 @@ export const INITIAL_FORM: FormState = {
     endereco: "",
     responsavel: "",
     segundoNumero: "",
+    aniversariante: "",
     kanbanColumnId: "",
     ultimoPasseio: "",
     followupDias: 45,
@@ -235,6 +238,18 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                         className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                     />
                 </FieldGroup>
+
+                {cliente.canal === "festas" && (
+                    <FieldGroup icon={<Cake className="w-3 h-3" />} label="Aniversariante">
+                        <Input
+                            value={form.aniversariante}
+                            onChange={(e) => onFormChange({ aniversariante: e.target.value })}
+                            onBlur={onSave}
+                            placeholder="Nome do aniversariante"
+                            className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                        />
+                    </FieldGroup>
+                )}
 
                 <FieldGroup icon={<Phone className="w-3 h-3" />} label="Telefone">
                     <Input
