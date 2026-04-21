@@ -6,17 +6,20 @@ import {
     sendWhatsAppMessage,
     sendWhatsAppImage,
     sendWhatsAppDocument,
+    sendWhatsAppAudio,
     sendWhatsAppReaction,
     sendWhatsAppReply,
     pinWhatsAppMessage,
     deleteWhatsAppMessage,
     sendEvolutionReaction,
     sendEvolutionReply,
+    sendEvolutionAudio,
     deleteEvolutionMessage,
 } from "@/lib/whatsapp/sender";
 import { z } from "zod";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_AUDIO_SIZE = 16 * 1024 * 1024; // 16MB — limite do WhatsApp para áudio
 
 const sendMessageSchema = z.object({
     telefone: z.string().min(8).max(20),
@@ -272,6 +275,90 @@ export async function sendFileMessage(
 
     if (dbErr) {
         console.error("[sendFileMessage] Falha ao persistir:", dbErr.message);
+    }
+
+    return { success: true };
+}
+
+/**
+ * Envia um áudio via WhatsApp (Z-API para alegrando, Evolution para festas)
+ * e persiste no Supabase.
+ *
+ * TODO: gravação direta via MediaRecorder — PR futuro
+ */
+export async function sendAudioMessage(
+    formData: FormData
+): Promise<{ success: boolean; error?: string }> {
+    const userId = await requireAuth();
+
+    const file = formData.get("file") as File | null;
+    const telefone = formData.get("telefone") as string | null;
+    const senderName = (formData.get("sender_name") as string) || "Equipe";
+    const canal = (formData.get("canal") as string) || "alegrando";
+
+    if (!file || !telefone) {
+        return { success: false, error: "Áudio e telefone são obrigatórios." };
+    }
+    if (!file.type.startsWith("audio/")) {
+        return { success: false, error: "Arquivo selecionado não é um áudio." };
+    }
+    if (file.size > MAX_AUDIO_SIZE) {
+        return { success: false, error: "Áudio muito grande. Máximo 16MB." };
+    }
+
+    const supabase = createServerSupabaseClient();
+
+    // Upload para o bucket "audios"
+    const ext = file.name.split(".").pop() || "ogg";
+    const storagePath = `${String(telefone).replace(/\D/g, "")}/${Date.now()}.${ext}`;
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    const { error: uploadErr } = await supabase.storage
+        .from("audios")
+        .upload(storagePath, buffer, {
+            contentType: file.type,
+            upsert: false,
+        });
+
+    if (uploadErr) {
+        console.error("[sendAudioMessage] Upload falhou:", uploadErr.message);
+        return { success: false, error: "Falha no upload do áudio." };
+    }
+
+    const { data: urlData } = supabase.storage.from("audios").getPublicUrl(storagePath);
+    const publicUrl = urlData.publicUrl;
+
+    const isFestas = canal === "festas";
+    let messageId: string | undefined;
+
+    if (isFestas) {
+        const result = await sendEvolutionAudio(String(telefone), buffer.toString("base64"));
+        if (!result.success) {
+            console.error("[sendAudioMessage] Evolution falhou:", result.error);
+            return { success: false, error: result.error };
+        }
+        messageId = result.evoMessageId;
+    } else {
+        const result = await sendWhatsAppAudio(String(telefone), publicUrl);
+        if (!result.success) {
+            console.error("[sendAudioMessage] Z-API falhou:", result.error);
+            return { success: false, error: result.error };
+        }
+        messageId = result.zapiMessageId;
+    }
+
+    const { error: dbErr } = await supabase.from("messages").insert({
+        telefone: String(telefone),
+        sender_type: "equipe",
+        sender_name: senderName,
+        content: publicUrl,
+        media_type: "audio",
+        created_by: userId,
+        ...(messageId ? { metadata: { messageId } } : {}),
+    });
+
+    if (dbErr) {
+        console.error("[sendAudioMessage] Falha ao persistir:", dbErr.message);
     }
 
     return { success: true };
