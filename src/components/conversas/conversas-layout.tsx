@@ -28,7 +28,7 @@ import {
     createCliente,
 } from "@/lib/actions/leads";
 import type { PasseioHistorico } from "@/lib/actions/leads";
-import { sendMessage, sendFileMessage } from "@/lib/actions/messages";
+import { sendMessage, sendFileMessage, sendAudioMessage } from "@/lib/actions/messages";
 import {
     getKanbanColumns,
     getLeadTasks,
@@ -55,6 +55,7 @@ import {
     ArrowLeft,
     PanelRightOpen,
     Paperclip,
+    Mic,
     UserPlus,
     X,
 } from "lucide-react";
@@ -169,6 +170,13 @@ export function ConversasLayout() {
         id: string;
     }>>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Audio attachment (preview before send)
+    // TODO: gravação direta via MediaRecorder — PR futuro
+    const [audioAttachment, setAudioAttachment] = useState<{ file: File; previewUrl: string } | null>(null);
+    const [isSendingAudio, setIsSendingAudio] = useState(false);
+    const audioInputRef = useRef<HTMLInputElement>(null);
+
     const firstCaptionRef = useRef<HTMLTextAreaElement>(null);
     const loadMoreRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -710,6 +718,50 @@ export function ConversasLayout() {
         setTimeout(() => firstCaptionRef.current?.focus(), 50);
     }
 
+    // ========= Audio select / send handlers =========
+    function handleAudioSelect(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        if (!file) return;
+        if (!file.type.startsWith("audio/")) {
+            setToast({ type: "error", text: "Selecione um arquivo de áudio." });
+            return;
+        }
+        if (file.size > 16 * 1024 * 1024) {
+            setToast({ type: "error", text: `"${file.name}" é muito grande. Máximo 16MB.` });
+            return;
+        }
+        setAudioAttachment({ file, previewUrl: URL.createObjectURL(file) });
+    }
+
+    function handleCancelAudio() {
+        if (audioAttachment) URL.revokeObjectURL(audioAttachment.previewUrl);
+        setAudioAttachment(null);
+    }
+
+    async function handleSendAudio() {
+        if (!cliente?.telefone || !audioAttachment) return;
+        setIsSendingAudio(true);
+        try {
+            const formData = new FormData();
+            formData.append("file", audioAttachment.file);
+            formData.append("telefone", cliente.telefone);
+            formData.append("sender_name", cliente.canal === "festas" ? "Márcia" : "Equipe");
+            formData.append("canal", cliente.canal ?? "alegrando");
+            const res = await sendAudioMessage(formData);
+            if (!res.success) {
+                setToast({ type: "error", text: res.error || "Erro ao enviar áudio." });
+                return;
+            }
+            URL.revokeObjectURL(audioAttachment.previewUrl);
+            setAudioAttachment(null);
+        } catch (err) {
+            setToast({ type: "error", text: `Erro ao enviar áudio: ${err}` });
+        } finally {
+            setIsSendingAudio(false);
+        }
+    }
+
     // ========= Send attachments handler =========
     function handleSendAttachments() {
         if (!cliente?.telefone || attachments.length === 0) return;
@@ -1036,6 +1088,43 @@ export function ConversasLayout() {
                             onReply={(msg) => setReplyTo(msg)}
                         />
 
+                        {/* Audio preview */}
+                        {audioAttachment && (
+                            <div className="px-5 py-3 border-t border-border/50 bg-[#F7F7F5] dark:bg-[#0f1829]/60 flex items-center gap-3">
+                                <Mic className="w-4 h-4 text-brand-400 shrink-0" />
+                                <audio
+                                    controls
+                                    preload="metadata"
+                                    src={audioAttachment.previewUrl}
+                                    className="h-9 flex-1 min-w-0"
+                                >
+                                    Seu navegador não suporta áudio HTML.
+                                </audio>
+                                <button
+                                    onClick={handleCancelAudio}
+                                    disabled={isSendingAudio}
+                                    className="p-1.5 rounded-lg text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] transition-colors shrink-0 disabled:opacity-50"
+                                    title="Cancelar"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={handleSendAudio}
+                                    disabled={isSendingAudio}
+                                    className="flex items-center justify-center h-9 px-3 rounded-lg bg-brand-500 text-[#191918] dark:text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors shadow shadow-brand-500/25 shrink-0 gap-1.5"
+                                >
+                                    {isSendingAudio ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <>
+                                            <Send className="w-3.5 h-3.5" />
+                                            Enviar
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        )}
+
                         {/* Attachment preview area */}
                         {attachments.length > 0 && (
                             <AttachmentPreview
@@ -1096,6 +1185,27 @@ export function ConversasLayout() {
                                     title="Anexar arquivo"
                                 >
                                     <Paperclip className="w-4 h-4" />
+                                </button>
+                                {/* Audio attachment — TODO: gravação direta via MediaRecorder — PR futuro */}
+                                <input
+                                    ref={audioInputRef}
+                                    type="file"
+                                    accept="audio/*"
+                                    className="hidden"
+                                    onChange={handleAudioSelect}
+                                />
+                                <button
+                                    onClick={() => audioInputRef.current?.click()}
+                                    disabled={cliente.iaAtiva || !!audioAttachment}
+                                    className={cn(
+                                        "flex items-center justify-center w-10 h-10 rounded-xl transition-colors shrink-0 border",
+                                        audioAttachment
+                                            ? "bg-brand-500/20 border-brand-500/50 text-brand-400"
+                                            : "hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]/50 text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white disabled:opacity-30"
+                                    )}
+                                    title="Enviar áudio"
+                                >
+                                    <Mic className="w-4 h-4" />
                                 </button>
                                 <Input
                                     value={chatMessage}
