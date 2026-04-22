@@ -20,9 +20,11 @@ interface KanbanColumnProps {
     onLeadClick?: (leadId: string) => void;
     onColumnRenamed?: (colId: string, newName: string) => void;
     onColumnDeleted?: (colId: string) => void;
+    emptyMessage?: string;
+    totalCount?: number;
 }
 
-export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onColumnDeleted }: KanbanColumnProps) {
+export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onColumnDeleted, emptyMessage, totalCount }: KanbanColumnProps) {
     // Sortable for column reordering
     const {
         setNodeRef: setSortableRef,
@@ -166,7 +168,9 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                 )}
 
                 <span className="text-xs font-medium text-muted-foreground bg-secondary px-2 py-0.5 rounded-full shrink-0">
-                    {leads.length}
+                    {typeof totalCount === "number" && totalCount !== leads.length
+                        ? `${leads.length}/${totalCount}`
+                        : leads.length}
                 </span>
 
                 {/* Trash button — only on hover, only for non-protected columns */}
@@ -220,8 +224,8 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                 </SortableContext>
 
                 {leads.length === 0 && (
-                    <div className="flex-1 flex items-center justify-center py-8 text-xs text-muted-foreground border-2 border-dashed border-[#A5B4FC] dark:border-[#4a5568] rounded-xl">
-                        Arraste leads aqui
+                    <div className="flex-1 flex items-center justify-center py-8 text-xs text-muted-foreground border-2 border-dashed border-[#A5B4FC] dark:border-[#4a5568] rounded-xl text-center px-3">
+                        {emptyMessage ?? "Arraste leads aqui"}
                     </div>
                 )}
             </div>
