@@ -325,9 +325,12 @@ export async function sendAudioMessage(
         .from("audios")
         .upload(storagePath, buffer, { contentType: file.type, upsert: false });
 
+    // Força mimetype OGG Opus no data URL enviado ao Z-API. O stream Opus é idêntico
+    // entre WebM e OGG; declarar OGG ajuda a Z-API a tratar como PTT (voice note) em
+    // vez de arquivo de áudio genérico.
     const sendPromise = isFestas
         ? sendEvolutionAudio(String(telefone), base64)
-        : sendWhatsAppAudio(String(telefone), `data:${file.type};base64,${base64}`);
+        : sendWhatsAppAudio(String(telefone), `data:audio/ogg;codecs=opus;base64,${base64}`);
 
     const [uploadRes, sendRes] = await Promise.all([uploadPromise, sendPromise]);
 
