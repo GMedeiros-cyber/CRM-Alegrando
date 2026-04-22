@@ -85,16 +85,30 @@ export function AudioRecorder({ disabled, onRecorded, onRecordingChange, onError
         if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         const wasCancelled = cancelledRef.current;
         const collected = chunksRef.current.slice();
         const recorderMime = recorder.mimeType || mime || "audio/webm";
+        const durationMs = Date.now() - startedAtRef.current;
         cleanupStream();
         setMode("idle");
         setElapsed(0);
         if (wasCancelled || collected.length === 0) return;
 
-        const blob = new Blob(collected, { type: recorderMime });
+        let blob: Blob = new Blob(collected, { type: recorderMime });
+
+        // Chrome/MediaRecorder gera WebM sem Duration no header, o que faz o
+        // WhatsApp renderizar como áudio genérico (sem waveform, timer zerado)
+        // e o AudioPlayer do CRM mostrar 0:00. Conserta o header antes de enviar.
+        if (recorderMime.includes("webm") && durationMs > 0) {
+          try {
+            const { default: fixWebmDuration } = await import("fix-webm-duration");
+            blob = await fixWebmDuration(blob, durationMs, { logger: false });
+          } catch (err) {
+            console.warn("[AudioRecorder] fix-webm-duration falhou:", err);
+          }
+        }
+
         const file = new File([blob], `gravacao-${Date.now()}.${ext}`, { type: recorderMime });
         const previewUrl = URL.createObjectURL(blob);
         onRecorded(file, previewUrl);
