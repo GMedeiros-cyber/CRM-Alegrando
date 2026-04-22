@@ -89,7 +89,7 @@ export async function sendWhatsAppAudio(
     const response = await fetch(`${zapiBase(instance, token)}/send-audio`, {
       method: "POST",
       headers: buildZapiHeaders(clientToken),
-      body: JSON.stringify({ phone, audio: audioUrl }),
+      body: JSON.stringify({ phone, audio: audioUrl, waveform: true }),
     });
 
     const body = await response.text();
