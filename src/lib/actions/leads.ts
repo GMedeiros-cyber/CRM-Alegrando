@@ -136,7 +136,10 @@ export type LeadMessage = {
 
 /**
  * Lista clientes da tabela Clientes _WhatsApp com paginação.
- * Ordenados por created_at DESC (mais recentes primeiro).
+ * Ordenado por data da última mensagem DESC (fallback: created_at do lead),
+ * para que o lead com atividade mais recente fique no topo — mesmo que o
+ * cadastro seja antigo. A ordenação e paginação acontecem no banco via RPC
+ * list_clientes_by_last_msg para não carregar leads inteiros no Node.
  */
 export async function listClientes(params?: {
     search?: string;
@@ -149,89 +152,54 @@ export async function listClientes(params?: {
     const search = params?.search?.trim();
     const page = params?.page ?? 1;
     const limit = params?.limit ?? 50;
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
+    const offset = (page - 1) * limit;
+    const canal = params?.canal && params.canal !== "todos" ? params.canal : null;
 
-    // 1. Buscar clientes com contagem total
-    // IMPORTANTE: order() e range() DEVEM vir após os filtros eq/ilike
-    // para paginação correta com canal filter
-    let query = supabase
-        .from("Clientes _WhatsApp")
-        .select("telefone, nome, email, status, status_atendimento, ia_ativa, last_seen_at, created_at, foto_url, canal", { count: "exact" });
+    const { data, error } = await supabase.rpc("list_clientes_by_last_msg", {
+        p_canal: canal,
+        p_search: search || null,
+        p_offset: offset,
+        p_limit: limit,
+    });
 
-    if (search) {
-        query = query.ilike("nome", `%${search}%`);
-    }
-
-    if (params?.canal && params.canal !== "todos") {
-        query = query.eq("canal", params.canal);
-    }
-
-    const { data: clients, error: clientsError, count } = await query
-        .order("created_at", { ascending: false })
-        .range(from, to);
-
-    // PGRST103 = range além dos limites — tratar como lista vazia mas manter total
-    if (clientsError) {
-        const supaErr = clientsError as { code?: string };
-        if (supaErr.code === "PGRST103") return { data: [], total: count || 0 };
-        console.error("[listClientes] Erro:", clientsError.message);
+    if (error) {
+        console.error("[listClientes] Erro RPC:", error.message);
         return { data: [], total: 0 };
     }
-    if (!clients || clients.length === 0) return { data: [], total: count || 0 };
 
-    // 2. Buscar mensagens dos telefones retornados para calcular lastMessageAt e unreadCount
-    const telefones = clients.map(c => c.telefone);
-    const { data: msgs } = await supabase
-        .from("messages")
-        .select("telefone, sender_type, created_at")
-        .in("telefone", telefones)
-        .order("created_at", { ascending: false });
+    const rows = (data || []) as Array<{
+        telefone: string | number;
+        nome: string | null;
+        email: string | null;
+        status: string | null;
+        status_atendimento: string | null;
+        ia_ativa: boolean | null;
+        last_seen_at: string | null;
+        created_at: string | null;
+        foto_url: string | null;
+        canal: string | null;
+        last_message_at: string | null;
+        unread_count: number | string | null;
+        total_count: number | string | null;
+    }>;
 
-    // 3. Calcular lastMessageAt e unreadCount no JS
-    const lastMessageMap = new Map<string, Date>();
-    const unreadCountMap = new Map<string, number>();
+    const total = rows.length > 0 ? Number(rows[0].total_count || 0) : 0;
 
-    const lastSeenMap = new Map<string, Date | null>();
-    for (const c of clients) {
-        lastSeenMap.set(String(c.telefone), c.last_seen_at ? new Date(c.last_seen_at) : null);
-    }
-
-    for (const msg of msgs || []) {
-        const tel = String(msg.telefone);
-        const msgDate = msg.created_at ? new Date(msg.created_at) : null;
-
-        if (msgDate) {
-            const current = lastMessageMap.get(tel);
-            if (!current || msgDate > current) {
-                lastMessageMap.set(tel, msgDate);
-            }
-        }
-
-        if (msg.sender_type === "cliente" && msgDate) {
-            const lastSeen = lastSeenMap.get(tel);
-            if (!lastSeen || msgDate > lastSeen) {
-                unreadCountMap.set(tel, (unreadCountMap.get(tel) || 0) + 1);
-            }
-        }
-    }
-
-    // 4. Mapear para ClienteListItem
-    const mapped: ClienteListItem[] = clients.map(c => ({
-        telefone: String(c.telefone),
-        nome: c.nome,
-        email: c.email,
-        status: c.status,
-        statusAtendimento: c.status_atendimento,
-        iaAtiva: c.ia_ativa ?? true,
-        unreadCount: unreadCountMap.get(String(c.telefone)) || 0,
-        lastMessageAt: lastMessageMap.get(String(c.telefone)) || null,
-        createdAt: c.created_at ? new Date(c.created_at) : null,
-        fotoUrl: (c.foto_url as string) || null,
-        canal: (c.canal as string) || "alegrando",
+    const mapped: ClienteListItem[] = rows.map(r => ({
+        telefone: String(r.telefone),
+        nome: r.nome,
+        email: r.email,
+        status: r.status,
+        statusAtendimento: r.status_atendimento,
+        iaAtiva: r.ia_ativa ?? true,
+        unreadCount: Number(r.unread_count || 0),
+        lastMessageAt: r.last_message_at ? new Date(r.last_message_at) : null,
+        createdAt: r.created_at ? new Date(r.created_at) : null,
+        fotoUrl: r.foto_url || null,
+        canal: r.canal || "alegrando",
     }));
 
-    return { data: mapped, total: count || 0 };
+    return { data: mapped, total };
 }
 
 /**
