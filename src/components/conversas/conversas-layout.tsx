@@ -11,6 +11,7 @@ import { NovoLeadModal } from "./novo-lead-modal";
 import { LeadListItem } from "./lead-list-item";
 import { AttachmentPreview } from "./attachment-preview";
 import { AudioPlayer } from "./audio-player";
+import { AudioRecorder } from "./audio-recorder";
 import { ClienteDetailPanel, INITIAL_FORM } from "./cliente-detail-panel";
 import type { FormState, TaskItem } from "./cliente-detail-panel";
 import {
@@ -56,7 +57,6 @@ import {
     ArrowLeft,
     PanelRightOpen,
     Paperclip,
-    Mic,
     UserPlus,
     X,
 } from "lucide-react";
@@ -173,10 +173,9 @@ export function ConversasLayout() {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Audio attachment (preview before send)
-    // TODO: gravação direta via MediaRecorder — PR futuro
     const [audioAttachment, setAudioAttachment] = useState<{ file: File; previewUrl: string } | null>(null);
     const [isSendingAudio, setIsSendingAudio] = useState(false);
-    const audioInputRef = useRef<HTMLInputElement>(null);
+    const [isRecordingAudio, setIsRecordingAudio] = useState(false);
 
     const firstCaptionRef = useRef<HTMLTextAreaElement>(null);
     const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -721,20 +720,14 @@ export function ConversasLayout() {
         setTimeout(() => firstCaptionRef.current?.focus(), 50);
     }
 
-    // ========= Audio select / send handlers =========
-    function handleAudioSelect(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0];
-        e.target.value = "";
-        if (!file) return;
-        if (!file.type.startsWith("audio/")) {
-            setToast({ type: "error", text: "Selecione um arquivo de áudio." });
-            return;
-        }
+    // ========= Audio record / send handlers =========
+    function handleAudioRecorded(file: File, previewUrl: string) {
         if (file.size > 16 * 1024 * 1024) {
-            setToast({ type: "error", text: `"${file.name}" é muito grande. Máximo 16MB.` });
+            URL.revokeObjectURL(previewUrl);
+            setToast({ type: "error", text: "Áudio muito longo. Máximo 16MB." });
             return;
         }
-        setAudioAttachment({ file, previewUrl: URL.createObjectURL(file) });
+        setAudioAttachment({ file, previewUrl });
     }
 
     function handleCancelAudio() {
@@ -1168,74 +1161,65 @@ export function ConversasLayout() {
                                     className="hidden"
                                     onChange={handleFileSelect}
                                 />
-                                <button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    disabled={cliente.iaAtiva}
-                                    className={cn(
-                                        "flex items-center justify-center w-10 h-10 rounded-xl transition-colors shrink-0 border",
-                                        attachments.length > 0
-                                            ? "bg-brand-500/20 border-brand-500/50 text-brand-400"
-                                            : "hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]/50 text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white disabled:opacity-30"
-                                    )}
-                                    title="Anexar arquivo"
-                                >
-                                    <Paperclip className="w-4 h-4" />
-                                </button>
-                                {/* Audio attachment — TODO: gravação direta via MediaRecorder — PR futuro */}
-                                <input
-                                    ref={audioInputRef}
-                                    type="file"
-                                    accept="audio/*"
-                                    className="hidden"
-                                    onChange={handleAudioSelect}
-                                />
-                                <button
-                                    onClick={() => audioInputRef.current?.click()}
+                                {!isRecordingAudio && (
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={cliente.iaAtiva}
+                                        className={cn(
+                                            "flex items-center justify-center w-10 h-10 rounded-xl transition-colors shrink-0 border",
+                                            attachments.length > 0
+                                                ? "bg-brand-500/20 border-brand-500/50 text-brand-400"
+                                                : "hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]/50 text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white disabled:opacity-30"
+                                        )}
+                                        title="Anexar arquivo"
+                                    >
+                                        <Paperclip className="w-4 h-4" />
+                                    </button>
+                                )}
+                                <AudioRecorder
                                     disabled={cliente.iaAtiva || !!audioAttachment}
-                                    className={cn(
-                                        "flex items-center justify-center w-10 h-10 rounded-xl transition-colors shrink-0 border",
-                                        audioAttachment
-                                            ? "bg-brand-500/20 border-brand-500/50 text-brand-400"
-                                            : "hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]/50 text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white disabled:opacity-30"
-                                    )}
-                                    title="Enviar áudio"
-                                >
-                                    <Mic className="w-4 h-4" />
-                                </button>
-                                <Input
-                                    value={chatMessage}
-                                    onChange={(e) => setChatMessage(e.target.value)}
-                                    disabled={(cliente.iaAtiva && cliente.canal !== "festas") || attachments.length > 0}
-                                    placeholder={
-                                        (cliente.iaAtiva && cliente.canal !== "festas")
-                                            ? "Pause a IA para enviar manualmente..."
-                                            : attachments.length > 0
-                                                ? "Adicione legenda nos arquivos acima ou clique em enviar"
-                                                : "Digite uma mensagem..."
-                                    }
-                                    className="rounded-xl flex-1 h-10 bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8] focus:border-brand-500 focus:ring-brand-500/20"
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter" && !e.shiftKey && !cliente.iaAtiva && attachments.length === 0) {
-                                            e.preventDefault();
-                                            handleSendMessage();
-                                        }
-                                    }}
+                                    onRecorded={handleAudioRecorded}
+                                    onRecordingChange={setIsRecordingAudio}
+                                    onError={(msg) => setToast({ type: "error", text: msg })}
                                 />
-                                <button
-                                    onClick={attachments.length > 0 ? handleSendAttachments : handleSendMessage}
-                                    disabled={
-                                        isSendingMessage ||
-                                        (cliente.iaAtiva && cliente.canal !== "festas") ||
-                                        (attachments.length === 0 && !chatMessage.trim())
-                                    }
-                                    className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500 text-[#191918] dark:text-white hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 shrink-0"
-                                >
-                                    {isSendingMessage ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <Send className="w-4 h-4" />
-                                    )}
-                                </button>
+                                {!isRecordingAudio && (
+                                    <>
+                                        <Input
+                                            value={chatMessage}
+                                            onChange={(e) => setChatMessage(e.target.value)}
+                                            disabled={(cliente.iaAtiva && cliente.canal !== "festas") || attachments.length > 0}
+                                            placeholder={
+                                                (cliente.iaAtiva && cliente.canal !== "festas")
+                                                    ? "Pause a IA para enviar manualmente..."
+                                                    : attachments.length > 0
+                                                        ? "Adicione legenda nos arquivos acima ou clique em enviar"
+                                                        : "Digite uma mensagem..."
+                                            }
+                                            className="rounded-xl flex-1 h-10 bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8] focus:border-brand-500 focus:ring-brand-500/20"
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && !e.shiftKey && !cliente.iaAtiva && attachments.length === 0) {
+                                                    e.preventDefault();
+                                                    handleSendMessage();
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            onClick={attachments.length > 0 ? handleSendAttachments : handleSendMessage}
+                                            disabled={
+                                                isSendingMessage ||
+                                                (cliente.iaAtiva && cliente.canal !== "festas") ||
+                                                (attachments.length === 0 && !chatMessage.trim())
+                                            }
+                                            className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500 text-[#191918] dark:text-white hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 shrink-0"
+                                        >
+                                            {isSendingMessage ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <Send className="w-4 h-4" />
+                                            )}
+                                        </button>
+                                    </>
+                                )}
                             </div>
                             <p className="text-[10px] text-[#9B9A97] dark:text-[#64748b] mt-1.5 text-center">
                                 {cliente.iaAtiva

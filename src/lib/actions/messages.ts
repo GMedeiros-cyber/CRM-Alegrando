@@ -562,6 +562,8 @@ export async function deleteMessage(payload: {
     telefone: string;
     owner: boolean;
     canal?: string;
+    mediaType?: string | null;
+    content?: string | null;
 }): Promise<{ success: boolean; error?: string }> {
     await requireAuth();
 
@@ -585,6 +587,19 @@ export async function deleteMessage(payload: {
                     .catch(err => console.error("[deleteMessage] Z-API exceção:", err));
             }
         }
+
+        // Se for áudio armazenado no bucket, apaga o arquivo (fire-and-forget)
+        if (payload.mediaType === "audio" && payload.content) {
+            const STORAGE_MARKER = "/storage/v1/object/public/audios/";
+            const markerIdx = payload.content.indexOf(STORAGE_MARKER);
+            if (markerIdx !== -1) {
+                const storagePath = payload.content.slice(markerIdx + STORAGE_MARKER.length);
+                supabase.storage.from("audios").remove([storagePath])
+                    .then(({ error: rmErr }) => { if (rmErr) console.error("[deleteMessage] Storage remove falhou:", rmErr.message); })
+                    .catch(err => console.error("[deleteMessage] Storage remove exceção:", err));
+            }
+        }
+
         // Marca como apagada no CRM (não remove o registro — fica visível como "Mensagem apagada")
         const { error } = await supabase
             .from("messages")
