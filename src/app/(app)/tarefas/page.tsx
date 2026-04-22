@@ -1,12 +1,31 @@
 ﻿"use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import { Plus, X, MoreHorizontal, User as UserIcon, Trash2, SquarePen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { 
-    getUsers, 
+import {
+    DndContext,
+    DragOverlay,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    closestCorners,
+    useDroppable,
+    type DragStartEvent,
+    type DragOverEvent,
+    type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+    SortableContext,
+    useSortable,
+    verticalListSortingStrategy,
+    arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+    getUsers,
     getTaskBoard,
     createTaskList,
     renameTaskList,
@@ -15,7 +34,8 @@ import {
     createTaskCard,
     updateTaskCard,
     deleteTaskCard,
-    assignMultipleTaskCard
+    assignMultipleTaskCard,
+    moveTaskCard,
 } from "@/lib/actions/tasks";
 
 // =============================================
@@ -62,19 +82,39 @@ export interface UserDTO {
 // Card Component
 // =============================================
 
-function TrelloCard({ 
+function TrelloCard({
     card,
     users,
     onAssignUser,
     onUpdateTitle,
     onDeleteCard,
-}: { 
+    isOverlay,
+}: {
     card: TaskCard;
     users: UserDTO[];
     onAssignUser: (cardId: string, userId: string, action: "add" | "remove") => void;
     onUpdateTitle: (cardId: string, title: string) => void;
     onDeleteCard: (cardId: string) => void;
+    isOverlay?: boolean;
 }) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({
+        id: card.id,
+        data: { type: "card", listId: card.listId },
+        disabled: isOverlay,
+    });
+
+    const dndStyle = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
     const [editing, setEditing] = useState(false);
     const [title, setTitle] = useState(card.title);
 
@@ -132,7 +172,18 @@ function TrelloCard({
 
     return (
         <>
-            <div className="group relative bg-[#EEF2FF] dark:bg-[#1e2536] hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] rounded-lg border border-[#818CF8] dark:border-[#4a5568] hover:border-[#6366F1] p-3 shadow-sm hover:shadow-md transition-all duration-150">
+            <div
+                ref={isOverlay ? undefined : setNodeRef}
+                style={isOverlay ? undefined : dndStyle}
+                {...(isOverlay ? {} : attributes)}
+                {...(isOverlay || editing ? {} : listeners)}
+                className={cn(
+                    "group relative bg-[#EEF2FF] dark:bg-[#1e2536] hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] rounded-lg border border-[#818CF8] dark:border-[#4a5568] hover:border-[#6366F1] p-3 shadow-sm hover:shadow-md transition-all duration-150",
+                    !editing && !isOverlay && "cursor-grab active:cursor-grabbing",
+                    isDragging && "opacity-40",
+                    isOverlay && "shadow-2xl rotate-2"
+                )}
+            >
                 {editing ? (
                     <div>
                         <textarea
@@ -477,15 +528,25 @@ function TrelloList({
         }
         setEditingName(false);
     }
-    
+
     function resetMenu() {
         setShowMenu(false);
         setShowDeleteConfirm(false);
         setShowMoveSubmenu(false);
     }
 
+    const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+        id: `list-${list.id}`,
+        data: { type: "list", listId: list.id },
+    });
+
+    const cardIds = list.cards.map((c) => c.id);
+
     return (
-        <div className="flex flex-col w-[280px] min-w-[280px] max-h-full rounded-xl bg-[#EEF2FF] dark:bg-[#1e2536] shrink-0">
+        <div className={cn(
+            "flex flex-col w-[280px] min-w-[280px] max-h-full rounded-xl bg-[#EEF2FF] dark:bg-[#1e2536] shrink-0 transition-colors",
+            isOver && "ring-2 ring-brand-400"
+        )}>
             {/* Header */}
             <div className="flex items-center gap-2 px-3 pt-3 pb-2 relative">
                 {editingName ? (
@@ -614,17 +675,22 @@ function TrelloList({
             </div>
 
             {/* Cards */}
-            <div className="flex-1 flex flex-col gap-2 px-2 overflow-y-auto pb-1 min-h-0">
-                {list.cards.map((card) => (
-                    <TrelloCard 
-                        key={card.id} 
-                        card={card} 
-                        users={users}
-                        onAssignUser={onAssignUser}
-                        onUpdateTitle={onUpdateCard}
-                        onDeleteCard={onDeleteCard}
-                    />
-                ))}
+            <div
+                ref={setDroppableRef}
+                className="flex-1 flex flex-col gap-2 px-2 overflow-y-auto pb-1 min-h-[60px]"
+            >
+                <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
+                    {list.cards.map((card) => (
+                        <TrelloCard
+                            key={card.id}
+                            card={card}
+                            users={users}
+                            onAssignUser={onAssignUser}
+                            onUpdateTitle={onUpdateCard}
+                            onDeleteCard={onDeleteCard}
+                        />
+                    ))}
+                </SortableContext>
             </div>
 
             {/* Footer: Add card */}
@@ -716,8 +782,147 @@ export default function TarefasPage() {
     const [lists, setLists] = useState<TaskList[]>([]);
     const [loading, setLoading] = useState(true);
     const [addingList, setAddingList] = useState(false);
-    
+
     const [users, setUsers] = useState<UserDTO[]>([]);
+
+    // DnD: activeCard para o DragOverlay, snapshot pra rollback em caso de erro.
+    const [activeCard, setActiveCard] = useState<TaskCard | null>(null);
+    const dragSnapshotRef = useRef<TaskList[] | null>(null);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    );
+
+    const findListIdOfCard = useCallback((cardId: string, source: TaskList[]): string | null => {
+        for (const list of source) {
+            if (list.cards.some((c) => c.id === cardId)) return list.id;
+        }
+        return null;
+    }, []);
+
+    const handleDragStart = useCallback((event: DragStartEvent) => {
+        const id = event.active.id as string;
+        const list = lists.find((l) => l.cards.some((c) => c.id === id));
+        const card = list?.cards.find((c) => c.id === id) || null;
+        setActiveCard(card);
+        dragSnapshotRef.current = lists;
+    }, [lists]);
+
+    const handleDragOver = useCallback((event: DragOverEvent) => {
+        const { active, over } = event;
+        if (!over) return;
+        const activeId = active.id as string;
+        const overId = over.id as string;
+
+        setLists((prev) => {
+            const sourceListId = findListIdOfCard(activeId, prev);
+            if (!sourceListId) return prev;
+
+            let destListId: string | null = null;
+            if (overId.startsWith("list-")) {
+                destListId = overId.replace("list-", "");
+            } else {
+                destListId = findListIdOfCard(overId, prev);
+            }
+            if (!destListId) return prev;
+            if (sourceListId === destListId) return prev;
+
+            const sourceList = prev.find((l) => l.id === sourceListId);
+            const destList = prev.find((l) => l.id === destListId);
+            if (!sourceList || !destList) return prev;
+
+            const activeIdx = sourceList.cards.findIndex((c) => c.id === activeId);
+            if (activeIdx === -1) return prev;
+
+            const [moved] = sourceList.cards.slice(activeIdx, activeIdx + 1);
+            const newSourceCards = sourceList.cards.filter((c) => c.id !== activeId);
+
+            let overIdx = destList.cards.findIndex((c) => c.id === overId);
+            if (overIdx === -1) overIdx = destList.cards.length;
+
+            const newDestCards = [...destList.cards];
+            newDestCards.splice(overIdx, 0, { ...moved, listId: destListId });
+
+            return prev.map((l) => {
+                if (l.id === sourceListId) return { ...l, cards: newSourceCards };
+                if (l.id === destListId) return { ...l, cards: newDestCards };
+                return l;
+            });
+        });
+    }, [findListIdOfCard]);
+
+    const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+        const { active, over } = event;
+        setActiveCard(null);
+        if (!over) {
+            dragSnapshotRef.current = null;
+            return;
+        }
+
+        const activeId = active.id as string;
+        const overId = over.id as string;
+
+        // Estado atual já reflete a movimentação entre listas (handleDragOver).
+        // Aqui só precisamos resolver reordenação dentro da lista de destino.
+        setLists((prev) => {
+            const destListId = findListIdOfCard(activeId, prev);
+            if (!destListId) return prev;
+            const destList = prev.find((l) => l.id === destListId);
+            if (!destList) return prev;
+
+            const oldIdx = destList.cards.findIndex((c) => c.id === activeId);
+            let newIdx = oldIdx;
+            if (!overId.startsWith("list-")) {
+                const overIdx = destList.cards.findIndex((c) => c.id === overId);
+                if (overIdx !== -1) newIdx = overIdx;
+            }
+            if (oldIdx === newIdx) return prev;
+
+            return prev.map((l) => {
+                if (l.id !== destListId) return l;
+                return { ...l, cards: arrayMove(l.cards, oldIdx, newIdx) };
+            });
+        });
+
+        // Persistir: pega o estado depois do setState sync com setTimeout 0.
+        // Cobre tanto cross-list (handleDragOver) quanto same-list (acima).
+        setTimeout(async () => {
+            const snapshot = dragSnapshotRef.current;
+            dragSnapshotRef.current = null;
+            try {
+                // Identifica listas afetadas comparando snapshot vs atual via closure.
+                // Como setLists é async, leio lists via callback novamente.
+                setLists((current) => {
+                    const affected = new Map<string, TaskList>();
+                    for (const list of current) {
+                        const snapList = snapshot?.find((l) => l.id === list.id);
+                        if (!snapList) continue;
+                        const changed =
+                            list.cards.length !== snapList.cards.length ||
+                            list.cards.some((c, i) => snapList.cards[i]?.id !== c.id);
+                        if (changed) affected.set(list.id, list);
+                    }
+
+                    // Fire and forget: update each affected card's position + list_id.
+                    const updates: Promise<unknown>[] = [];
+                    for (const list of affected.values()) {
+                        list.cards.forEach((card, idx) => {
+                            updates.push(moveTaskCard(card.id, list.id, idx));
+                        });
+                    }
+                    Promise.all(updates).catch((err) => {
+                        console.error("[tarefas] Erro ao persistir DnD, revertendo:", err);
+                        if (snapshot) setLists(snapshot);
+                    });
+
+                    return current;
+                });
+            } catch (err) {
+                console.error("[tarefas] Erro inesperado no dragEnd:", err);
+                if (snapshot) setLists(snapshot);
+            }
+        }, 0);
+    }, [findListIdOfCard]);
 
     useEffect(() => {
         Promise.all([getTaskBoard(), getUsers()])
@@ -915,41 +1120,62 @@ export default function TarefasPage() {
                     <div className="w-8 h-8 rounded-full border-4 border-[#C7D2FE] dark:border-[#3d4a60] border-t-brand-500 animate-spin" />
                 </div>
             ) : (
-                <div className="flex-1 flex gap-4 overflow-x-auto overflow-y-hidden pb-4 items-start relative px-4 lg:px-0">
-                    {lists
-                        .sort((a, b) => a.position - b.position)
-                        .map((list) => (
-                            <TrelloList
-                                key={list.id}
-                                list={list}
-                                totalLists={lists.length}
-                                users={users}
-                                onAddCard={handleAddCard}
-                                onRenameList={handleRenameList}
-                                onAssignUser={handleAssignUser}
-                                onUpdateCard={handleUpdateCard}
-                                onDeleteCard={handleDeleteCard}
-                                onDeleteList={handleDeleteList}
-                                onMoveList={handleMoveList}
-                            />
-                        ))}
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCorners}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDragEnd={handleDragEnd}
+                >
+                    <div className="flex-1 flex gap-4 overflow-x-auto overflow-y-hidden pb-4 items-start relative px-4 lg:px-0">
+                        {lists
+                            .sort((a, b) => a.position - b.position)
+                            .map((list) => (
+                                <TrelloList
+                                    key={list.id}
+                                    list={list}
+                                    totalLists={lists.length}
+                                    users={users}
+                                    onAddCard={handleAddCard}
+                                    onRenameList={handleRenameList}
+                                    onAssignUser={handleAssignUser}
+                                    onUpdateCard={handleUpdateCard}
+                                    onDeleteCard={handleDeleteCard}
+                                    onDeleteList={handleDeleteList}
+                                    onMoveList={handleMoveList}
+                                />
+                            ))}
 
-                    {/* Add list button / form */}
-                    {addingList ? (
-                        <AddListForm
-                            onAdd={handleAddList}
-                            onCancel={() => setAddingList(false)}
-                        />
-                    ) : (
-                        <button
-                            onClick={() => setAddingList(true)}
-                            className="flex items-center gap-2 w-[280px] min-w-[280px] px-4 py-3 rounded-xl bg-[#EEF2FF] dark:bg-[#1e2536]/60 hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] border-2 border-dashed border-[#C7D2FE] dark:border-[#3d4a60] hover:border-brand-500/50 text-sm font-medium text-[#6366F1] dark:text-[#94a3b8] hover:text-brand-400 transition-all shrink-0"
-                        >
-                            <Plus className="w-4 h-4" />
-                            Adicionar outra lista
-                        </button>
-                    )}
-                </div>
+                        {/* Add list button / form */}
+                        {addingList ? (
+                            <AddListForm
+                                onAdd={handleAddList}
+                                onCancel={() => setAddingList(false)}
+                            />
+                        ) : (
+                            <button
+                                onClick={() => setAddingList(true)}
+                                className="flex items-center gap-2 w-[280px] min-w-[280px] px-4 py-3 rounded-xl bg-[#EEF2FF] dark:bg-[#1e2536]/60 hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] border-2 border-dashed border-[#C7D2FE] dark:border-[#3d4a60] hover:border-brand-500/50 text-sm font-medium text-[#6366F1] dark:text-[#94a3b8] hover:text-brand-400 transition-all shrink-0"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Adicionar outra lista
+                            </button>
+                        )}
+                    </div>
+
+                    <DragOverlay dropAnimation={null}>
+                        {activeCard ? (
+                            <TrelloCard
+                                card={activeCard}
+                                users={users}
+                                onAssignUser={handleAssignUser}
+                                onUpdateTitle={handleUpdateCard}
+                                onDeleteCard={handleDeleteCard}
+                                isOverlay
+                            />
+                        ) : null}
+                    </DragOverlay>
+                </DndContext>
             )}
         </div>
     );
