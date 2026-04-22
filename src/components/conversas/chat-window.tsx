@@ -513,7 +513,7 @@ export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProp
         }
 
         try {
-            const result = await deleteMessage({ dbMessageId: msg.id, zapiMessageId: msg.zapiMessageId ?? null, telefone, owner, canal });
+            const result = await deleteMessage({ dbMessageId: msg.id, zapiMessageId: msg.zapiMessageId ?? null, telefone, owner, canal, mediaType: msg.mediaType, content: msg.content });
             if (!result.success) {
                 // Revert
                 if (owner) {
