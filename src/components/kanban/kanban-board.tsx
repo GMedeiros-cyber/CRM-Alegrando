@@ -29,7 +29,7 @@ import type {
     KanbanColumn as KanbanColumnType,
     KanbanLead,
 } from "@/lib/actions/kanban";
-import { Plus } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 
 interface KanbanBoardProps {
     initialColumns: KanbanColumnType[];
@@ -57,6 +57,17 @@ export function KanbanBoard({
     const [activeCard, setActiveCard] = useState<KanbanLead | null>(null);
     const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
 
+    // Busca por nome/telefone. searchQuery é atualizado por tecla; debouncedSearch
+    // roda o filtro 300ms depois pra não recomputar a cada digitação.
+    const [searchQuery, setSearchQuery] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedSearch(searchQuery.trim().toLowerCase()), 300);
+        return () => clearTimeout(t);
+    }, [searchQuery]);
+
     const pendingColumnOrder = useRef<string[]>([]);
 
     // Inline add column
@@ -75,6 +86,23 @@ export function KanbanBoard({
     const sortedColumns = useMemo(() => {
         return [...columns].sort((a, b) => a.position - b.position);
     }, [columns]);
+
+    // Mapa filtrado para renderização. O leadsMap "oficial" continua intacto
+    // pra que o drag-and-drop e a persistência no banco usem a lista completa.
+    const filteredLeadsMap = useMemo(() => {
+        if (!debouncedSearch) return leadsMap;
+        const out: Record<string, KanbanLead[]> = {};
+        for (const [colId, colLeads] of Object.entries(leadsMap)) {
+            out[colId] = colLeads.filter((l) => {
+                const nome = (l.nomeEscola || "").toLowerCase();
+                const tel = String(l.telefone || "");
+                return nome.includes(debouncedSearch) || tel.includes(debouncedSearch);
+            });
+        }
+        return out;
+    }, [leadsMap, debouncedSearch]);
+
+    const hasActiveSearch = debouncedSearch.length > 0;
 
     async function handleAddColumn() {
         const name = newColName.trim();
@@ -303,19 +331,62 @@ export function KanbanBoard({
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
         >
-            <div className="flex h-[calc(100vh-180px)]">
+            {/* Search bar */}
+            <div className="relative mb-3 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6366F1] dark:text-[#94a3b8] pointer-events-none" />
+                <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                            setSearchQuery("");
+                            searchInputRef.current?.blur();
+                        }
+                    }}
+                    placeholder="Buscar por nome ou telefone..."
+                    className="w-full pl-9 pr-9 rounded-xl bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#A5B4FC] dark:border-[#4a5568] h-9 text-sm text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#94a3b8] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                />
+                {searchQuery && (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setSearchQuery("");
+                            searchInputRef.current?.focus();
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white hover:bg-[#C7D2FE]/50 dark:hover:bg-[#2d3347] transition-colors"
+                        aria-label="Limpar busca"
+                        title="Limpar busca"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                )}
+            </div>
+
+            <div className="flex h-[calc(100vh-220px)]">
                 <div className="flex gap-4 overflow-x-auto pb-4 flex-1">
                     <SortableContext items={columnSortableIds} strategy={horizontalListSortingStrategy}>
-                        {sortedColumns.map((column) => (
-                            <KanbanColumn
-                                key={column.id}
-                                column={column}
-                                leads={leadsMap[column.id] || []}
-                                onLeadClick={handleLeadClick}
-                                onColumnRenamed={handleColumnRenamed}
-                                onColumnDeleted={handleColumnDeleted}
-                            />
-                        ))}
+                        {sortedColumns.map((column) => {
+                            const fullLeads = leadsMap[column.id] || [];
+                            const visibleLeads = filteredLeadsMap[column.id] || [];
+                            return (
+                                <KanbanColumn
+                                    key={column.id}
+                                    column={column}
+                                    leads={visibleLeads}
+                                    totalCount={hasActiveSearch ? fullLeads.length : undefined}
+                                    emptyMessage={
+                                        hasActiveSearch && fullLeads.length > 0
+                                            ? "Nenhum lead corresponde à busca"
+                                            : undefined
+                                    }
+                                    onLeadClick={handleLeadClick}
+                                    onColumnRenamed={handleColumnRenamed}
+                                    onColumnDeleted={handleColumnDeleted}
+                                />
+                            );
+                        })}
                     </SortableContext>
 
                     {/* Inline Add Column */}
