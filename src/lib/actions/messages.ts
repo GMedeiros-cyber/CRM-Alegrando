@@ -308,44 +308,41 @@ export async function sendAudioMessage(
 
     const supabase = createServerSupabaseClient();
 
-    // Upload para o bucket "audios"
     const ext = file.name.split(".").pop() || "ogg";
     const storagePath = `${String(telefone).replace(/\D/g, "")}/${Date.now()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
+    const base64 = buffer.toString("base64");
 
-    const { error: uploadErr } = await supabase.storage
-        .from("audios")
-        .upload(storagePath, buffer, {
-            contentType: file.type,
-            upsert: false,
-        });
-
-    if (uploadErr) {
-        console.error("[sendAudioMessage] Upload falhou:", uploadErr.message);
-        return { success: false, error: "Falha no upload do áudio." };
-    }
-
+    // URL pública já é conhecida a partir do path — não precisa esperar o upload
     const { data: urlData } = supabase.storage.from("audios").getPublicUrl(storagePath);
     const publicUrl = urlData.publicUrl;
 
     const isFestas = canal === "festas";
-    let messageId: string | undefined;
 
-    if (isFestas) {
-        const result = await sendEvolutionAudio(String(telefone), buffer.toString("base64"));
-        if (!result.success) {
-            console.error("[sendAudioMessage] Evolution falhou:", result.error);
-            return { success: false, error: result.error };
-        }
-        messageId = result.evoMessageId;
-    } else {
-        const result = await sendWhatsAppAudio(String(telefone), publicUrl);
-        if (!result.success) {
-            console.error("[sendAudioMessage] Z-API falhou:", result.error);
-            return { success: false, error: result.error };
-        }
-        messageId = result.zapiMessageId;
+    // Paraleliza upload ao Storage e envio ao WhatsApp. Ambos usam o mesmo buffer;
+    // Z-API aceita data URL base64, evitando o round-trip de fetch da URL pública.
+    const uploadPromise = supabase.storage
+        .from("audios")
+        .upload(storagePath, buffer, { contentType: file.type, upsert: false });
+
+    const sendPromise = isFestas
+        ? sendEvolutionAudio(String(telefone), base64)
+        : sendWhatsAppAudio(String(telefone), `data:${file.type};base64,${base64}`);
+
+    const [uploadRes, sendRes] = await Promise.all([uploadPromise, sendPromise]);
+
+    if (uploadRes.error) {
+        console.error("[sendAudioMessage] Upload falhou:", uploadRes.error.message);
+        return { success: false, error: "Falha no upload do áudio." };
     }
+    if (!sendRes.success) {
+        console.error("[sendAudioMessage] Envio falhou:", sendRes.error);
+        return { success: false, error: sendRes.error };
+    }
+
+    const messageId = isFestas
+        ? (sendRes as { evoMessageId?: string }).evoMessageId
+        : (sendRes as { zapiMessageId?: string }).zapiMessageId;
 
     const { error: dbErr } = await supabase.from("messages").insert({
         telefone: String(telefone),

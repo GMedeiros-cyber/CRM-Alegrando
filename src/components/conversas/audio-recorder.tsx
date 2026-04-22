@@ -14,19 +14,21 @@ interface AudioRecorderProps {
 type Mode = "idle" | "recording";
 
 function pickMimeType(): { mime: string; ext: string } {
+  // Prefere OGG Opus (formato nativo do WhatsApp para PTT). Cai para WebM em
+  // browsers que não suportam OGG no MediaRecorder (ex.: Chrome desktop).
   const candidates: Array<{ mime: string; ext: string }> = [
+    { mime: "audio/ogg;codecs=opus", ext: "ogg" },
     { mime: "audio/webm;codecs=opus", ext: "webm" },
     { mime: "audio/webm", ext: "webm" },
-    { mime: "audio/ogg;codecs=opus", ext: "ogg" },
     { mime: "audio/mp4", ext: "m4a" },
   ];
   if (typeof window === "undefined" || !("MediaRecorder" in window)) {
-    return { mime: "", ext: "webm" };
+    return { mime: "", ext: "ogg" };
   }
   for (const c of candidates) {
     if (MediaRecorder.isTypeSupported(c.mime)) return c;
   }
-  return { mime: "", ext: "webm" };
+  return { mime: "", ext: "ogg" };
 }
 
 function formatElapsed(ms: number): string {
