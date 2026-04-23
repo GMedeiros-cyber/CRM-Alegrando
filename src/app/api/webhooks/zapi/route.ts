@@ -231,9 +231,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const n8nWebhookUrl = process.env.N8N_ZAPI_WEBHOOK_URL;
 
   // --- 1. Filtro: apenas eventos de mensagem real ---
+  // Status callbacks (DeliveryCallback, ReadCallback, etc.) não vão para o n8n —
+  // o agente IA não tem o que fazer com eles e cada forward gera execução desnecessária.
   const eventType = payload.type || "";
   if (!MESSAGE_EVENT_TYPES.has(eventType)) {
-    if (n8nWebhookUrl) forwardToN8n(payload, n8nWebhookUrl);
     return NextResponse.json({ status: "skipped", reason: "non-message event" });
   }
 
@@ -266,7 +267,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       isFromMe
     );
 
-    if (n8nWebhookUrl) forwardToN8n(payload, n8nWebhookUrl);
+    // Reação já foi totalmente tratada — não reencaminhar ao n8n (evita execução
+    // que cairia no filtro do If6 e geraria ruído no histórico).
     return NextResponse.json({ status: "ok", type: "reaction-embedded" });
   }
 
@@ -284,7 +286,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .maybeSingle();
 
     if (canalRowClient?.canal === "festas") {
-      if (n8nWebhookUrl) forwardToN8n(payload, n8nWebhookUrl);
+      // Canal festas é tratado pela Evolution — n8n não atende esses leads.
       return NextResponse.json({ status: "skipped", reason: "festas channel" });
     }
 
@@ -415,7 +417,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
         if (canalRow?.canal === "festas") {
           console.log(`[ZAPI-PROXY] Lead festas — ignorando, Evolution cuida: ${phone}`);
-          if (n8nWebhookUrl) forwardToN8n(payload, n8nWebhookUrl);
+          // Canal festas é tratado pela Evolution — n8n não atende esses leads.
           return NextResponse.json({ status: "skipped", reason: "festas channel" });
         }
 
@@ -476,7 +478,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const targetMessageId = (payload as Record<string, unknown>).reactionMessageId as string || "";
 
       if (!targetMessageId) {
-        if (n8nWebhookUrl) forwardToN8n(payload, n8nWebhookUrl);
+        // Reação sem alvo é evento anômalo — n8n não tem o que fazer.
         return NextResponse.json({ status: "skipped", reason: "no reactionMessageId" });
       }
 
