@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { fetchEvolutionProfilePicture } from "@/lib/whatsapp/sender";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
     const payload = await req.json();
@@ -94,6 +95,28 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
                 .eq("telefone", phone)
                 .then();
         }
+
+        // Backfill de foto: se o lead ainda não tem foto_url, busca via Evolution API
+        supabaseEarly
+            .from("Clientes _WhatsApp")
+            .select("telefone, foto_url")
+            .eq("telefone", phone)
+            .is("foto_url", null)
+            .maybeSingle()
+            .then(async ({ data: leadSemFoto }) => {
+                if (!leadSemFoto) return;
+                const url = await fetchEvolutionProfilePicture(phone);
+                if (url) {
+                    supabaseEarly
+                        .from("Clientes _WhatsApp")
+                        .update({ foto_url: url })
+                        .eq("telefone", phone)
+                        .then(({ error }) => {
+                            if (error) console.error("[EVO-WEBHOOK] Falha backfill foto:", error.message);
+                        });
+                }
+            });
+
         return NextResponse.json({ status: "ok" });
     }
 

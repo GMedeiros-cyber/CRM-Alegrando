@@ -437,6 +437,30 @@ function evoPhone(telefone: string): string {
   return `${digits}@s.whatsapp.net`;
 }
 
+export async function fetchEvolutionProfilePicture(telefone: string): Promise<string | null> {
+  const url = process.env.EVOLUTION_API_URL;
+  const instance = process.env.EVOLUTION_INSTANCE;
+  const key = process.env.EVOLUTION_API_KEY;
+  if (!url || !instance || !key) return null;
+
+  const digits = telefone.replace(/\D/g, "");
+  if (digits.length < 10) return null;
+  const normalized = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
+
+  try {
+    const res = await fetch(`${url}/chat/fetchProfilePictureUrl/${instance}`, {
+      method: "POST",
+      headers: buildEvoHeaders(key),
+      body: JSON.stringify({ number: normalized }),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { profilePictureUrl?: string };
+    return body.profilePictureUrl || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function sendEvolutionReaction(
   telefone: string,
   evoMessageId: string,
