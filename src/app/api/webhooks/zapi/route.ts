@@ -350,25 +350,43 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         .maybeSingle();
 
       if (!existingMsg) {
-        let content = rawContent;
-        if (media_type === "audio" && rawContent.startsWith("http")) {
-          const proxied = await proxyAudioToStorage(
-            supabase, rawContent, realPhone, payload.messageId
-          );
-          if (proxied) content = proxied;
-        }
+        // Dedup multi-dispositivo: mesma mensagem chega com messageIds distintos
+        // quando o número tem WhatsApp ativo em vários celulares (ex: auto-reply).
+        // Janela de 2s é segura — auto-replies disparam em < 100ms; humanos não
+        // conseguem digitar e enviar a mesma mensagem duas vezes em 2 segundos.
+        const windowStart = new Date(new Date(sentAt).getTime() - 2000).toISOString();
+        const { data: recentDup } = await supabase
+          .from("messages")
+          .select("id")
+          .eq("telefone", realPhone)
+          .eq("sender_type", "cliente")
+          .eq("content", rawContent)
+          .gte("created_at", windowStart)
+          .maybeSingle();
 
-        supabase.from("messages").insert({
-          telefone: realPhone,
-          sender_type: "cliente",
-          sender_name: payload.chatName || payload.senderName || null,
-          content,
-          media_type,
-          created_at: sentAt,
-          metadata: { messageId: payload.messageId },
-        }).then(({ error }) => {
-          if (error) console.error("[ZAPI-PROXY] Falha ao salvar msg cliente:", error.message);
-        });
+        if (recentDup) {
+          console.log(`[ZAPI-PROXY] Dedup multi-device: conteúdo idêntico em 2s para ${realPhone}. Ignorando.`);
+        } else {
+          let content = rawContent;
+          if (media_type === "audio" && rawContent.startsWith("http")) {
+            const proxied = await proxyAudioToStorage(
+              supabase, rawContent, realPhone, payload.messageId
+            );
+            if (proxied) content = proxied;
+          }
+
+          supabase.from("messages").insert({
+            telefone: realPhone,
+            sender_type: "cliente",
+            sender_name: payload.chatName || payload.senderName || null,
+            content,
+            media_type,
+            created_at: sentAt,
+            metadata: { messageId: payload.messageId },
+          }).then(({ error }) => {
+            if (error) console.error("[ZAPI-PROXY] Falha ao salvar msg cliente:", error.message);
+          });
+        }
       }
     }
   }
