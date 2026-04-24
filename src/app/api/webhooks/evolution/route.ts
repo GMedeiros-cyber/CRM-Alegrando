@@ -64,12 +64,54 @@ async function handleReaction(payload: Record<string, unknown>): Promise<NextRes
     }
 }
 
+type EvoMediaType = "text" | "image" | "video" | "audio" | "document" | "sticker";
+
+interface EvoMessage {
+    conversation?: string;
+    extendedTextMessage?: { text?: string };
+    audioMessage?: { url?: string; mediaUrl?: string };
+    imageMessage?: { url?: string; mediaUrl?: string; caption?: string };
+    videoMessage?: { url?: string; mediaUrl?: string; caption?: string };
+    documentMessage?: { url?: string; mediaUrl?: string; fileName?: string; caption?: string };
+    stickerMessage?: { url?: string; mediaUrl?: string };
+}
+
+function extractEvoContent(msg: EvoMessage | undefined): { content: string; media_type: EvoMediaType } | null {
+    if (!msg) return null;
+    if (msg.conversation)
+        return { content: msg.conversation, media_type: "text" };
+    if (msg.extendedTextMessage?.text)
+        return { content: msg.extendedTextMessage.text, media_type: "text" };
+    if (msg.imageMessage) {
+        const url = msg.imageMessage.url ?? msg.imageMessage.mediaUrl ?? "";
+        const cap = msg.imageMessage.caption ?? "";
+        return { content: cap ? `${url}|||${cap}` : url, media_type: "image" };
+    }
+    if (msg.videoMessage) {
+        const url = msg.videoMessage.url ?? msg.videoMessage.mediaUrl ?? "";
+        const cap = msg.videoMessage.caption ?? "";
+        return { content: cap ? `${url}|||${cap}` : url, media_type: "video" };
+    }
+    if (msg.audioMessage) {
+        return { content: msg.audioMessage.url ?? msg.audioMessage.mediaUrl ?? "", media_type: "audio" };
+    }
+    if (msg.documentMessage) {
+        const url = msg.documentMessage.url ?? msg.documentMessage.mediaUrl ?? "";
+        const label = msg.documentMessage.fileName ?? msg.documentMessage.caption ?? "";
+        return { content: label ? `${url}|||${label}` : url, media_type: "document" };
+    }
+    if (msg.stickerMessage) {
+        return { content: msg.stickerMessage.url ?? msg.stickerMessage.mediaUrl ?? "", media_type: "sticker" };
+    }
+    return null;
+}
+
 async function handleUpsert(payload: Record<string, unknown>): Promise<NextResponse> {
     const data = (payload as { data?: Record<string, unknown> }).data as
         | {
               key?: { fromMe?: boolean; remoteJid?: string; id?: string };
               pushName?: string;
-              message?: { conversation?: string; extendedTextMessage?: { text?: string } };
+              message?: EvoMessage;
               messageTimestamp?: number;
           }
         | undefined;
@@ -121,12 +163,14 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
     }
 
     const messageId = data?.key?.id;
-    const content =
-        data?.message?.conversation ||
-        data?.message?.extendedTextMessage?.text ||
-        null;
-    if (!content || !messageId) return NextResponse.json({ status: "skipped" });
+    const extracted = extractEvoContent(data?.message);
+    if (!extracted || !extracted.content || !messageId) {
+        const msgKeys = data?.message ? Object.keys(data.message) : [];
+        console.log(`[EVO-WEBHOOK] fromMe skipped — sem conteúdo. messageId=${messageId}, tipos=${msgKeys.join(",")}`);
+        return NextResponse.json({ status: "skipped" });
+    }
 
+    const { content, media_type } = extracted;
     const supabase = supabaseEarly;
 
     // Idempotência
@@ -144,7 +188,7 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
         sender_type: "equipe",
         sender_name: "Márcia",
         content,
-        media_type: "text",
+        media_type,
         created_at: data.messageTimestamp
             ? new Date(data.messageTimestamp * 1000).toISOString()
             : new Date().toISOString(),
