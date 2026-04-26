@@ -3,7 +3,7 @@
 import { memo } from "react";
 import Image from "next/image";
 import type { ClienteListItem } from "@/lib/actions/leads";
-import { cn } from "@/lib/utils";
+import { cn, isValidPhotoUrl } from "@/lib/utils";
 
 function isRecentlyCreated(createdAt: Date | null): boolean {
     if (!createdAt) return false;
@@ -54,7 +54,7 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
             <div className="flex items-center gap-3">
                 {/* Avatar */}
                 <div className="w-9 h-9 rounded-full bg-[#E0E7FF] dark:bg-[#2d3347] shrink-0 border border-[#A5B4FC] dark:border-[#4a5568] overflow-hidden flex items-center justify-center text-sm font-bold text-[#191918] dark:text-white">
-                    {item.fotoUrl ? (
+                    {isValidPhotoUrl(item.fotoUrl) ? (
                         <Image
                             src={item.fotoUrl}
                             alt={item.nome || "avatar"}

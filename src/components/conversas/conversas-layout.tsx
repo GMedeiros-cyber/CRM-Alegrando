@@ -64,7 +64,7 @@ import {
     Sheet,
     SheetContent,
 } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
+import { cn, isValidPhotoUrl } from "@/lib/utils";
 import { supabase } from "@/lib/supabase/client";
 
 // =============================================
@@ -136,12 +136,13 @@ export function ConversasLayout() {
     const [loadingAgendamentos, setLoadingAgendamentos] = useState(false);
 
     const [sortOrder, setSortOrder] = useState<string>("recent");
-    const [canalFiltro, setCanalFiltro] = useState<"todos" | "alegrando" | "festas">(() => {
-        if (typeof window !== "undefined") {
-            return (localStorage.getItem("crm_canal_filtro") as "todos" | "alegrando" | "festas") || "todos";
+    const [canalFiltro, setCanalFiltro] = useState<"todos" | "alegrando" | "festas">("todos");
+    useEffect(() => {
+        const stored = localStorage.getItem("crm_canal_filtro");
+        if (stored === "todos" || stored === "alegrando" || stored === "festas") {
+            setCanalFiltro(stored);
         }
-        return "todos";
-    });
+    }, []);
     const [totalClientes, setTotalClientes] = useState(0);
     const [loadingMore, setLoadingMore] = useState(false);
     const CLIENTES_LIMIT = 50;
@@ -974,7 +975,7 @@ export function ConversasLayout() {
                                 </button>
                                 <div className="flex items-center gap-3 min-w-0">
                                     <div className="w-10 h-10 rounded-full bg-[#E0E7FF] dark:bg-[#2d3347] shrink-0 border border-[#A5B4FC] dark:border-[#4a5568] overflow-hidden flex items-center justify-center text-sm font-bold text-[#191918] dark:text-white">
-                                        {cliente.fotoUrl ? (
+                                        {isValidPhotoUrl(cliente.fotoUrl) ? (
                                             <Image
                                                 src={cliente.fotoUrl}
                                                 alt={cliente.nome || "avatar"}

@@ -30,7 +30,7 @@ export default function RootLayout({
         },
       }}
     >
-      <html lang="pt-BR">
+      <html lang="pt-BR" suppressHydrationWarning>
         <body className="antialiased">
           <script
             dangerouslySetInnerHTML={{
