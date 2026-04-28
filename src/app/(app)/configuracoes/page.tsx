@@ -3,6 +3,7 @@
 import { useState, useEffect, useTransition } from "react";
 import { getSetting, updateSetting } from "@/lib/actions/settings";
 import { SETTING_DEFAULTS } from "@/lib/settings_helper";
+import { PasseiosPanel } from "@/components/configuracoes/passeios-panel";
 
 const POS_PASSEIO_DEFAULT =
     "Olá {nome}! 🎉 Foi um prazer ter você no passeio! Caso queira ver as fotos ou deixar uma avaliação, o link está aqui: {link}";
@@ -59,7 +60,7 @@ export default function ConfiguracoesPage() {
     }
 
     return (
-        <div className="space-y-8 max-w-4xl">
+        <div className="space-y-8 max-w-6xl">
             <div className="bento-enter">
                 <h1 className="text-2xl font-bold tracking-tight text-[#191918] dark:text-white">
                     Configurações
@@ -174,6 +175,10 @@ export default function ConfiguracoesPage() {
                     </span>
                 )}
             </div>
+
+            <hr className="border-border/50" />
+
+            <PasseiosPanel />
         </div>
     );
 }

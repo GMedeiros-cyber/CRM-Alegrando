@@ -176,6 +176,7 @@ export function ConversasLayout() {
     // Audio attachment (preview before send)
     const [audioAttachment, setAudioAttachment] = useState<{ file: File; previewUrl: string } | null>(null);
     const [isSendingAudio, setIsSendingAudio] = useState(false);
+    const [isSendingFile, setIsSendingFile] = useState(false);
     const [isRecordingAudio, setIsRecordingAudio] = useState(false);
 
     const firstCaptionRef = useRef<HTMLTextAreaElement>(null);
@@ -762,24 +763,31 @@ export function ConversasLayout() {
     // ========= Send attachments handler =========
     function handleSendAttachments() {
         if (!cliente?.telefone || attachments.length === 0) return;
+        if (isSendingFile) return; // guard contra duplo-clique
+        const toSend = attachments;
+        setIsSendingFile(true);
+        setAttachments([]); // limpa preview imediatamente para impedir reenvio
         (async () => {
-            for (const att of attachments) {
-                try {
-                    const formData = new FormData();
-                    formData.append("file", att.file);
-                    formData.append("telefone", cliente.telefone);
-                    formData.append("sender_name", cliente.canal === "festas" ? "Márcia" : "Equipe");
-                    formData.append("caption", att.caption);
-                    formData.append("canal", cliente.canal ?? "alegrando");
-                    const res = await sendFileMessage(formData);
-                    if (!res.success) {
-                        setToast({ type: "error", text: res.error || "Erro ao enviar arquivo." });
+            try {
+                for (const att of toSend) {
+                    try {
+                        const formData = new FormData();
+                        formData.append("file", att.file);
+                        formData.append("telefone", cliente.telefone);
+                        formData.append("sender_name", cliente.canal === "festas" ? "Márcia" : "Equipe");
+                        formData.append("caption", att.caption);
+                        formData.append("canal", cliente.canal ?? "alegrando");
+                        const res = await sendFileMessage(formData);
+                        if (!res.success) {
+                            setToast({ type: "error", text: res.error || "Erro ao enviar arquivo." });
+                        }
+                    } catch (err) {
+                        setToast({ type: "error", text: `Erro ao enviar arquivo: ${err}` });
                     }
-                } catch (err) {
-                    setToast({ type: "error", text: `Erro ao enviar arquivo: ${err}` });
                 }
+            } finally {
+                setIsSendingFile(false);
             }
-            setAttachments([]);
         })();
     }
 
@@ -1208,12 +1216,13 @@ export function ConversasLayout() {
                                             onClick={attachments.length > 0 ? handleSendAttachments : handleSendMessage}
                                             disabled={
                                                 isSendingMessage ||
+                                                isSendingFile ||
                                                 (cliente.iaAtiva && cliente.canal !== "festas") ||
                                                 (attachments.length === 0 && !chatMessage.trim())
                                             }
                                             className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500 text-[#191918] dark:text-white hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 shrink-0"
                                         >
-                                            {isSendingMessage ? (
+                                            {isSendingMessage || isSendingFile ? (
                                                 <Loader2 className="w-4 h-4 animate-spin" />
                                             ) : (
                                                 <Send className="w-4 h-4" />

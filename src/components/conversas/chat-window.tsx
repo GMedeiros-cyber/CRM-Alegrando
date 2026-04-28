@@ -224,7 +224,7 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
         const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
         const parts = content.split(regex);
         return (
-            <p className="text-sm whitespace-pre-wrap leading-relaxed">
+            <p className="text-sm whitespace-pre-wrap leading-relaxed break-words">
                 {parts.map((part, i) => regex.test(part) ? <mark key={i} className="bg-yellow-400/30 text-yellow-200 rounded-sm px-0.5">{part}</mark> : <span key={i}>{part}</span>)}
             </p>
         );
@@ -238,7 +238,7 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
             </div>
         );
     }
-    return <p className="text-sm whitespace-pre-wrap leading-relaxed">{content}</p>;
+    return <p className="text-sm whitespace-pre-wrap leading-relaxed break-words">{content}</p>;
 }
 
 // =============================================
