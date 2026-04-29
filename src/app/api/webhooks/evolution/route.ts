@@ -111,10 +111,12 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
         | {
               key?: { fromMe?: boolean; remoteJid?: string; id?: string };
               pushName?: string;
+              participant?: string;
               message?: EvoMessage;
               messageTimestamp?: number;
           }
         | undefined;
+    const instance = (payload as { instance?: string }).instance;
     const isFromMe = data?.key?.fromMe === true;
 
     const rawPhone = (data?.key?.remoteJid ?? "").replace(/@.*$/, "");
@@ -183,10 +185,15 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
 
     if (existing) return NextResponse.json({ status: "duplicate" });
 
+    // sender_name dinâmico: usa pushName real do operador. Se a Evolution não
+    // expõe (alguns eventos não trazem), cai para o nome da instância e em
+    // último caso "Festas". Antes era hardcoded "Márcia" — apagava a info real.
+    const senderName = data.pushName || instance || "Festas";
+
     await supabase.from("messages").insert({
         telefone: phone,
         sender_type: "equipe",
-        sender_name: "Márcia",
+        sender_name: senderName,
         content,
         media_type,
         created_at: data.messageTimestamp

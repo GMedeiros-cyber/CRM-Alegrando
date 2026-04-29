@@ -93,6 +93,9 @@ interface ZApiWebhookPayload {
   chatName?: string;
   senderName?: string;
   senderPhoto?: string;
+  isGroup?: boolean;
+  participantPhone?: string;
+  participantLid?: string;
   type?: string;
   text?: ZApiTextPayload;
   image?: ZApiImagePayload;
@@ -155,7 +158,39 @@ function isLid(phone: string): boolean {
   return phone.includes("@lid");
 }
 
+/**
+ * Retorna true se for um grupo. Z-API marca grupos por:
+ *  - flag isGroup=true (quando presente)
+ *  - sufixo "-group" no phone
+ *  - participantPhone preenchido (só existe em grupo)
+ *  - phone com 18+ dígitos começando em 120363 (formato canônico do WhatsApp,
+ *    com ou sem prefixo "55" herdado do webhook antigo)
+ */
+function isGroupChat(payload: ZApiWebhookPayload): boolean {
+  if (payload.isGroup === true) return true;
+  if (payload.participantPhone) return true;
+  const phone = payload.phone ?? "";
+  if (phone.endsWith("-group")) return true;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("120363") && digits.length >= 18) return true;
+  if (digits.startsWith("55120363") && digits.length >= 20) return true;
+  return false;
+}
+
+/**
+ * Normaliza o ID do grupo para o formato canônico "<digits>-group", removendo
+ * prefixo "55" herdado do webhook antigo.
+ */
+function normalizeGroupId(phone: string): string {
+  if (phone.endsWith("-group")) return phone;
+  let digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("55") && digits.length > 18) digits = digits.slice(2);
+  return `${digits}-group`;
+}
+
 function normalizePhone(phone: string): string {
+  // Grupos: manter o ID exato (já vem com sufixo "-group")
+  if (phone.endsWith("-group")) return phone;
   const digits = phone.replace(/\D/g, "");
   if (digits.startsWith("55") && digits.length >= 12) return digits;
   return `55${digits}`;
@@ -243,8 +278,127 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const isFromMe = payload.fromMe === true;
   // fromApi=true = enviado pelo CRM via API → já salvo pela action, ignorar.
   const isFromApi = payload.fromApi === true;
+  const isGroup = isGroupChat(payload);
 
   const supabase = createServerSupabaseClient();
+
+  // --- 1.4. Mensagens de grupo: handler dedicado ---
+  // Grupos têm phone com sufixo "-group" e payload.participantPhone com quem mandou.
+  // Tratamos grupos como contatos "alegrando" com canal_extra="grupo" — sem IA.
+  if (isGroup && rawPhone) {
+    const groupId = normalizeGroupId(rawPhone); // ex: "120363403370100000-group"
+    const groupName = payload.chatName || "Grupo WhatsApp";
+
+    if (eventType === "ReceivedCallback" && !isFromMe && payload.messageId) {
+      // Garantir que o grupo exista como contato
+      await supabase.from("Clientes _WhatsApp").upsert(
+        {
+          telefone: groupId,
+          nome: groupName,
+          canal: "alegrando",
+          ia_ativa: false,
+        },
+        { onConflict: "telefone" }
+      );
+
+      // Backfill foto do grupo (apenas se ainda não tiver) — fire-and-forget.
+      // senderPhoto no payload de grupo geralmente é a foto do PARTICIPANTE,
+      // não do grupo. Buscamos a foto do grupo pelo endpoint profile-picture.
+      supabase
+        .from("Clientes _WhatsApp")
+        .select("foto_url")
+        .eq("telefone", groupId)
+        .is("foto_url", null)
+        .maybeSingle()
+        .then(async ({ data: needsPhoto }) => {
+          if (!needsPhoto) return;
+          const { fetchZapiProfilePicture } = await import("@/lib/whatsapp/sender");
+          const url = await fetchZapiProfilePicture(groupId);
+          if (url) {
+            supabase
+              .from("Clientes _WhatsApp")
+              .update({ foto_url: url })
+              .eq("telefone", groupId)
+              .then(({ error }) => {
+                if (error) console.error("[ZAPI-PROXY] Falha foto grupo:", error.message);
+              });
+          }
+        });
+
+      const { content: rawContent, media_type } = extractMessageContent(payload);
+      const sentAt = payload.momment
+        ? new Date(payload.momment).toISOString()
+        : new Date().toISOString();
+
+      const { data: existingGroupMsg } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("telefone", groupId)
+        .eq("metadata->>messageId", payload.messageId)
+        .maybeSingle();
+
+      if (!existingGroupMsg) {
+        let content = rawContent;
+        if (media_type === "audio" && rawContent.startsWith("http")) {
+          const proxied = await proxyAudioToStorage(
+            supabase, rawContent, groupId, payload.messageId
+          );
+          if (proxied) content = proxied;
+        }
+
+        await supabase.from("messages").insert({
+          telefone: groupId,
+          sender_type: "cliente",
+          sender_name: payload.senderName || payload.participantPhone || null,
+          content,
+          media_type,
+          created_at: sentAt,
+          metadata: {
+            messageId: payload.messageId,
+            isGroup: true,
+            participantPhone: payload.participantPhone ?? null,
+            participantLid: payload.participantLid ?? null,
+          },
+        });
+      }
+    } else if (isFromMe && !isFromApi && payload.messageId && eventType !== "ReactionCallback") {
+      // Mensagem da equipe enviada para o grupo via celular físico
+      const { data: existingTeamMsg } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("telefone", groupId)
+        .eq("metadata->>messageId", payload.messageId)
+        .maybeSingle();
+
+      if (!existingTeamMsg) {
+        const { content: rawContent, media_type } = extractMessageContent(payload);
+        const sentAt = payload.momment
+          ? new Date(payload.momment).toISOString()
+          : new Date().toISOString();
+
+        let content = rawContent;
+        if (media_type === "audio" && rawContent.startsWith("http")) {
+          const proxied = await proxyAudioToStorage(
+            supabase, rawContent, groupId, payload.messageId
+          );
+          if (proxied) content = proxied;
+        }
+
+        await supabase.from("messages").insert({
+          telefone: groupId,
+          sender_type: "equipe",
+          sender_name: payload.senderName || "Equipe",
+          content,
+          media_type,
+          created_at: sentAt,
+          metadata: { messageId: payload.messageId, isGroup: true },
+        });
+      }
+    }
+
+    // Não repassa grupos ao n8n (Jade não atende grupos)
+    return NextResponse.json({ status: "ok", type: "group" });
+  }
 
   // --- 1.5. Reação embutida em ReceivedCallback/SentCallback ---
   // Z-API envia reações como ReceivedCallback com reaction.referencedMessage.messageId
@@ -378,7 +532,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           supabase.from("messages").insert({
             telefone: realPhone,
             sender_type: "cliente",
-            sender_name: payload.chatName || payload.senderName || null,
+            // senderName antes de chatName: chatName pode trazer o nome do
+            // aparelho conectado em alguns payloads, gerando falsos "Alegrando
+            // Eventos" para mensagens de leads.
+            sender_name: payload.senderName || payload.chatName || null,
             content,
             media_type,
             created_at: sentAt,

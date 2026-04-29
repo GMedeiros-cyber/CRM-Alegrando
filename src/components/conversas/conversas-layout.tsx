@@ -59,6 +59,9 @@ import {
     Paperclip,
     UserPlus,
     X,
+    ArrowUpDown,
+    Check,
+    ChevronDown,
 } from "lucide-react";
 import {
     Sheet,
@@ -82,6 +85,128 @@ const statusStyles: Record<string, string> = {
 function isRecentlyCreated(createdAt: Date | null): boolean {
     if (!createdAt) return false;
     return Date.now() - new Date(createdAt).getTime() < 60_000;
+}
+
+// =============================================
+// SORT + FILTER DROPDOWN (custom — substitui <select> nativo)
+// =============================================
+const SORT_OPTIONS = [
+    { value: "recent", label: "Mais recente" },
+    { value: "oldest", label: "Mais antigo" },
+    { value: "az",     label: "A-Z" },
+    { value: "za",     label: "Z-A" },
+] as const;
+
+const IA_OPTIONS = [
+    { value: "ia_ativa" as const, label: "IA Ativa", icon: <Bot className="w-3.5 h-3.5 text-emerald-400" /> },
+    { value: "manual"   as const, label: "Manual",   icon: <UserRound className="w-3.5 h-3.5 text-orange-400" /> },
+];
+
+function SortFilterDropdown({
+    sortOrder,
+    iaFiltro,
+    onSortChange,
+    onIaChange,
+}: {
+    sortOrder: string;
+    iaFiltro: "todos" | "ia_ativa" | "manual";
+    onSortChange: (v: string) => void;
+    onIaChange: (v: "ia_ativa" | "manual") => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const wrapperRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        function onDoc(e: MouseEvent) {
+            if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+                setOpen(false);
+            }
+        }
+        function onEsc(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
+        document.addEventListener("mousedown", onDoc);
+        document.addEventListener("keydown", onEsc);
+        return () => {
+            document.removeEventListener("mousedown", onDoc);
+            document.removeEventListener("keydown", onEsc);
+        };
+    }, [open]);
+
+    const activeLabel = iaFiltro === "ia_ativa"
+        ? "IA Ativa"
+        : iaFiltro === "manual"
+            ? "Manual"
+            : SORT_OPTIONS.find((o) => o.value === sortOrder)?.label ?? "Mais recente";
+
+    return (
+        <div ref={wrapperRef} className="relative">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className={cn(
+                    "flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-lg border transition-all",
+                    "bg-[#EEF2FF] dark:bg-[#1e2536] text-[#37352F] dark:text-[#cbd5e1]",
+                    "hover:border-brand-500/60 hover:shadow-sm hover:shadow-brand-500/10",
+                    open
+                        ? "border-brand-500/70 ring-2 ring-brand-500/20"
+                        : "border-[#C7D2FE] dark:border-[#3d4a60]"
+                )}
+            >
+                <ArrowUpDown className="w-3 h-3 text-[#6366F1] dark:text-[#94a3b8]" />
+                <span className="font-semibold">{activeLabel}</span>
+                <ChevronDown className={cn("w-3 h-3 transition-transform", open && "rotate-180")} />
+            </button>
+
+            {open && (
+                <div className="absolute right-0 z-30 mt-1.5 w-44 rounded-xl border border-[#C7D2FE] dark:border-[#3d4a60] bg-[#EEF2FF] dark:bg-[#1e2536] shadow-xl shadow-black/10 dark:shadow-black/40 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-100 origin-top-right">
+                    <div className="px-3 pt-2 pb-1 text-[9px] font-bold uppercase tracking-wider text-[#6366F1] dark:text-[#94a3b8]">
+                        Ordenar
+                    </div>
+                    {SORT_OPTIONS.map((opt) => {
+                        const active = iaFiltro === "todos" && sortOrder === opt.value;
+                        return (
+                            <button
+                                key={opt.value}
+                                onClick={() => { onSortChange(opt.value); setOpen(false); }}
+                                className={cn(
+                                    "w-full flex items-center justify-between px-3 py-1.5 text-[12px] transition-colors",
+                                    active
+                                        ? "bg-brand-500/15 text-brand-500 dark:text-brand-400 font-semibold"
+                                        : "text-[#37352F] dark:text-[#cbd5e1] hover:bg-[#C7D2FE]/40 dark:hover:bg-[#3d4a60]/50"
+                                )}
+                            >
+                                <span>{opt.label}</span>
+                                {active && <Check className="w-3.5 h-3.5" />}
+                            </button>
+                        );
+                    })}
+                    <div className="my-1 mx-3 h-px bg-[#C7D2FE] dark:bg-[#3d4a60]" />
+                    <div className="px-3 pt-1 pb-1 text-[9px] font-bold uppercase tracking-wider text-[#6366F1] dark:text-[#94a3b8]">
+                        Filtrar IA
+                    </div>
+                    {IA_OPTIONS.map((opt) => {
+                        const active = iaFiltro === opt.value;
+                        return (
+                            <button
+                                key={opt.value}
+                                onClick={() => { onIaChange(opt.value); setOpen(false); }}
+                                className={cn(
+                                    "w-full flex items-center gap-2 px-3 py-1.5 text-[12px] transition-colors",
+                                    active
+                                        ? "bg-brand-500/15 text-brand-500 dark:text-brand-400 font-semibold"
+                                        : "text-[#37352F] dark:text-[#cbd5e1] hover:bg-[#C7D2FE]/40 dark:hover:bg-[#3d4a60]/50"
+                                )}
+                            >
+                                {opt.icon}
+                                <span className="flex-1 text-left">{opt.label}</span>
+                                {active && <Check className="w-3.5 h-3.5" />}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
 }
 
 // =============================================
@@ -137,12 +262,29 @@ export function ConversasLayout() {
 
     const [sortOrder, setSortOrder] = useState<string>("recent");
     const [canalFiltro, setCanalFiltro] = useState<"todos" | "alegrando" | "festas">("todos");
+    const [iaFiltro, setIaFiltro] = useState<"todos" | "ia_ativa" | "manual">("todos");
     useEffect(() => {
         const stored = localStorage.getItem("crm_canal_filtro");
         if (stored === "todos" || stored === "alegrando" || stored === "festas") {
             setCanalFiltro(stored);
         }
+        // Query string ?ia=ativa|manual sobrescreve localStorage (vinda do dashboard)
+        const queryIa = searchParams.get("ia");
+        if (queryIa === "ativa") {
+            setIaFiltro("ia_ativa");
+        } else if (queryIa === "manual") {
+            setIaFiltro("manual");
+        } else {
+            const storedIa = localStorage.getItem("crm_ia_filtro");
+            if (storedIa === "todos" || storedIa === "ia_ativa" || storedIa === "manual") {
+                setIaFiltro(storedIa);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+    useEffect(() => {
+        localStorage.setItem("crm_ia_filtro", iaFiltro);
+    }, [iaFiltro]);
     const [totalClientes, setTotalClientes] = useState(0);
     const [loadingMore, setLoadingMore] = useState(false);
     const CLIENTES_LIMIT = 50;
@@ -206,26 +348,32 @@ export function ConversasLayout() {
         return () => clearInterval(interval);
     }, [clientesList, tick]);
 
-    // Ordenação client-side
-    const sortedLeads = [...clientesList].sort((a, b) => {
-        if (sortOrder === "recent") {
-            const timeA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-            const timeB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-            return timeB - timeA;
-        }
-        if (sortOrder === "oldest") {
-            const timeA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
-            const timeB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
-            return timeA - timeB;
-        }
-        if (sortOrder === "az") {
-            return (a.nome || "").localeCompare(b.nome || "");
-        }
-        if (sortOrder === "za") {
-            return (b.nome || "").localeCompare(a.nome || "");
-        }
-        return 0;
-    });
+    // Filtro IA (client-side) + ordenação
+    const sortedLeads = [...clientesList]
+        .filter((c) => {
+            if (iaFiltro === "ia_ativa") return c.iaAtiva === true;
+            if (iaFiltro === "manual") return c.iaAtiva === false;
+            return true;
+        })
+        .sort((a, b) => {
+            if (sortOrder === "recent") {
+                const timeA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+                const timeB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+                return timeB - timeA;
+            }
+            if (sortOrder === "oldest") {
+                const timeA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+                const timeB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+                return timeA - timeB;
+            }
+            if (sortOrder === "az") {
+                return (a.nome || "").localeCompare(b.nome || "");
+            }
+            if (sortOrder === "za") {
+                return (b.nome || "").localeCompare(a.nome || "");
+            }
+            return 0;
+        });
 
     // Load clientes list (page 1)
     const loadList = useCallback(async () => {
@@ -544,7 +692,7 @@ export function ConversasLayout() {
         const currentReply = replyTo;
         setChatMessage("");
         setReplyTo(null);
-        addOptimisticRef.current?.(text, cliente.canal === "festas" ? "Márcia" : "Equipe");
+        addOptimisticRef.current?.(text, cliente.canal === "festas" ? "Festas" : "Alegrando");
 
         (async () => {
             try {
@@ -553,7 +701,7 @@ export function ConversasLayout() {
                     await replyToMessage({
                         telefone: cliente.telefone,
                         text,
-                        senderName: cliente.canal === "festas" ? "Márcia" : "Equipe",
+                        senderName: cliente.canal === "festas" ? "Festas" : "Alegrando",
                         iaAtiva: cliente.iaAtiva,
                         replyToZapiId: currentReply.zapiMessageId ?? null,
                         replyToContent: currentReply.content,
@@ -564,7 +712,7 @@ export function ConversasLayout() {
                     await sendMessage({
                         telefone: cliente.telefone,
                         mensagem: text,
-                        sender_name: cliente.canal === "festas" ? "Márcia" : "Equipe",
+                        sender_name: cliente.canal === "festas" ? "Festas" : "Alegrando",
                         iaAtiva: cliente.iaAtiva,
                         canal: cliente.canal,
                     });
@@ -744,7 +892,7 @@ export function ConversasLayout() {
             const formData = new FormData();
             formData.append("file", audioAttachment.file);
             formData.append("telefone", cliente.telefone);
-            formData.append("sender_name", cliente.canal === "festas" ? "Márcia" : "Equipe");
+            formData.append("sender_name", cliente.canal === "festas" ? "Festas" : "Alegrando");
             formData.append("canal", cliente.canal ?? "alegrando");
             const res = await sendAudioMessage(formData);
             if (!res.success) {
@@ -774,7 +922,7 @@ export function ConversasLayout() {
                         const formData = new FormData();
                         formData.append("file", att.file);
                         formData.append("telefone", cliente.telefone);
-                        formData.append("sender_name", cliente.canal === "festas" ? "Márcia" : "Equipe");
+                        formData.append("sender_name", cliente.canal === "festas" ? "Festas" : "Alegrando");
                         formData.append("caption", att.caption);
                         formData.append("canal", cliente.canal ?? "alegrando");
                         const res = await sendFileMessage(formData);
@@ -881,16 +1029,12 @@ export function ConversasLayout() {
                         <span className="text-[10px] font-semibold text-[#6366F1] dark:text-[#94a3b8] uppercase tracking-wider">
                             Ordenar por:
                         </span>
-                        <select
-                            value={sortOrder}
-                            onChange={(e) => setSortOrder(e.target.value)}
-                            className="text-[11px] bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60] rounded-lg px-2 py-1 text-[#37352F] dark:text-[#cbd5e1] outline-none focus:border-brand-500 transition-colors cursor-pointer"
-                        >
-                            <option value="recent">Mais recente</option>
-                            <option value="oldest">Mais antigo</option>
-                            <option value="az">A-Z</option>
-                            <option value="za">Z-A</option>
-                        </select>
+                        <SortFilterDropdown
+                            sortOrder={sortOrder}
+                            iaFiltro={iaFiltro}
+                            onSortChange={(v) => { setIaFiltro("todos"); setSortOrder(v); }}
+                            onIaChange={(v) => setIaFiltro(v)}
+                        />
                     </div>
 
                     {/* Canal filter */}
@@ -910,6 +1054,21 @@ export function ConversasLayout() {
                             </button>
                         ))}
                     </div>
+
+                    {/* IA filter — quick row to clear current filter when active */}
+                    {iaFiltro !== "todos" && (
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-semibold text-[#6366F1] dark:text-[#94a3b8] uppercase tracking-wider">
+                                Filtro IA: {iaFiltro === "ia_ativa" ? "🤖 Ativa" : "👤 Manual"}
+                            </span>
+                            <button
+                                onClick={() => setIaFiltro("todos")}
+                                className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full border border-[#C7D2FE] dark:border-[#3d4a60] text-[#6366F1] dark:text-[#94a3b8] hover:text-foreground transition-colors"
+                            >
+                                Limpar
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* List */}
@@ -1089,6 +1248,7 @@ export function ConversasLayout() {
                             key={cliente.telefone}
                             telefone={cliente.telefone}
                             canal={cliente.canal}
+                            leadName={cliente.nome}
                             onReady={(fns) => { addOptimisticRef.current = fns.addOptimisticMessage; }}
                             onReply={(msg) => setReplyTo(msg)}
                         />

@@ -43,6 +43,27 @@ export async function getTotalLeadsByCanal(): Promise<{
 }
 
 /**
+ * Estatísticas de IA: quantos contatos com IA ativa vs. modo manual.
+ */
+export async function getIaAtivaStats(): Promise<{
+    iaAtiva: number;
+    manual: number;
+    total: number;
+}> {
+    await requireAuth();
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("ia_ativa");
+
+    if (error || !data) return { iaAtiva: 0, manual: 0, total: 0 };
+
+    const iaAtiva = data.filter((r) => r.ia_ativa === true).length;
+    const manual = data.length - iaAtiva;
+    return { iaAtiva, manual, total: data.length };
+}
+
+/**
  * Leads agrupados por mês (últimos 6 meses).
  */
 export async function getLeadsPorMes(): Promise<{ mes: string; leads: number }[]> {
