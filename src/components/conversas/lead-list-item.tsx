@@ -40,7 +40,22 @@ interface LeadListItemProps {
     tick: number;
 }
 
+export function isGroupTelefone(telefone: string | number): boolean {
+    const s = String(telefone);
+    if (s.endsWith("-group")) return true;
+    // IDs de grupos do WhatsApp começam com 120363 e têm 18+ dígitos.
+    // Antes da migration que mudou a coluna para TEXT, eles eram salvos
+    // como numeric (com 55 prefixado por engano), então também detectamos
+    // por esse padrão para não perder o badge.
+    const digits = s.replace(/\D/g, "");
+    if (digits.startsWith("120363") && digits.length >= 18) return true;
+    if (digits.startsWith("55120363") && digits.length >= 20) return true;
+    return false;
+}
+
 const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: LeadListItemProps) {
+    const telefoneStr = String(item.telefone);
+    const isGroup = isGroupTelefone(item.telefone);
     return (
         <button
             onClick={onClick}
@@ -64,12 +79,12 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
                             onError={(e) => {
                                 (e.currentTarget as HTMLImageElement).style.display = "none";
                                 const fallback = e.currentTarget.parentElement;
-                                if (fallback) fallback.textContent = (item.nome || String(item.telefone)).charAt(0).toUpperCase();
+                                if (fallback) fallback.textContent = (item.nome || telefoneStr).charAt(0).toUpperCase();
                             }}
                             unoptimized={item.fotoUrl.includes("pps.whatsapp.net")}
                         />
                     ) : (
-                        (item.nome || String(item.telefone)).charAt(0).toUpperCase()
+                        (item.nome || telefoneStr).charAt(0).toUpperCase()
                     )}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -80,7 +95,7 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
                                 ? "text-brand-400"
                                 : "text-[#191918] dark:text-white"
                         )}>
-                            {item.nome || item.telefone}
+                            {item.nome || telefoneStr}
                         </p>
                         <span className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] shrink-0 ml-auto">
                             {formatLastMessageTime(item.lastMessageAt)}
@@ -92,7 +107,7 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
                         )}
                     </div>
                     <p className="text-[11px] font-mono text-[#191918] dark:text-white font-medium truncate mt-0.5">
-                        {item.telefone}
+                        {isGroup ? "Grupo WhatsApp" : telefoneStr}
                     </p>
                 </div>
             </div>
@@ -102,12 +117,17 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
                         NOVO
                     </span>
                 )}
-                {!item.iaAtiva && item.canal !== "festas" && (
+                {isGroup && (
+                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-emerald-200 text-emerald-800 border border-emerald-400">
+                        Grupo
+                    </span>
+                )}
+                {!isGroup && !item.iaAtiva && item.canal !== "festas" && (
                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-200 text-orange-800 border border-orange-400">
                         Manual
                     </span>
                 )}
-                {item.canal === "festas" && (
+                {!isGroup && item.canal === "festas" && (
                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-pink-200 text-pink-800 border border-pink-400">
                         🎉 Festas
                     </span>

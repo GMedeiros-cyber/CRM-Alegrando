@@ -7,11 +7,13 @@ import {
     Target,
     ArrowRight,
     Loader2,
+    Bot,
+    UserCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { LeadsPorMesChart } from "@/components/dashboard/charts";
-import { getTotalLeadsByCanal, getEventosDoMes, getFollowupsAtivos } from "@/lib/actions/dashboard";
+import { getTotalLeadsByCanal, getEventosDoMes, getFollowupsAtivos, getIaAtivaStats } from "@/lib/actions/dashboard";
 import { updateCliente } from "@/lib/actions/leads";
 import { getAgendamentos } from "@/lib/actions/agenda";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
@@ -117,6 +119,7 @@ export default function DashboardPage() {
     } | null>(null);
     const [eventosDoMes, setEventosDoMes] = useState<number | null>(null);
     const [followupsAtivos, setFollowupsAtivos] = useState<number | null>(null);
+    const [iaStats, setIaStats] = useState<{ iaAtiva: number; manual: number; total: number } | null>(null);
     const [proximosEventos, setProximosEventos] = useState<AgendamentoEvent[]>([]);
     const [loadingEventos, setLoadingEventos] = useState(true);
 
@@ -128,10 +131,12 @@ export default function DashboardPage() {
             getEventosDoMes(),
             getFollowupsAtivos(),
             getAgendamentos(),
-        ]).then(([leads, eventos, followups, agendamentos]) => {
+            getIaAtivaStats(),
+        ]).then(([leads, eventos, followups, agendamentos, ia]) => {
             setLeadsData(leads);
             setEventosDoMes(eventos);
             setFollowupsAtivos(followups.length);
+            setIaStats(ia);
 
             const now = new Date();
             const in7Days = new Date();
@@ -159,7 +164,7 @@ export default function DashboardPage() {
                 </p>
             </div>
 
-            {/* KPI Cards Grid — 3 colunas */}
+            {/* KPI Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 <MetricCard
                     title="Total de Leads"
@@ -193,6 +198,34 @@ export default function DashboardPage() {
                     gradient="kpi-gradient-emerald"
                     iconColor="text-emerald-500"
                     delay={100}
+                />
+                <MetricCard
+                    title="IA Ativa"
+                    value={iaStats !== null ? iaStats.iaAtiva : "..."}
+                    subtitle={
+                        iaStats !== null && iaStats.total > 0
+                            ? `${Math.round((iaStats.iaAtiva / iaStats.total) * 100)}% dos contatos`
+                            : "Contatos atendidos pela Jade"
+                    }
+                    icon={Bot}
+                    gradient="kpi-gradient-blue"
+                    iconColor="text-violet-400"
+                    delay={150}
+                    href="/conversas?ia=ativa"
+                />
+                <MetricCard
+                    title="Modo Manual"
+                    value={iaStats !== null ? iaStats.manual : "..."}
+                    subtitle={
+                        iaStats !== null && iaStats.total > 0
+                            ? `${Math.round((iaStats.manual / iaStats.total) * 100)}% dos contatos`
+                            : "Contatos atendidos pela equipe"
+                    }
+                    icon={UserCheck}
+                    gradient="kpi-gradient-coral"
+                    iconColor="text-amber-500"
+                    delay={200}
+                    href="/conversas?ia=manual"
                 />
             </div>
 

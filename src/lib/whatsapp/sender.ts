@@ -1,5 +1,9 @@
 function formatPhoneZapi(telefone: string): string {
+  // Grupos: ID canônico não leva prefixo 55. Aceita "<digits>-group" ou
+  // string "120363..." com 18+ dígitos (formato pós-migration).
+  if (telefone.endsWith("-group")) return telefone.replace(/\D/g, "");
   const digits = telefone.replace(/\D/g, "");
+  if (digits.startsWith("120363") && digits.length >= 18) return digits;
   if (digits.startsWith("55") && digits.length >= 12) return digits;
   return `55${digits}`;
 }

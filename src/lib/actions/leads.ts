@@ -203,6 +203,47 @@ export async function listClientes(params?: {
 }
 
 /**
+ * Lista participantes únicos de um grupo (apenas para telefones com sufixo
+ * -group). Agrega por sender_name distinto + participantPhone do metadata,
+ * com contagem de mensagens. Mensagens sem sender_name caem em "Desconhecido".
+ */
+export async function getGroupParticipants(telefone: string): Promise<{
+    name: string;
+    participantPhone: string | null;
+    messageCount: number;
+}[]> {
+    await requireAuth();
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+        .from("messages")
+        .select("sender_name, sender_type, metadata")
+        .eq("telefone", telefone)
+        .eq("sender_type", "cliente");
+
+    if (error || !data) return [];
+
+    const map = new Map<string, { name: string; participantPhone: string | null; count: number }>();
+    for (const m of data) {
+        const meta = (m.metadata ?? {}) as Record<string, unknown>;
+        const participantPhone = (meta.participantPhone as string | null) ?? null;
+        const name = m.sender_name || participantPhone || "Desconhecido";
+        const key = participantPhone || name;
+        const cur = map.get(key);
+        if (cur) {
+            cur.count += 1;
+            if (!cur.participantPhone && participantPhone) cur.participantPhone = participantPhone;
+        } else {
+            map.set(key, { name, participantPhone, count: 1 });
+        }
+    }
+
+    return Array.from(map.values())
+        .map((v) => ({ name: v.name, participantPhone: v.participantPhone, messageCount: v.count }))
+        .sort((a, b) => b.messageCount - a.messageCount);
+}
+
+/**
  * Marca as mensagens de um cliente como lidas (atualiza lastSeenAt).
  */
 export async function markAsRead(telefone: string): Promise<void> {

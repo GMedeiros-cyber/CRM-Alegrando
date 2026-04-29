@@ -44,6 +44,7 @@ const CustomTooltipContent = ({
 export function LeadsPorMesChart() {
     const [data, setData] = useState<{ mes: string; leads: number }[]>([]);
     const [loading, setLoading] = useState(true);
+    const [view, setView] = useState<"mes_atual" | "historico">("historico");
 
     useEffect(() => {
         getLeadsPorMes()
@@ -51,24 +52,58 @@ export function LeadsPorMesChart() {
             .finally(() => setLoading(false));
     }, []);
 
+    const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    const mesAtualLabel = meses[new Date().getMonth()];
+    const visibleData = view === "mes_atual"
+        ? data.filter((d) => d.mes === mesAtualLabel)
+        : data;
+
+    const subtitle = view === "mes_atual"
+        ? `Apenas ${mesAtualLabel.toLowerCase()}`
+        : "Evolução dos últimos 6 meses";
+
     return (
         <div className="bento-card-static p-6 bento-enter" style={{ animationDelay: "200ms" }}>
-            <div className="mb-6">
-                <h3 className="font-display text-lg font-semibold text-foreground">
-                    Leads por Mês
-                </h3>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                    Evolução dos últimos 6 meses
-                </p>
+            <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                    <h3 className="font-display text-lg font-semibold text-foreground">
+                        Leads por Mês
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
+                </div>
+                <div className="flex items-center gap-1 rounded-full bg-background/60 border border-border/50 p-0.5 shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => setView("mes_atual")}
+                        className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                            view === "mes_atual"
+                                ? "bg-brand-500 text-white"
+                                : "text-muted-foreground hover:text-foreground"
+                        }`}
+                    >
+                        Mês atual
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setView("historico")}
+                        className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                            view === "historico"
+                                ? "bg-brand-500 text-white"
+                                : "text-muted-foreground hover:text-foreground"
+                        }`}
+                    >
+                        Últimos 6
+                    </button>
+                </div>
             </div>
             {loading ? (
                 <div className="h-[260px] flex items-center justify-center">
                     <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
                 </div>
-            ) : data.length > 0 ? (
+            ) : visibleData.length > 0 ? (
                 <div className="h-[260px]">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data} barCategoryGap="20%">
+                        <BarChart data={visibleData} barCategoryGap="20%">
                             <CartesianGrid
                                 strokeDasharray="3 3"
                                 vertical={false}
@@ -97,7 +132,11 @@ export function LeadsPorMesChart() {
                 </div>
             ) : (
                 <div className="h-[260px] flex items-center justify-center">
-                    <p className="text-sm text-[#6366F1] dark:text-[#94a3b8]">Nenhum lead registrado nos últimos 6 meses.</p>
+                    <p className="text-sm text-[#6366F1] dark:text-[#94a3b8]">
+                        {view === "mes_atual"
+                            ? `Nenhum lead em ${mesAtualLabel.toLowerCase()}.`
+                            : "Nenhum lead registrado nos últimos 6 meses."}
+                    </p>
                 </div>
             )}
         </div>

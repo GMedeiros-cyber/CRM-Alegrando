@@ -10,6 +10,24 @@ import { PinnedMessageBanner } from "./pinned-message-banner";
 import { ReactionPicker } from "./reaction-picker";
 import { AudioPlayer } from "./audio-player";
 import { reactToMessage, deleteMessage, pinMessage } from "@/lib/actions/messages";
+import { isGroupTelefone } from "./lead-list-item";
+
+// Hash simples → cor estável por participante (paleta 8 tons no estilo do tema)
+const PARTICIPANT_COLORS = [
+    "text-rose-400",
+    "text-amber-400",
+    "text-lime-400",
+    "text-cyan-400",
+    "text-sky-400",
+    "text-violet-400",
+    "text-pink-400",
+    "text-teal-400",
+];
+function colorForParticipant(name: string): string {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+    return PARTICIPANT_COLORS[Math.abs(hash) % PARTICIPANT_COLORS.length];
+}
 
 export interface ChatWindowHandles {
     addOptimisticMessage: (content: string, senderName?: string) => void;
@@ -18,6 +36,7 @@ export interface ChatWindowHandles {
 interface ChatWindowProps {
     telefone: string;
     canal?: string;
+    leadName?: string | null;
     onReady?: (fns: ChatWindowHandles) => void;
     onReply?: (msg: LeadMessage) => void;
 }
@@ -52,14 +71,38 @@ function DateSeparator({ date }: { date: Date }) {
 // =============================================
 // SENDER LABEL
 // =============================================
-function SenderLabel({ message, isClient }: { message: LeadMessage; isClient: boolean }) {
+function SenderLabel({
+    message,
+    isClient,
+    canal,
+    leadName,
+    isGroup,
+}: {
+    message: LeadMessage;
+    isClient: boolean;
+    canal?: string;
+    leadName?: string | null;
+    isGroup?: boolean;
+}) {
     if (isClient) {
+        // Em grupo: priorizar nome do participante (senderName) — nunca o nome do
+        // grupo (leadName), pois cada mensagem pode ser de uma pessoa diferente.
+        // Em chat individual: priorizar leadName sobre senderName (registros
+        // antigos podem ter senderName inconsistente).
+        const displayName = isGroup
+            ? (message.senderName || "Participante")
+            : (leadName || message.senderName || "Cliente");
+
+        const colorClass = isGroup
+            ? colorForParticipant(displayName)
+            : "text-[#6366F1] dark:text-[#94a3b8]";
+
         return (
             <div className="flex items-center gap-1.5 mb-1">
                 <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#C7D2FE]/30 dark:bg-[#3d4a60]/40">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#A5B4FC] dark:bg-[#94a3b8]" />
-                    <span className="text-[11px] font-bold tracking-wide text-[#6366F1] dark:text-[#94a3b8]">
-                        {message.senderName || "Cliente"}
+                    <span className={cn("text-[11px] font-bold tracking-wide", colorClass)}>
+                        {displayName}
                     </span>
                 </div>
             </div>
@@ -75,12 +118,16 @@ function SenderLabel({ message, isClient }: { message: LeadMessage; isClient: bo
             </div>
         );
     }
+    // Equipe: mostra label unificado por canal (independente do nome
+    // individual do operador no payload do WhatsApp). Evita confusão como
+    // "Márcia" aparecendo em mensagens enviadas pelo canal Alegrando.
+    const teamLabel = canal === "festas" ? "Festas" : "Alegrando";
     return (
         <div className="flex items-center gap-1.5 mb-1">
             <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 <span className="text-[11px] font-bold tracking-wide text-emerald-400">
-                    {message.senderName || "Alegrando"}
+                    {teamLabel}
                 </span>
             </div>
         </div>
@@ -195,17 +242,36 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
     if (message.mediaType === "document") {
         const { url, caption } = parseMediaContent(message.content || "");
         if (url.startsWith("http")) {
-            const fileName = url.split("/").pop()?.split("?")[0] || "Documento";
+            const rawFileName = url.split("/").pop()?.split("?")[0] || "Documento";
+            const fileName = (() => {
+                try { return decodeURIComponent(rawFileName); } catch { return rawFileName; }
+            })();
+            const lower = fileName.toLowerCase();
+            const isPdf = lower.endsWith(".pdf") || url.toLowerCase().includes(".pdf");
             return (
-                <div>
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#191918]/5 dark:bg-white/5 hover:bg-[#191918]/10 dark:hover:bg-white/10 transition-colors max-w-[240px] border border-[#191918]/10 dark:border-white/10">
+                <div className="flex flex-col gap-1.5">
+                    {isPdf && (
+                        // Preview inline do PDF — sem precisar abrir nova aba
+                        <object
+                            data={url}
+                            type="application/pdf"
+                            className="rounded-xl border border-[#191918]/10 dark:border-white/10 bg-white"
+                            width={320}
+                            height={400}
+                        >
+                            <div className="text-[10px] p-3 text-[#6366F1] dark:text-[#94a3b8]">
+                                Preview indisponível neste navegador.
+                            </div>
+                        </object>
+                    )}
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#191918]/5 dark:bg-white/5 hover:bg-[#191918]/10 dark:hover:bg-white/10 transition-colors max-w-[320px] border border-[#191918]/10 dark:border-white/10">
                         <FileText className="w-8 h-8 text-brand-400 shrink-0" />
                         <div className="min-w-0">
-                            <p className="text-sm font-medium text-[#191918] dark:text-white truncate">{decodeURIComponent(fileName)}</p>
-                            <p className="text-[10px] text-[#191918] dark:text-white/50">Toque para abrir</p>
+                            <p className="text-sm font-medium text-[#191918] dark:text-white truncate">{fileName}</p>
+                            <p className="text-[10px] text-[#191918] dark:text-white/50">{isPdf ? "Abrir em tela cheia" : "Toque para abrir"}</p>
                         </div>
                     </a>
-                    {caption && <p className="text-xs mt-1.5 text-[#191918] dark:text-white/70 leading-relaxed">{caption}</p>}
+                    {caption && <p className="text-xs mt-1 text-[#191918] dark:text-white/70 leading-relaxed">{caption}</p>}
                 </div>
             );
         }
@@ -363,8 +429,9 @@ const MY_USER_ID = "crm-user";
 // =============================================
 // CHAT WINDOW
 // =============================================
-export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProps) {
+export function ChatWindow({ telefone, canal, leadName, onReady, onReply }: ChatWindowProps) {
     const { messages, loading, hasMore, loadingMore, loadOlder, addOptimisticMessage, updateMessageById, removeMessageById } = useLeadMessages(telefone);
+    const isGroup = isGroupTelefone(telefone);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const messageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
     const messageIdRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -746,7 +813,7 @@ export function ChatWindow({ telefone, canal, onReady, onReply }: ChatWindowProp
                                                 </div>
                                             )}
 
-                                            <SenderLabel message={msg} isClient={isClient} />
+                                            <SenderLabel message={msg} isClient={isClient} canal={canal} leadName={leadName} isGroup={isGroup} />
                                             <MessageContent message={msg} isSelf={isSelf} highlight={searchTerm || undefined} />
                                             <p className={cn("text-[10px] mt-1 text-right", isClient ? "text-[#6366F1] dark:text-[#94a3b8]" : "text-[#191918] dark:text-white/50")}>
                                                 {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}

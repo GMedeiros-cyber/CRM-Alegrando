@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,10 +34,12 @@ import {
     Share2,
     CheckCircle2,
     Cake,
+    Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { updateCliente } from "@/lib/actions/leads";
+import { updateCliente, getGroupParticipants } from "@/lib/actions/leads";
 import type { ClienteDetail, PasseioHistorico } from "@/lib/actions/leads";
+import { isGroupTelefone } from "./lead-list-item";
 import type { KanbanColumn } from "@/lib/actions/kanban";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
 
@@ -181,6 +183,27 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
     const doneTasks = tasks.filter((t) => t.done);
     const sortedTasks = [...pendingTasks, ...doneTasks];
     const allTasksDone = tasks.length > 0 && pendingTasks.length === 0;
+    const isGroup = isGroupTelefone(cliente.telefone);
+
+    const [participants, setParticipants] = useState<{
+        name: string;
+        participantPhone: string | null;
+        messageCount: number;
+    }[]>([]);
+    const [loadingParticipants, setLoadingParticipants] = useState(false);
+
+    useEffect(() => {
+        if (!isGroup) {
+            setParticipants([]);
+            return;
+        }
+        let cancelled = false;
+        setLoadingParticipants(true);
+        getGroupParticipants(cliente.telefone)
+            .then((data) => { if (!cancelled) setParticipants(data); })
+            .finally(() => { if (!cancelled) setLoadingParticipants(false); });
+        return () => { cancelled = true; };
+    }, [cliente.telefone, isGroup]);
 
     return (
         <div className="p-4 space-y-4">
@@ -194,8 +217,53 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                 </div>
             </div>
 
-            {/* AI Toggle — only for alegrando */}
-            {cliente.canal !== "festas" && (
+            {/* Group participants — only for groups */}
+            {isGroup && (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Users className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-xs font-bold text-emerald-300 uppercase tracking-wide">
+                            Integrantes do grupo
+                        </span>
+                        <span className="ml-auto text-[10px] font-semibold text-emerald-300/80 bg-emerald-500/15 px-1.5 py-0.5 rounded-full">
+                            {participants.length}
+                        </span>
+                    </div>
+                    {loadingParticipants ? (
+                        <div className="flex justify-center py-3">
+                            <Loader2 className="w-4 h-4 animate-spin text-emerald-400/70" />
+                        </div>
+                    ) : participants.length === 0 ? (
+                        <p className="text-[11px] text-[#6366F1] dark:text-[#94a3b8] py-1">
+                            Nenhum integrante identificado ainda. Mensagens novas
+                            captarão automaticamente nome e número.
+                        </p>
+                    ) : (
+                        <ul className="space-y-1.5">
+                            {participants.map((p, idx) => (
+                                <li key={`${p.participantPhone || p.name}-${idx}`} className="flex items-center gap-2 text-[12px]">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-semibold text-[#191918] dark:text-white truncate">
+                                            {p.name}
+                                        </p>
+                                        {p.participantPhone && (
+                                            <p className="text-[10px] font-mono text-[#6366F1] dark:text-[#94a3b8] truncate">
+                                                {p.participantPhone}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/15 px-1.5 py-0.5 rounded-full shrink-0">
+                                        {p.messageCount}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            )}
+
+            {/* AI Toggle — only for alegrando (não para grupos) */}
+            {cliente.canal !== "festas" && !isGroup && (
                 <div
                     className={cn(
                         "flex items-center gap-3 px-3 py-2 rounded-xl border-2 transition-colors",
