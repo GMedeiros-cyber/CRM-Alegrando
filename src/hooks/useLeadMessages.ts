@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { LeadMessage } from "@/lib/actions/leads";
 
-export function useLeadMessages(telefone: string) {
+export function useLeadMessages(telefone: string, canal: string = "alegrando") {
     const [messages, setMessages] = useState<LeadMessage[]>([]);
     const [loading, setLoading] = useState(true);
     const [hasMore, setHasMore] = useState(false);
@@ -18,7 +18,7 @@ export function useLeadMessages(telefone: string) {
         async function fetchInitial() {
             try {
                 setLoading(true);
-                const { data, error } = await fetchMessagePage(telefone, null);
+                const { data, error } = await fetchMessagePage(telefone, canal, null);
                 if (isMounted && !error && data) {
                     if (data.length === 100) {
                         setHasMore(true);
@@ -38,8 +38,9 @@ export function useLeadMessages(telefone: string) {
         fetchInitial();
 
         // Inscreve no Supabase Realtime para a tabela messages filtrado pelo telefone
+        // Realtime do Supabase só permite um filtro — filtramos canal localmente.
         const channel = supabase
-            .channel(`public:messages:telefone_${telefone}`)
+            .channel(`public:messages:telefone_${telefone}_${canal}`)
             .on(
                 "postgres_changes",
                 {
@@ -50,6 +51,7 @@ export function useLeadMessages(telefone: string) {
                 },
                 (payload) => {
                     const updated = payload.new;
+                    if (updated.canal && updated.canal !== canal) return;
                     const meta = updated.metadata as Record<string, unknown> | null;
                     if (isMounted) {
                         setMessages((prev) =>
@@ -104,6 +106,7 @@ export function useLeadMessages(telefone: string) {
                 },
                 (payload) => {
                     const newMsg = payload.new;
+                    if (newMsg.canal && newMsg.canal !== canal) return;
                     const meta = newMsg.metadata as Record<string, unknown> | null;
                     const formattedMsg: LeadMessage = {
                         id: newMsg.id,
@@ -167,13 +170,13 @@ export function useLeadMessages(telefone: string) {
             isMounted = false;
             supabase.removeChannel(channel);
         };
-    }, [telefone]);
+    }, [telefone, canal]);
 
     const loadOlder = useCallback(async () => {
         if (!hasMore || loadingMore || !oldestCreatedAt.current) return;
         setLoadingMore(true);
         try {
-            const { data, error } = await fetchMessagePage(telefone, oldestCreatedAt.current);
+            const { data, error } = await fetchMessagePage(telefone, canal, oldestCreatedAt.current);
             if (!error && data) {
                 const mapped = mapRows(data).reverse();
                 setMessages((prev) => [...mapped, ...prev]);
@@ -187,7 +190,7 @@ export function useLeadMessages(telefone: string) {
         } finally {
             setLoadingMore(false);
         }
-    }, [telefone, hasMore, loadingMore]);
+    }, [telefone, canal, hasMore, loadingMore]);
 
     const addOptimisticMessage = useCallback((content: string, senderName?: string) => {
         const optimistic: LeadMessage = {
@@ -242,11 +245,12 @@ function mapRows(rows: Record<string, unknown>[]): LeadMessage[] {
  * Busca uma página de 100 mensagens, opcionalmente antes de `before` (ISO string).
  * Retorna rows brutas (ordem descendente do servidor) para inspecionar created_at.
  */
-async function fetchMessagePage(telefone: string, before: string | null) {
+async function fetchMessagePage(telefone: string, canal: string, before: string | null) {
     let query = supabase
         .from("messages")
         .select("id, sender_type, sender_name, content, media_type, created_at, created_by, metadata, pinned, reactions")
         .eq("telefone", telefone)
+        .eq("canal", canal)
         .order("created_at", { ascending: false })
         .limit(100);
 

@@ -40,8 +40,11 @@ interface ZApiImagePayload {
 
 interface ZApiDocumentPayload {
   documentUrl?: string;
+  url?: string;         // campo alternativo que alguns payloads Z-API usam
+  mediaUrl?: string;    // campo alternativo
   fileName?: string;
   caption?: string;
+  mimeType?: string;
 }
 
 interface ZApiAudioPayload {
@@ -130,8 +133,8 @@ function extractMessageContent(payload: ZApiWebhookPayload): {
     return { content: payload.audio.audioUrl || "", media_type: "audio" };
   }
   if (payload.document) {
-    const url = payload.document.documentUrl || "";
-    const caption = payload.document.caption || "";
+    const url = payload.document.documentUrl || payload.document.url || payload.document.mediaUrl || "";
+    const caption = payload.document.caption || payload.document.fileName || "";
     return { content: caption ? `${url}|||${caption}` : url, media_type: "document" };
   }
   if (payload.sticker) {
@@ -145,10 +148,12 @@ function extractMessageContent(payload: ZApiWebhookPayload): {
     return { content: payload.contact.displayName || "Contato", media_type: "contact" };
   }
   const tipo = (payload as Record<string, unknown>).type as string || "mensagem";
+  // Log completo para diagnóstico — payload de tipos desconhecidos precisa ser
+  // inspecionado para identificar o campo correto (ex: documentos em grupos).
   console.error(
-    "[ZAPI-PROXY] Tipo não reconhecido — fallback document:",
-    tipo, "keys=", Object.keys(payload),
-    "payload_preview=", JSON.stringify(payload).slice(0, 500)
+    "[ZAPI-PROXY] Tipo não reconhecido — fallback document. tipo=" + tipo,
+    "| keys=" + Object.keys(payload).join(","),
+    "| FULL=" + JSON.stringify(payload).slice(0, 3000)
   );
   return { content: `📎 ${tipo} enviada pelo WhatsApp`, media_type: "document" };
 }
@@ -298,7 +303,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           canal: "alegrando",
           ia_ativa: false,
         },
-        { onConflict: "telefone" }
+        { onConflict: "telefone,canal" }
       );
 
       // Backfill foto do grupo (apenas se ainda não tiver) — fire-and-forget.
@@ -348,6 +353,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
         await supabase.from("messages").insert({
           telefone: groupId,
+          canal: "alegrando",
           sender_type: "cliente",
           sender_name: payload.senderName || payload.participantPhone || null,
           content,
@@ -386,6 +392,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
         await supabase.from("messages").insert({
           telefone: groupId,
+          canal: "alegrando",
           sender_type: "equipe",
           sender_name: payload.senderName || "Equipe",
           content,
@@ -428,27 +435,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // --- 2. Mensagens do cliente (fromMe=false) com número real: atualiza chat_lid no lead ---
   // Isso cria o mapeamento LID → telefone que usaremos para mensagens do celular físico.
+  // Z-API sempre é canal "alegrando" — o mesmo número pode existir em "festas" via
+  // Evolution, mas com unique (telefone, canal) cada canal mantém seu próprio registro.
   if (!isFromMe && !isLid(rawPhone) && rawPhone) {
     const realPhone = normalizePhone(rawPhone);
     const phoneWithout55 = realPhone.startsWith("55") ? realPhone.slice(2) : realPhone;
-
-    // Ignorar leads do canal festas — Evolution cuida deles
-    const { data: canalRowClient } = await supabase
-      .from("Clientes _WhatsApp")
-      .select("canal")
-      .or(`telefone.eq.${realPhone},telefone.eq.${phoneWithout55}`)
-      .maybeSingle();
-
-    if (canalRowClient?.canal === "festas") {
-      // Canal festas é tratado pela Evolution — n8n não atende esses leads.
-      return NextResponse.json({ status: "skipped", reason: "festas channel" });
-    }
 
     if (chatLid) {
       supabase
         .from("Clientes _WhatsApp")
         .update({ chat_lid: chatLid })
         .or(`telefone.eq.${realPhone},telefone.eq.${phoneWithout55}`)
+        .eq("canal", "alegrando")
         .then(({ error }) => {
           if (error) console.error("[ZAPI-PROXY] Falha ao atualizar chat_lid:", error.message);
         });
@@ -459,6 +457,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         .from("Clientes _WhatsApp")
         .update({ foto_url: payload.senderPhoto })
         .or(`telefone.eq.${realPhone},telefone.eq.${phoneWithout55}`)
+        .eq("canal", "alegrando")
         .then(({ error }) => {
           if (error) console.error("[ZAPI-PROXY] Falha ao atualizar foto:", error.message);
         });
@@ -471,6 +470,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         .from("Clientes _WhatsApp")
         .select("telefone, foto_url")
         .or(`telefone.eq.${realPhone},telefone.eq.${phoneWithout55}`)
+        .eq("canal", "alegrando")
         .is("foto_url", null)
         .maybeSingle()
         .then(async ({ data: leadSemFoto }) => {
@@ -482,6 +482,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               .from("Clientes _WhatsApp")
               .update({ foto_url: url })
               .eq("telefone", leadSemFoto.telefone)
+              .eq("canal", "alegrando")
               .then(({ error }) => {
                 if (error) console.error("[ZAPI-PROXY] Falha backfill foto:", error.message);
               });
@@ -500,6 +501,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         .from("messages")
         .select("id")
         .eq("telefone", realPhone)
+        .eq("canal", "alegrando")
         .eq("metadata->>messageId", payload.messageId)
         .maybeSingle();
 
@@ -513,6 +515,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           .from("messages")
           .select("id")
           .eq("telefone", realPhone)
+          .eq("canal", "alegrando")
           .eq("sender_type", "cliente")
           .eq("content", rawContent)
           .gte("created_at", windowStart)
@@ -531,6 +534,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
           supabase.from("messages").insert({
             telefone: realPhone,
+            canal: "alegrando",
             sender_type: "cliente",
             // senderName antes de chatName: chatName pode trazer o nome do
             // aparelho conectado em alguns payloads, gerando falsos "Alegrando
@@ -554,13 +558,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       let phone: string | null = null;
 
       if (!isLid(rawPhone) && rawPhone) {
-        // Número real: resolve o telefone no formato exato do CRM
+        // Número real: resolve o telefone no formato exato do CRM (canal alegrando)
         const normalizedPhone = normalizePhone(rawPhone);
         const phoneWithout55 = normalizedPhone.startsWith("55") ? normalizedPhone.slice(2) : normalizedPhone;
         const { data: leadRow } = await supabase
           .from("Clientes _WhatsApp")
           .select("telefone")
           .or(`telefone.eq.${normalizedPhone},telefone.eq.${phoneWithout55}`)
+          .eq("canal", "alegrando")
           .maybeSingle();
         phone = leadRow?.telefone ?? normalizedPhone;
 
@@ -570,6 +575,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           .from("Clientes _WhatsApp")
           .select("telefone")
           .eq("chat_lid", chatLid)
+          .eq("canal", "alegrando")
           .maybeSingle();
 
         if (leadRow?.telefone) {
@@ -583,24 +589,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         // Sem telefone resolvido, não conseguimos salvar com segurança
         console.warn(`[ZAPI-PROXY] Telefone não resolvido para mensagem ${payload.messageId}. Skipping save.`);
       } else {
-        // Verificar canal do lead — ignorar se for festas (Evolution cuida)
-        const { data: canalRow } = await supabase
-          .from("Clientes _WhatsApp")
-          .select("canal")
-          .eq("telefone", phone)
-          .maybeSingle();
-
-        if (canalRow?.canal === "festas") {
-          console.log(`[ZAPI-PROXY] Lead festas — ignorando, Evolution cuida: ${phone}`);
-          // Canal festas é tratado pela Evolution — n8n não atende esses leads.
-          return NextResponse.json({ status: "skipped", reason: "festas channel" });
-        }
-
-        // Idempotência: verifica se o messageId já foi processado
+        // Idempotência: verifica se o messageId já foi processado neste canal
         const { data: existing } = await supabase
           .from("messages")
           .select("id")
           .eq("telefone", phone)
+          .eq("canal", "alegrando")
           .eq("metadata->>messageId", payload.messageId)
           .maybeSingle();
 
@@ -622,6 +616,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
           const { error: insertErr } = await supabase.from("messages").insert({
             telefone: phone,
+            canal: "alegrando",
             sender_type: "equipe",
             sender_name: payload.senderName || "Equipe",
             content,

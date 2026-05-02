@@ -430,7 +430,7 @@ const MY_USER_ID = "crm-user";
 // CHAT WINDOW
 // =============================================
 export function ChatWindow({ telefone, canal, leadName, onReady, onReply }: ChatWindowProps) {
-    const { messages, loading, hasMore, loadingMore, loadOlder, addOptimisticMessage, updateMessageById, removeMessageById } = useLeadMessages(telefone);
+    const { messages, loading, hasMore, loadingMore, loadOlder, addOptimisticMessage, updateMessageById, removeMessageById } = useLeadMessages(telefone, canal);
     const isGroup = isGroupTelefone(telefone);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const messageRefs = useRef<Map<number, HTMLDivElement>>(new Map());

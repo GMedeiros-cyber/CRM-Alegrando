@@ -35,6 +35,7 @@ async function handleReaction(payload: Record<string, unknown>): Promise<NextRes
             .from("messages")
             .select("id, reactions")
             .eq("telefone", reactPhone)
+            .eq("canal", "festas")
             .eq("metadata->>messageId", targetMessageId)
             .maybeSingle();
 
@@ -129,22 +130,28 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
     const phone =
         digitsEarly.startsWith("55") && digitsEarly.length >= 12 ? digitsEarly : `55${digitsEarly}`;
 
-    // Atualizar foto e nome do contato quando ele manda mensagem
+    // Atualizar foto e nome do contato quando ele manda mensagem (canal festas)
     if (!isFromMe) {
         const pushName = data?.pushName || null;
-        if (pushName) {
-            supabaseEarly
-                .from("Clientes _WhatsApp")
-                .update({ nome: pushName })
-                .eq("telefone", phone)
-                .then();
-        }
+
+        // Garantir que o cliente exista no canal festas (mesmo número pode estar
+        // também em "alegrando" — unique (telefone, canal) permite os dois).
+        await supabaseEarly.from("Clientes _WhatsApp").upsert(
+            {
+                telefone: phone,
+                canal: "festas",
+                ia_ativa: false,
+                ...(pushName ? { nome: pushName } : {}),
+            },
+            { onConflict: "telefone,canal" }
+        );
 
         // Backfill de foto: se o lead ainda não tem foto_url, busca via Evolution API
         supabaseEarly
             .from("Clientes _WhatsApp")
             .select("telefone, foto_url")
             .eq("telefone", phone)
+            .eq("canal", "festas")
             .is("foto_url", null)
             .maybeSingle()
             .then(async ({ data: leadSemFoto }) => {
@@ -155,6 +162,7 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
                         .from("Clientes _WhatsApp")
                         .update({ foto_url: url })
                         .eq("telefone", phone)
+                        .eq("canal", "festas")
                         .then(({ error }) => {
                             if (error) console.error("[EVO-WEBHOOK] Falha backfill foto:", error.message);
                         });
@@ -175,15 +183,27 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
     const { content, media_type } = extracted;
     const supabase = supabaseEarly;
 
-    // Idempotência
+    // Idempotência: messageId é único por (telefone, canal)
     const { data: existing } = await supabase
         .from("messages")
         .select("id")
         .eq("telefone", phone)
+        .eq("canal", "festas")
         .eq("metadata->>messageId", messageId)
         .maybeSingle();
 
     if (existing) return NextResponse.json({ status: "duplicate" });
+
+    // Garantir que o cliente exista no canal festas antes de salvar a mensagem
+    await supabase.from("Clientes _WhatsApp").upsert(
+        {
+            telefone: phone,
+            canal: "festas",
+            ia_ativa: false,
+            ...(data.pushName ? { nome: data.pushName } : {}),
+        },
+        { onConflict: "telefone,canal" }
+    );
 
     // sender_name dinâmico: usa pushName real do operador. Se a Evolution não
     // expõe (alguns eventos não trazem), cai para o nome da instância e em
@@ -192,6 +212,7 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
 
     await supabase.from("messages").insert({
         telefone: phone,
+        canal: "festas",
         sender_type: "equipe",
         sender_name: senderName,
         content,

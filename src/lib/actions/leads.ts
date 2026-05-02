@@ -215,10 +215,12 @@ export async function getGroupParticipants(telefone: string): Promise<{
     await requireAuth();
     const supabase = createServerSupabaseClient();
 
+    // Grupos só existem no canal alegrando (Z-API)
     const { data, error } = await supabase
         .from("messages")
         .select("sender_name, sender_type, metadata")
         .eq("telefone", telefone)
+        .eq("canal", "alegrando")
         .eq("sender_type", "cliente");
 
     if (error || !data) return [];
@@ -246,25 +248,30 @@ export async function getGroupParticipants(telefone: string): Promise<{
 /**
  * Marca as mensagens de um cliente como lidas (atualiza lastSeenAt).
  */
-export async function markAsRead(telefone: string): Promise<void> {
+export async function markAsRead(telefone: string, canal: string = "alegrando"): Promise<void> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
     await supabase
         .from("Clientes _WhatsApp")
         .update({ last_seen_at: new Date().toISOString() })
-        .eq("telefone", telefone);
+        .eq("telefone", telefone)
+        .eq("canal", canal);
 }
 
 /**
- * Busca um cliente pelo telefone.
+ * Busca um cliente pelo telefone (por canal — mesmo número pode existir em ambos).
  */
-export async function getClienteByTelefone(telefone: string): Promise<ClienteDetail | null> {
+export async function getClienteByTelefone(
+    telefone: string,
+    canal: string = "alegrando"
+): Promise<ClienteDetail | null> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("Clientes _WhatsApp")
         .select("*")
         .eq("telefone", telefone)
+        .eq("canal", canal)
         .maybeSingle();
 
     if (error || !data) return null;
@@ -303,15 +310,16 @@ export async function getClienteByTelefone(telefone: string): Promise<ClienteDet
 }
 
 /**
- * Atualiza ia_ativa do cliente.
+ * Atualiza ia_ativa do cliente. IA só faz sentido no canal alegrando.
  */
-export async function toggleIaAtiva(telefone: string, iaAtiva: boolean) {
+export async function toggleIaAtiva(telefone: string, iaAtiva: boolean, canal: string = "alegrando") {
     await requireAuth();
     const supabase = createServerSupabaseClient();
     await supabase
         .from("Clientes _WhatsApp")
         .update({ ia_ativa: iaAtiva })
-        .eq("telefone", telefone);
+        .eq("telefone", telefone)
+        .eq("canal", canal);
 
     return { success: true, iaAtiva };
 }
@@ -389,13 +397,14 @@ export async function updateCliente(
     await supabase
         .from("Clientes _WhatsApp")
         .update(updateData)
-        .eq("telefone", telefone);
+        .eq("telefone", telefone)
+        .eq("canal", "alegrando");
 
     return { success: true };
 }
 
 /**
- * Envia follow-up manual para um lead específico.
+ * Envia follow-up manual para um lead específico (canal alegrando — Festas não tem follow-up).
  */
 export async function sendManualFollowup(telefone: string): Promise<{ success: boolean; type: string; error?: string }> {
     await requireAuth();
@@ -405,6 +414,7 @@ export async function sendManualFollowup(telefone: string): Promise<{ success: b
         .from("Clientes _WhatsApp")
         .select("telefone, nome, ultimo_passeio, followup_dias, followup_enviado, followup_ativo")
         .eq("telefone", telefone)
+        .eq("canal", "alegrando")
         .maybeSingle();
 
     if (error || !lead) {
@@ -448,6 +458,7 @@ export async function sendManualFollowup(telefone: string): Promise<{ success: b
 
     await supabase.from("messages").insert({
         telefone: lead.telefone,
+        canal: "alegrando",
         sender_type: "humano",
         sender_name: "Alegrando",
         content: mensagem,
@@ -459,7 +470,8 @@ export async function sendManualFollowup(telefone: string): Promise<{ success: b
             followup_enviado: true,
             followup_enviado_em: new Date().toISOString(),
         })
-        .eq("telefone", telefone);
+        .eq("telefone", telefone)
+        .eq("canal", "alegrando");
 
     return { success: true, type: tipo };
 }
@@ -630,6 +642,7 @@ export async function sendPosPasseio(
     if (result.success) {
         await supabase.from("messages").insert({
             telefone: tel,
+            canal: "alegrando",
             sender_type: "humano",
             sender_name: "Alegrando",
             content: mensagem,
@@ -641,7 +654,8 @@ export async function sendPosPasseio(
                 pos_passeio_enviado: true,
                 pos_passeio_enviado_em: new Date().toISOString(),
             })
-            .eq("telefone", tel);
+            .eq("telefone", tel)
+            .eq("canal", "alegrando");
 
         return { success: true };
     }
@@ -676,17 +690,20 @@ export async function createCliente(data: {
 
     const supabase = createServerSupabaseClient();
 
+    const canalLead = parsed.canal || "alegrando";
+
+    // Mesmo número pode existir em canais diferentes — checa apenas no canal alvo
     const { data: existing } = await supabase
         .from("Clientes _WhatsApp")
         .select("telefone")
         .or(`telefone.eq.${telefoneCompleto},telefone.eq.${telefoneCurto}`)
+        .eq("canal", canalLead)
         .maybeSingle();
 
     if (existing) {
-        throw new Error("Lead já existe com este telefone");
+        throw new Error(`Lead já existe com este telefone no canal ${canalLead}`);
     }
 
-    const canalLead = parsed.canal || "alegrando";
     const { data: primeiraColuna } = await supabase
         .from("kanban_columns")
         .select("id")
@@ -711,27 +728,42 @@ export async function createCliente(data: {
     return { success: true };
 }
 
-export async function deleteCliente(telefone: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteCliente(
+    telefone: string,
+    canal: string = "alegrando"
+): Promise<{ success: boolean; error?: string }> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
 
     try {
-        await supabase.from("lead_tasks").delete().eq("telefone", telefone);
-        await supabase.from("passeios_historico").delete().eq("telefone", telefone);
-        await supabase.from("messages").delete().eq("telefone", telefone);
-        await supabase.from("Clientes _WhatsApp").delete().eq("telefone", telefone);
+        // Tasks/historico não são por canal — só deleta se for o último registro do telefone
+        const { count } = await supabase
+            .from("Clientes _WhatsApp")
+            .select("telefone", { count: "exact", head: true })
+            .eq("telefone", telefone);
+
+        if ((count ?? 0) <= 1) {
+            await supabase.from("lead_tasks").delete().eq("telefone", telefone);
+            await supabase.from("passeios_historico").delete().eq("telefone", telefone);
+        }
+
+        await supabase.from("messages").delete().eq("telefone", telefone).eq("canal", canal);
+        await supabase.from("Clientes _WhatsApp").delete().eq("telefone", telefone).eq("canal", canal);
         return { success: true };
     } catch (err) {
         return { success: false, error: String(err) };
     }
 }
 
-export async function clearClienteMessages(telefone: string): Promise<{ success: boolean; error?: string }> {
+export async function clearClienteMessages(
+    telefone: string,
+    canal: string = "alegrando"
+): Promise<{ success: boolean; error?: string }> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
 
     try {
-        await supabase.from("messages").delete().eq("telefone", telefone);
+        await supabase.from("messages").delete().eq("telefone", telefone).eq("canal", canal);
         return { success: true };
     } catch (err) {
         return { success: false, error: String(err) };
