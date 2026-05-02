@@ -219,12 +219,14 @@ export function ConversasLayout() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const initialTelefone = searchParams.get("telefone");
+    const initialCanal = searchParams.get("canal") || "alegrando";
 
     // State
     const [clientesList, setClientesList] = useState<ClienteListItem[]>([]);
     const [selectedTelefone, setSelectedTelefone] = useState<string | null>(
         initialTelefone
     );
+    const [selectedCanal, setSelectedCanal] = useState<string>(initialCanal);
     const [cliente, setCliente] = useState<ClienteDetail | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(true);
@@ -493,7 +495,7 @@ export function ConversasLayout() {
     }, [selectedTelefone]);
 
     // Load selected cliente
-    const loadCliente = useCallback(async (telefone: string) => {
+    const loadCliente = useCallback(async (telefone: string, canal: string = "alegrando") => {
         const version = ++loadClienteVersionRef.current;
         setLoadingCliente(true);
         setLoadingAgendamentos(true);
@@ -507,7 +509,7 @@ export function ConversasLayout() {
 
             // As chamadas disparam em paralelo
             const [clienteData, tasksData, todosAgendamentos, historico] = await Promise.all([
-                getClienteByTelefone(telefone),
+                getClienteByTelefone(telefone, canal),
                 !isNaN(tel) ? getLeadTasks(tel) : Promise.resolve([]),
                 (() => {
                     const cache = agendamentosCache.current;
@@ -580,17 +582,20 @@ export function ConversasLayout() {
 
     // Select cliente and mark as read
     const handleSelectCliente = useCallback(
-        async (telefone: string) => {
+        async (telefone: string, canal: string = "alegrando") => {
             setSelectedTelefone(telefone);
+            setSelectedCanal(canal);
             setMobileView("chat");
             setReplyTo(null);
-            router.push(`/conversas?telefone=${telefone}`, { scroll: false });
+            router.push(`/conversas?telefone=${telefone}&canal=${canal}`, { scroll: false });
 
             // Fire-and-forget — não bloqueia a navegação
-            markAsRead(telefone)
+            markAsRead(telefone, canal)
                 .then(() => setClientesList((prev) =>
                     prev.map((c) =>
-                        String(c.telefone) === String(telefone) ? { ...c, unreadCount: 0 } : c
+                        String(c.telefone) === String(telefone) && c.canal === canal
+                            ? { ...c, unreadCount: 0 }
+                            : c
                     )
                 ))
                 .catch((err) => console.error("[conversas] Erro ao marcar como lida:", err));
@@ -599,8 +604,8 @@ export function ConversasLayout() {
     );
 
     useEffect(() => {
-        if (selectedTelefone) loadCliente(selectedTelefone);
-    }, [selectedTelefone, loadCliente]);
+        if (selectedTelefone) loadCliente(selectedTelefone, selectedCanal);
+    }, [selectedTelefone, selectedCanal, loadCliente]);
 
     // Handlers
 
@@ -665,11 +670,11 @@ export function ConversasLayout() {
         const newVal = !cliente.iaAtiva;
         startSavingCliente(async () => {
             try {
-                await toggleIaAtiva(selectedTelefone, newVal);
+                await toggleIaAtiva(selectedTelefone, newVal, selectedCanal);
                 setCliente((prev) => (prev ? { ...prev, iaAtiva: newVal } : null));
                 setClientesList((prev) =>
                     prev.map((c) =>
-                        String(c.telefone) === String(selectedTelefone)
+                        String(c.telefone) === String(selectedTelefone) && c.canal === selectedCanal
                             ? { ...c, iaAtiva: newVal }
                             : c
                     )
@@ -784,7 +789,7 @@ export function ConversasLayout() {
     async function handleDeleteCliente() {
         if (!selectedTelefone) return;
         startRunningAction(async () => {
-            const result = await deleteCliente(selectedTelefone);
+            const result = await deleteCliente(selectedTelefone, selectedCanal);
             if (result.success) {
                 setSelectedTelefone(null);
                 setCliente(null);
@@ -801,7 +806,7 @@ export function ConversasLayout() {
     async function handleClearMessages() {
         if (!selectedTelefone) return;
         startRunningAction(async () => {
-            const result = await clearClienteMessages(selectedTelefone);
+            const result = await clearClienteMessages(selectedTelefone, selectedCanal);
             if (result.success) {
                 setConfirmingClearMessages(false);
                 setToast({ type: "success", text: "Conversas apagadas." });
@@ -1085,10 +1090,10 @@ export function ConversasLayout() {
                         <div className="space-y-1.5 flex flex-col">
                             {sortedLeads.map((item) => (
                                 <LeadListItem
-                                    key={item.telefone.toString()}
+                                    key={`${item.telefone.toString()}__${item.canal}`}
                                     item={item}
-                                    isSelected={selectedTelefone === item.telefone.toString()}
-                                    onClick={() => handleSelectCliente(item.telefone.toString())}
+                                    isSelected={selectedTelefone === item.telefone.toString() && selectedCanal === item.canal}
+                                    onClick={() => handleSelectCliente(item.telefone.toString(), item.canal)}
                                     tick={tick}
                                 />
                             ))}

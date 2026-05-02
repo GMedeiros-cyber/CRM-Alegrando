@@ -100,6 +100,7 @@ export async function sendMessage(payload: {
 
         await supabase.from("messages").insert({
             telefone: parsed.telefone,
+            canal: "festas",
             sender_type: "equipe",
             sender_name: parsed.sender_name,
             content: parsed.mensagem,
@@ -145,6 +146,7 @@ export async function sendMessage(payload: {
 
         const { error: dbErr } = await supabase.from("messages").insert({
             telefone: parsed.telefone,
+            canal: "alegrando",
             sender_type: "equipe",
             sender_name: parsed.sender_name,
             content: parsed.mensagem,
@@ -266,6 +268,7 @@ export async function sendFileMessage(
     const storedContent = caption.trim() ? `${publicUrl}|||${caption.trim()}` : publicUrl;
     const { error: dbErr } = await supabase.from("messages").insert({
         telefone: String(telefone),
+        canal: isFestas ? "festas" : "alegrando",
         sender_type: "equipe",
         sender_name: senderName,
         content: storedContent,
@@ -349,6 +352,7 @@ export async function sendAudioMessage(
 
     const { error: dbErr } = await supabase.from("messages").insert({
         telefone: String(telefone),
+        canal: isFestas ? "festas" : "alegrando",
         sender_type: "equipe",
         sender_name: senderName,
         content: publicUrl,
@@ -487,6 +491,7 @@ export async function replyToMessage(payload: {
 
         const { error: dbErr } = await supabase.from("messages").insert({
             telefone: payload.telefone,
+            canal: "festas",
             sender_type: "equipe",
             sender_name: payload.senderName,
             content: payload.text,
@@ -535,6 +540,7 @@ export async function replyToMessage(payload: {
 
         const { error: dbErr } = await supabase.from("messages").insert({
             telefone: payload.telefone,
+            canal: "alegrando",
             sender_type: "equipe",
             sender_name: payload.senderName,
             content: payload.text,

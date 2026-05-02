@@ -31,12 +31,13 @@ export async function POST(req: Request) {
         getSetting("avaliacao_mensagem"),
     ]);
 
-    // 2. Buscar leads elegíveis
+    // 2. Buscar leads elegíveis (followup só existe no canal alegrando)
     const { data: leads, error } = await supabase
         .from("Clientes _WhatsApp")
         .select(
             "telefone, nome, ultimo_passeio, followup_dias, followup_enviado, followup_hora"
         )
+        .eq("canal", "alegrando")
         .eq("followup_ativo", true)
         .eq("followup_enviado", false)
         .not("ultimo_passeio", "is", null);
@@ -98,9 +99,10 @@ export async function POST(req: Request) {
                         `[followup] D+1 avaliação enviada para ${telefone}`
                     );
 
-                    // Salvar no histórico de chat
+                    // Salvar no histórico de chat (cron só atende canal alegrando)
                     await supabase.from("messages").insert({
                         telefone: lead.telefone,
+                        canal: "alegrando",
                         sender_type: "humano",
                         sender_name: "Alegrando",
                         content: mensagem,
@@ -127,9 +129,10 @@ export async function POST(req: Request) {
                         `[followup] D+${followupDias} follow-up enviado para ${telefone}`
                     );
 
-                    // Salvar no histórico de chat
+                    // Salvar no histórico de chat (cron só atende canal alegrando)
                     await supabase.from("messages").insert({
                         telefone: lead.telefone,
+                        canal: "alegrando",
                         sender_type: "humano",
                         sender_name: "Alegrando",
                         content: mensagem,
@@ -142,7 +145,8 @@ export async function POST(req: Request) {
                             followup_enviado: true,
                             followup_enviado_em: new Date().toISOString(),
                         })
-                        .eq("telefone", lead.telefone);
+                        .eq("telefone", lead.telefone)
+                        .eq("canal", "alegrando");
                 } else {
                     erros++;
                     console.error(
