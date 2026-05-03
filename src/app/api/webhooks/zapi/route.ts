@@ -201,14 +201,19 @@ function normalizePhone(phone: string): string {
   return `55${digits}`;
 }
 
-function forwardToN8n(payload: ZApiWebhookPayload, n8nUrl: string): void {
-  fetch(n8nUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  }).catch((err) => {
+async function forwardToN8n(payload: ZApiWebhookPayload, n8nUrl: string): Promise<void> {
+  try {
+    const res = await fetch(n8nUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      console.error(`[ZAPI-PROXY] n8n retornou ${res.status} para ${n8nUrl}`);
+    }
+  } catch (err) {
     console.error("[ZAPI-PROXY] Falha ao repassar para o n8n:", err);
-  });
+  }
 }
 
 async function processReaction(
@@ -664,9 +669,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // --- 5. Repasse ao n8n (fire-and-forget) ---
+  // --- 5. Repasse ao n8n (aguarda antes de retornar para evitar abort na Vercel) ---
   if (n8nWebhookUrl) {
-    forwardToN8n(payload, n8nWebhookUrl);
+    await forwardToN8n(payload, n8nWebhookUrl);
   } else {
     console.warn("[ZAPI-PROXY] N8N_ZAPI_WEBHOOK_URL não configurada — repasse desativado.");
   }
