@@ -11,8 +11,21 @@ import {
     UserCheck,
 } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { MetricCard } from "@/components/dashboard/metric-card";
-import { LeadsPorMesChart } from "@/components/dashboard/charts";
+
+// Lazy: Recharts (~120KB) só baixa quando o card entra em tela.
+const LeadsPorMesChart = dynamic(
+    () => import("@/components/dashboard/charts").then((m) => ({ default: m.LeadsPorMesChart })),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="bento-card-static p-6 h-[300px] flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
+            </div>
+        ),
+    },
+);
 import { getTotalLeadsByCanal, getEventosDoMes, getFollowupsAtivos, getIaAtivaStats } from "@/lib/actions/dashboard";
 import { updateCliente } from "@/lib/actions/leads";
 import { getAgendamentos } from "@/lib/actions/agenda";

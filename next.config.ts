@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
+  },
   // Otimização de imagens externas (fotos de perfil WhatsApp + Supabase Storage)
   images: {
     remotePatterns: [

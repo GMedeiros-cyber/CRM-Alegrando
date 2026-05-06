@@ -43,6 +43,20 @@ export async function POST(req: Request) {
     const supabase = createServerSupabaseClient();
     const eventType = evt.type;
 
+    // Idempotência: ignora eventos já processados (svix-id é único por entrega).
+    const { error: dedupErr } = await supabase
+        .from("webhook_events")
+        .insert({ svix_id: svixId, source: "clerk", event_type: eventType });
+
+    if (dedupErr) {
+        // 23505 = unique_violation → evento já processado, retorna 200 idempotente.
+        if (dedupErr.code === "23505") {
+            return new Response("Já processado", { status: 200 });
+        }
+        console.error("[clerk-webhook] Falha ao registrar evento:", dedupErr.message);
+        // Segue mesmo assim — perder dedup é melhor que perder o evento.
+    }
+
     try {
         if (eventType === "user.created" || eventType === "user.updated") {
             const { id, email_addresses, first_name, last_name, image_url } = evt.data;

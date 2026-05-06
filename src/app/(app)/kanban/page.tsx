@@ -1,7 +1,20 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { KanbanBoard } from "@/components/kanban/kanban-board";
+import dynamic from "next/dynamic";
+
+// Lazy: @dnd-kit + lead-detail-sheet pesam ~80KB+ — adia até a página abrir.
+const KanbanBoard = dynamic(
+    () => import("@/components/kanban/kanban-board").then((m) => ({ default: m.KanbanBoard })),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="flex items-center justify-center py-32">
+                <Loader2 className="w-8 h-8 animate-spin text-brand-400" />
+            </div>
+        ),
+    },
+);
 import {
     getKanbanData,
     seedDefaultColumns,
