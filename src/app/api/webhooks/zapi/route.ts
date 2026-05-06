@@ -16,6 +16,8 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { proxyAudioToStorage } from "@/lib/whatsapp/audio-storage";
+import { verifyZapiWebhook } from "@/lib/webhook-auth";
+import { fetchWithTimeout } from "@/lib/fetch-utils";
 import { NextRequest, NextResponse } from "next/server";
 
 // Tipos de evento que representam uma mensagem real chegando.
@@ -203,11 +205,17 @@ function normalizePhone(phone: string): string {
 
 async function forwardToN8n(payload: ZApiWebhookPayload, n8nUrl: string): Promise<void> {
   try {
-    const res = await fetch(n8nUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    // Timeout de 8s: forward é fire-and-forget pro n8n; não bloquear webhook
+    // por mais que isso (Vercel mata o handler em 10s no plano hobby).
+    const res = await fetchWithTimeout(
+      n8nUrl,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      8_000,
+    );
     if (!res.ok) {
       console.error(`[ZAPI-PROXY] n8n retornou ${res.status} para ${n8nUrl}`);
     }
@@ -265,6 +273,11 @@ async function processReaction(
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const auth = verifyZapiWebhook(req);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.message }, { status: auth.status });
+  }
+
   let payload: ZApiWebhookPayload;
 
   try {

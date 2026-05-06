@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "@/lib/fetch-utils";
+
 function formatPhoneZapi(telefone: string): string {
   // Grupos: ID canônico não leva prefixo 55. Aceita "<digits>-group" ou
   // string "120363..." com 18+ dígitos (formato pós-migration).
@@ -45,7 +47,7 @@ export async function sendWhatsAppImage(
   console.log("[ZAPI-IMG] Enviando para:", phone, "url:", imageUrl);
 
   try {
-    const response = await fetch(`${zapiBase(instance, token)}/send-image`, {
+    const response = await fetchWithTimeout(`${zapiBase(instance, token)}/send-image`, {
       method: "POST",
       headers: buildZapiHeaders(clientToken),
       body: JSON.stringify({ phone, image: imageUrl, caption: caption || "" }),
@@ -90,7 +92,7 @@ export async function sendWhatsAppAudio(
   console.log("[ZAPI-AUDIO] Enviando para:", phone, "url:", audioUrl);
 
   try {
-    const response = await fetch(`${zapiBase(instance, token)}/send-audio`, {
+    const response = await fetchWithTimeout(`${zapiBase(instance, token)}/send-audio`, {
       method: "POST",
       headers: buildZapiHeaders(clientToken),
       body: JSON.stringify({ phone, audio: audioUrl, waveform: true }),
@@ -162,7 +164,7 @@ export async function sendWhatsAppDocument(
   console.log("[ZAPI-DOC] Enviando para:", phone, "arquivo:", fileName, "ext:", extension, "mime:", mime);
 
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${zapiBase(instance, token)}/send-document/${extension}`,
       {
         method: "POST",
@@ -210,7 +212,7 @@ export async function sendWhatsAppReaction(
 
   const phone = formatPhoneZapi(telefone);
   try {
-    const response = await fetch(`${zapiBase(instance, token)}/send-reaction`, {
+    const response = await fetchWithTimeout(`${zapiBase(instance, token)}/send-reaction`, {
       method: "POST",
       headers: buildZapiHeaders(clientToken),
       // Z-API aceita reaction="" para remover a reação existente
@@ -247,7 +249,7 @@ export async function sendWhatsAppReply(
 
   const phone = formatPhoneZapi(telefone);
   try {
-    const response = await fetch(`${zapiBase(instance, token)}/send-text`, {
+    const response = await fetchWithTimeout(`${zapiBase(instance, token)}/send-text`, {
       method: "POST",
       headers: buildZapiHeaders(clientToken),
       body: JSON.stringify({ phone, message: text, messageId: zapiMessageId }),
@@ -285,7 +287,7 @@ export async function deleteWhatsAppMessage(
 
   const phone = formatPhoneZapi(telefone);
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${zapiBase(instance, token)}/messages?messageId=${zapiMessageId}&phone=${phone}&owner=${owner}`,
       {
         method: "DELETE",
@@ -325,7 +327,7 @@ export async function pinWhatsAppMessage(
 
   const phone = formatPhoneZapi(telefone);
   try {
-    const response = await fetch(`${zapiBase(instance, token)}/pin-message`, {
+    const response = await fetchWithTimeout(`${zapiBase(instance, token)}/pin-message`, {
       method: "POST",
       headers: buildZapiHeaders(clientToken),
       body: JSON.stringify({
@@ -365,7 +367,7 @@ export async function sendWhatsAppMessage(
   console.log("[ZAPI] Enviando para:", phone);
 
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${zapiBase(instance, token)}/send-text`,
       {
         method: "POST",
@@ -412,7 +414,7 @@ export async function fetchZapiProfilePicture(telefone: string): Promise<string 
   if (!phone || phone.length < 10) return null;
 
   try {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${zapiBase(instance, token)}/profile-picture?phone=${phone}`,
       { headers: buildZapiHeaders(clientToken) }
     );
@@ -452,7 +454,7 @@ export async function fetchEvolutionProfilePicture(telefone: string): Promise<st
   const normalized = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
 
   try {
-    const res = await fetch(`${url}/chat/fetchProfilePictureUrl/${instance}`, {
+    const res = await fetchWithTimeout(`${url}/chat/fetchProfilePictureUrl/${instance}`, {
       method: "POST",
       headers: buildEvoHeaders(key),
       body: JSON.stringify({ number: normalized }),
@@ -476,7 +478,7 @@ export async function sendEvolutionReaction(
   if (!url || !instance || !key) return { success: false, error: "Evolution API não configurada" };
 
   try {
-    const res = await fetch(`${url}/message/sendReaction/${instance}`, {
+    const res = await fetchWithTimeout(`${url}/message/sendReaction/${instance}`, {
       method: "POST",
       headers: buildEvoHeaders(key),
       body: JSON.stringify({
@@ -510,7 +512,7 @@ export async function sendEvolutionReply(
   if (!url || !instance || !key) return { success: false, error: "Evolution API não configurada" };
 
   try {
-    const res = await fetch(`${url}/message/sendText/${instance}`, {
+    const res = await fetchWithTimeout(`${url}/message/sendText/${instance}`, {
       method: "POST",
       headers: buildEvoHeaders(key),
       body: JSON.stringify({
@@ -553,7 +555,7 @@ export async function sendEvolutionAudio(
   const normalized = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
 
   try {
-    const res = await fetch(`${url}/message/sendWhatsAppAudio/${instance}`, {
+    const res = await fetchWithTimeout(`${url}/message/sendWhatsAppAudio/${instance}`, {
       method: "POST",
       headers: buildEvoHeaders(key),
       body: JSON.stringify({
@@ -584,7 +586,7 @@ export async function deleteEvolutionMessage(
   if (!url || !instance || !key) return { success: false, error: "Evolution API não configurada" };
 
   try {
-    const res = await fetch(`${url}/chat/deleteMessageForEveryone/${instance}`, {
+    const res = await fetchWithTimeout(`${url}/chat/deleteMessageForEveryone/${instance}`, {
       method: "DELETE",
       headers: buildEvoHeaders(key),
       body: JSON.stringify({

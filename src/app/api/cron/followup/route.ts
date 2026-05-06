@@ -21,6 +21,14 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
+    // Defesa em profundidade: se o trigger veio do Vercel Cron, valida o header
+    // adicional. Em produção sempre tem; em dev/manual fica ausente — não exige.
+    const isVercelProd = process.env.VERCEL_ENV === "production";
+    const hasVercelCronHeader = req.headers.get("x-vercel-cron") !== null;
+    if (isVercelProd && !hasVercelCronHeader) {
+        console.warn("[followup] Em prod sem header x-vercel-cron — possível trigger manual");
+    }
+
     const supabase = createServerSupabaseClient();
     const googleReviewLink =
         process.env.GOOGLE_REVIEW_LINK || "https://g.page/alegrando";
@@ -86,6 +94,24 @@ export async function POST(req: Request) {
             }
 
             if (diffDias === 1) {
+                // Idempotência: se já enviamos qualquer mensagem da equipe pra
+                // esse lead nas últimas 23h, pulamos. Evita duplicar caso o
+                // cron seja re-disparado (Vercel pode retentar em falha de rede).
+                const ultDia = new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString();
+                const { data: enviadoRecente } = await supabase
+                    .from("messages")
+                    .select("id")
+                    .eq("telefone", lead.telefone)
+                    .eq("canal", "alegrando")
+                    .eq("sender_type", "humano")
+                    .gte("created_at", ultDia)
+                    .limit(1)
+                    .maybeSingle();
+                if (enviadoRecente) {
+                    console.log(`[followup] D+1 skip dedup para ${telefone} — já enviamos nas últimas 23h`);
+                    continue;
+                }
+
                 const mensagem = applyPlaceholders(avaliacaoTemplate, {
                     nome,
                     link_google: googleReviewLink,

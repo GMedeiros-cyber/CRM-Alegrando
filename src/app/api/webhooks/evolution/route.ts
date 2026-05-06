@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { fetchEvolutionProfilePicture } from "@/lib/whatsapp/sender";
+import { verifyEvolutionWebhook } from "@/lib/webhook-auth";
+import { proxyAudioToStorage } from "@/lib/whatsapp/audio-storage";
+import { fetchWithTimeout } from "@/lib/fetch-utils";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+    const auth = verifyEvolutionWebhook(req);
+    if (!auth.ok) {
+        return NextResponse.json({ error: auth.message }, { status: auth.status });
+    }
+
     const payload = await req.json();
     console.log(`[EVO-WEBHOOK] event=${payload.event}`);
     if (payload.event === "messages.reaction") return handleReaction(payload);
@@ -107,6 +115,26 @@ function extractEvoContent(msg: EvoMessage | undefined): { content: string; medi
     return null;
 }
 
+async function forwardToMarcia(payload: Record<string, unknown>): Promise<void> {
+    const url = process.env.N8N_EVOLUTION_WEBHOOK_URL;
+    if (!url) {
+        console.warn("[EVO-WEBHOOK] N8N_EVOLUTION_WEBHOOK_URL não configurada — repasse desativado.");
+        return;
+    }
+    try {
+        const res = await fetchWithTimeout(
+            url,
+            { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+            8_000,
+        );
+        if (!res.ok) {
+            console.error(`[EVO-WEBHOOK] n8n retornou ${res.status}`);
+        }
+    } catch (err) {
+        console.error("[EVO-WEBHOOK] Falha ao repassar para Márcia n8n:", err);
+    }
+}
+
 async function handleUpsert(payload: Record<string, unknown>): Promise<NextResponse> {
     const data = (payload as { data?: Record<string, unknown> }).data as
         | {
@@ -169,6 +197,41 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
                 }
             });
 
+        // Salvar mensagem recebida do cliente
+        const messageIdClient = data?.key?.id;
+        const extractedClient = extractEvoContent(data?.message);
+        if (extractedClient && extractedClient.content && messageIdClient) {
+            const { data: existingClient } = await supabaseEarly
+                .from("messages")
+                .select("id")
+                .eq("telefone", phone)
+                .eq("canal", "festas")
+                .eq("metadata->>messageId", messageIdClient)
+                .maybeSingle();
+
+            if (!existingClient) {
+                let { content: clientContent, media_type: clientMediaType } = extractedClient;
+                if (clientMediaType === "audio" && clientContent.startsWith("http")) {
+                    const proxied = await proxyAudioToStorage(supabaseEarly, clientContent, phone, messageIdClient);
+                    if (proxied) clientContent = proxied;
+                }
+                await supabaseEarly.from("messages").insert({
+                    telefone: phone,
+                    canal: "festas",
+                    sender_type: "cliente",
+                    sender_name: pushName || "Cliente",
+                    content: clientContent,
+                    media_type: clientMediaType,
+                    created_at: data?.messageTimestamp
+                        ? new Date(data.messageTimestamp * 1000).toISOString()
+                        : new Date().toISOString(),
+                    metadata: { messageId: messageIdClient, source: "evolution-marcia" },
+                });
+            }
+        }
+
+        // Encaminhar ao n8n da Márcia para processamento IA (await: evita abort na Vercel)
+        await forwardToMarcia(payload);
         return NextResponse.json({ status: "ok" });
     }
 
@@ -180,7 +243,7 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
         return NextResponse.json({ status: "skipped" });
     }
 
-    const { content, media_type } = extracted;
+    const { content: rawContent, media_type } = extracted;
     const supabase = supabaseEarly;
 
     // Idempotência: messageId é único por (telefone, canal)
@@ -193,6 +256,12 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
         .maybeSingle();
 
     if (existing) return NextResponse.json({ status: "duplicate" });
+
+    let finalContent = rawContent;
+    if (media_type === "audio" && rawContent.startsWith("http")) {
+        const proxied = await proxyAudioToStorage(supabase, rawContent, phone, messageId);
+        if (proxied) finalContent = proxied;
+    }
 
     // Garantir que o cliente exista no canal festas antes de salvar a mensagem
     await supabase.from("Clientes _WhatsApp").upsert(
@@ -215,7 +284,7 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
         canal: "festas",
         sender_type: "equipe",
         sender_name: senderName,
-        content,
+        content: finalContent,
         media_type,
         created_at: data.messageTimestamp
             ? new Date(data.messageTimestamp * 1000).toISOString()

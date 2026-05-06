@@ -3,6 +3,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { ptBR } from "@clerk/localizations";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Analytics } from "@vercel/analytics/next";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -40,6 +41,12 @@ export default function RootLayout({
           <TooltipProvider delayDuration={200}>
             {children}
           </TooltipProvider>
+          <Toaster
+            position="top-right"
+            richColors
+            closeButton
+            toastOptions={{ duration: 3500 }}
+          />
           <Analytics />
         </body>
       </html>

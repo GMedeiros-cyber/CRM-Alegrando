@@ -114,46 +114,6 @@ export async function getLeadsPorMes(): Promise<{ mes: string; leads: number }[]
 }
 
 /**
- * Top 5 destinos do mês atual, da tabela destinos_interesse.
- * Retorna pedidos (total) vs fechados (status = 'fechado').
- */
-export async function getTopDestinos(): Promise<{ destino: string; pedidos: number; fechados: number }[]> {
-    await requireAuth();
-    const supabase = createServerSupabaseClient();
-    const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
-
-    const { data, error } = await supabase
-        .from("destinos_interesse")
-        .select("destino, status")
-        .gte("created_at", firstDay)
-        .lte("created_at", lastDay);
-
-    if (error) {
-        return [];
-    }
-
-    if (!data || data.length === 0) return [];
-
-    // Agrupar no JS: pedidos (total) e fechados
-    const groups: Record<string, { pedidos: number; fechados: number }> = {};
-    for (const row of data) {
-        if (!row.destino) continue;
-        if (!groups[row.destino]) groups[row.destino] = { pedidos: 0, fechados: 0 };
-        groups[row.destino].pedidos += 1;
-        if (row.status === "fechado") {
-            groups[row.destino].fechados += 1;
-        }
-    }
-
-    return Object.entries(groups)
-        .map(([destino, counts]) => ({ destino, ...counts }))
-        .sort((a, b) => b.pedidos - a.pedidos)
-        .slice(0, 5);
-}
-
-/**
  * Conta eventos do Google Calendar a partir de hoje.
  */
 export async function getEventosDoMes(): Promise<number> {

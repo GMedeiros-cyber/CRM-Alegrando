@@ -10,7 +10,7 @@ import {
     ResponsiveContainer,
 } from "recharts";
 import { useState, useEffect } from "react";
-import { getLeadsPorMes, getTopDestinos } from "@/lib/actions/dashboard";
+import { getLeadsPorMes } from "@/lib/actions/dashboard";
 import { Loader2 } from "lucide-react";
 
 // =========================================
@@ -143,60 +143,3 @@ export function LeadsPorMesChart() {
     );
 }
 
-// =========================================
-// Top Destinos — dados reais
-// =========================================
-export function TopDestinosChart() {
-    const [data, setData] = useState<{ destino: string; pedidos: number; fechados: number }[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        getTopDestinos()
-            .then((res) => setData(res))
-            .finally(() => setLoading(false));
-    }, []);
-
-    return (
-        <div className="bento-card-static p-6 bento-enter" style={{ animationDelay: "500ms" }}>
-            <div className="mb-6">
-                <h3 className="font-display text-lg font-semibold text-foreground">
-                    Top Destinos & Passeios
-                </h3>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                    Pedidos vs fechados este mês
-                </p>
-            </div>
-            {loading ? (
-                <div className="h-[220px] flex items-center justify-center">
-                    <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
-                </div>
-            ) : data.length > 0 ? (
-                <div className="h-[220px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data} layout="vertical" barCategoryGap="25%">
-                            <XAxis type="number" hide />
-                            <YAxis
-                                type="category"
-                                dataKey="destino"
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fontSize: 13, fill: "#e2e8f0" }}
-                                width={140}
-                            />
-                            <Tooltip content={<CustomTooltipContent />} cursor={{ fill: "transparent" }} />
-                            <Bar dataKey="pedidos" name="Pedidos" radius={[0, 4, 4, 0]} fill="#fb923c" />
-                            <Bar dataKey="fechados" name="Fechados" radius={[0, 4, 4, 0]} fill="#22c55e" />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-            ) : (
-                <div className="h-[220px] flex flex-col items-center justify-center gap-2">
-                    <span className="text-3xl">📍</span>
-                    <p className="text-sm text-[#6366F1] dark:text-[#94a3b8]">
-                        Nenhuma menção registrada este mês.
-                    </p>
-                </div>
-            )}
-        </div>
-    );
-}
