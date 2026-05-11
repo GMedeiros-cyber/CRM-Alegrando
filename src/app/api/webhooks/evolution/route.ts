@@ -263,13 +263,14 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
         if (proxied) finalContent = proxied;
     }
 
-    // Garantir que o cliente exista no canal festas antes de salvar a mensagem
+    // Garantir que o cliente exista no canal festas antes de salvar a mensagem.
+    // NÃO incluir nome aqui: quando fromMe=true, data.pushName é o nome da operadora
+    // (ex: "Márcia Alegrando"), não do contato destinatário.
     await supabase.from("Clientes _WhatsApp").upsert(
         {
             telefone: phone,
             canal: "festas",
             ia_ativa: false,
-            ...(data.pushName ? { nome: data.pushName } : {}),
         },
         { onConflict: "telefone,canal" }
     );
