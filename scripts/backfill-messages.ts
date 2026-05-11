@@ -33,12 +33,21 @@ const supabase = createClient(SB_URL, SB_KEY);
 const sinceTs = Math.floor(new Date(SINCE_ARG + "T00:00:00Z").getTime() / 1000);
 
 interface EvoMessageRaw {
-    key: { id: string; fromMe: boolean; remoteJid: string };
+    key: { id: string; fromMe: boolean; remoteJid: string; remoteJidAlt?: string };
     pushName?: string;
     messageTimestamp: number;
     messageType?: string;
     message?: Record<string, unknown>;
     instance?: string;
+}
+
+interface EvoFindResponse {
+    messages: {
+        total: number;
+        pages: number;
+        currentPage: number;
+        records: EvoMessageRaw[];
+    };
 }
 
 function extractContent(msg: EvoMessageRaw): { content: string; media_type: string } | null {
@@ -77,33 +86,35 @@ function extractContent(msg: EvoMessageRaw): { content: string; media_type: stri
     return null;
 }
 
-function normalizePhone(remoteJid: string): string | null {
-    const raw = remoteJid.replace(/@.*$/, "");
-    if (!raw || remoteJid.includes("@g.us")) return null;
+function normalizePhone(msg: EvoMessageRaw): string | null {
+    // Prioriza remoteJidAlt (formato @s.whatsapp.net) pois remoteJid pode ser @lid
+    const jid = msg.key.remoteJidAlt ?? msg.key.remoteJid;
+    if (!jid || jid.includes("@g.us") || jid.includes("@lid")) return null;
+    const raw = jid.replace(/@.*$/, "");
+    if (!raw) return null;
     const digits = raw.replace(/\D/g, "");
     return digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
 }
 
-async function fetchPage(skip: number): Promise<EvoMessageRaw[]> {
+async function fetchPage(page: number): Promise<{ records: EvoMessageRaw[]; totalPages: number }> {
     const res = await fetch(`${EVO_URL}/chat/findMessages/${EVO_INSTANCE}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: EVO_KEY },
         body: JSON.stringify({
             where: { messageTimestamp: { gte: sinceTs } },
             limit: PAGE_SIZE,
-            skip,
+            page,
         }),
     });
     if (!res.ok) {
         const text = await res.text();
         throw new Error(`Evolution API ${res.status}: ${text.slice(0, 300)}`);
     }
-    const body = (await res.json()) as unknown;
-    if (Array.isArray(body)) return body as EvoMessageRaw[];
-    if (body && typeof body === "object" && "messages" in (body as object)) {
-        return (body as { messages: EvoMessageRaw[] }).messages;
-    }
-    return [];
+    const body = (await res.json()) as EvoFindResponse;
+    return {
+        records: body.messages?.records ?? [],
+        totalPages: body.messages?.pages ?? 1,
+    };
 }
 
 async function main() {
@@ -116,13 +127,16 @@ async function main() {
     let skippedDup = 0;
     let skippedSemConteudo = 0;
     let errors = 0;
-    let skip = 0;
+    let page = 1;
+    let totalPages = 1;
 
-    while (true) {
-        process.stdout.write(`Buscando página skip=${skip}... `);
+    while (page <= totalPages) {
+        process.stdout.write(`Buscando página ${page}/${totalPages}... `);
         let msgs: EvoMessageRaw[];
         try {
-            msgs = await fetchPage(skip);
+            const result = await fetchPage(page);
+            msgs = result.records;
+            totalPages = result.totalPages;
         } catch (err) {
             console.error("\nErro ao buscar:", (err as Error).message);
             break;
@@ -137,7 +151,7 @@ async function main() {
         totalFetched += msgs.length;
 
         for (const msg of msgs) {
-            const phone = normalizePhone(msg.key.remoteJid);
+            const phone = normalizePhone(msg);
             if (!phone) { skippedSemConteudo++; continue; }
 
             const messageId = msg.key.id;
@@ -173,8 +187,7 @@ async function main() {
 
         console.log(`  → inseridos=${inserted} dup=${skippedDup} semConteudo=${skippedSemConteudo} erros=${errors}`);
 
-        if (msgs.length < PAGE_SIZE) break;
-        skip += PAGE_SIZE;
+        page++;
         await new Promise(r => setTimeout(r, 150));
     }
 
