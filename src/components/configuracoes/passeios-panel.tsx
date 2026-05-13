@@ -32,6 +32,7 @@ import {
     ArrowDownAZ,
     ArrowUpAZ,
     FileText,
+    FolderTree,
 } from "lucide-react";
 import {
     getPasseios,
@@ -49,7 +50,6 @@ import {
 import { cn } from "@/lib/utils";
 
 const EMPTY_FORM: PasseioForm = { nome: "", categoria: "outro", content: "" };
-const PAGE_SIZE = 10;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 function normalizeText(s: string): string {
@@ -72,11 +72,10 @@ export function PasseiosPanel() {
     const [categorias, setCategorias] = useState<Categoria[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Filtros / paginação
+    // Filtros (lista usa scroll interno, sem paginação manual)
     const [searchTerm, setSearchTerm] = useState("");
     const [filterCat, setFilterCat] = useState<string>("todas");
     const [sortOrder, setSortOrder] = useState<"az" | "za">("az");
-    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
     // Modal
     const [modalOpen, setModalOpen] = useState(false);
@@ -134,9 +133,6 @@ export function PasseiosPanel() {
 
         return list;
     }, [passeios, searchTerm, filterCat, sortOrder]);
-
-    const visiblePasseios = filteredPasseios.slice(0, visibleCount);
-    const hasMore = filteredPasseios.length > visibleCount;
 
     function openCreate() {
         setEditingId(null);
@@ -267,14 +263,19 @@ export function PasseiosPanel() {
                         <p className="text-sm text-muted-foreground mt-1">
                             {loading
                                 ? "Carregando..."
-                                : `Mostrando ${visiblePasseios.length} de ${filteredPasseios.length}${
-                                      filteredPasseios.length !== passeios.length ? ` (${passeios.length} total)` : ""
-                                  }.`}{" "}
+                                : filteredPasseios.length === passeios.length
+                                    ? `${passeios.length} passeio${passeios.length !== 1 ? "s" : ""}.`
+                                    : `${filteredPasseios.length} de ${passeios.length} passeios.`}{" "}
                             Usados pela IA para responder dúvidas dos leads.
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => setShowCategorias((v) => !v)}>
+                        <Button
+                            variant={showCategorias ? "default" : "secondary"}
+                            size="sm"
+                            onClick={() => setShowCategorias((v) => !v)}
+                        >
+                            <FolderTree className="size-4" />
                             {showCategorias ? "Ocultar categorias" : "Categorias"}
                         </Button>
                         <Button onClick={openCreate} size="sm">
@@ -297,15 +298,12 @@ export function PasseiosPanel() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
                         <Input
                             value={searchTerm}
-                            onChange={(e) => {
-                                setSearchTerm(e.target.value);
-                                setVisibleCount(PAGE_SIZE);
-                            }}
+                            onChange={(e) => setSearchTerm(e.target.value)}
                             placeholder="Buscar passeio..."
                             className="pl-9"
                         />
                     </div>
-                    <Select value={filterCat} onValueChange={(v) => { setFilterCat(v); setVisibleCount(PAGE_SIZE); }}>
+                    <Select value={filterCat} onValueChange={setFilterCat}>
                         <SelectTrigger className="w-[180px]">
                             <SelectValue placeholder="Categoria" />
                         </SelectTrigger>
@@ -329,79 +327,71 @@ export function PasseiosPanel() {
                     </Button>
                 </div>
 
-                {/* Lista */}
-                <div className="space-y-2">
-                    {loading && (
-                        <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-                            <Loader2 className="size-4 animate-spin mr-2" /> Carregando passeios...
-                        </div>
-                    )}
+                {/* Lista — scroll interno (sem paginação manual) */}
+                {loading && (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                        <Loader2 className="size-4 animate-spin mr-2" /> Carregando passeios...
+                    </div>
+                )}
 
-                    {!loading && filteredPasseios.length === 0 && (
-                        <div className="text-center py-8 text-muted-foreground text-sm">
-                            {passeios.length === 0
-                                ? "Nenhum passeio cadastrado ainda. Clique em Novo Passeio para começar."
-                                : "Nenhum passeio encontrado com esses filtros."}
-                        </div>
-                    )}
+                {!loading && filteredPasseios.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground text-sm">
+                        {passeios.length === 0
+                            ? "Nenhum passeio cadastrado ainda. Clique em Novo Passeio para começar."
+                            : "Nenhum passeio encontrado com esses filtros."}
+                    </div>
+                )}
 
-                    {!loading && visiblePasseios.map((p) => {
-                        const cat = p.categoria ? catMap[p.categoria] : null;
-                        return (
-                            <div
-                                key={p.id}
-                                className="group flex items-center gap-3 p-3 rounded-lg border border-[#E0E7FF] dark:border-[#3d4a60] bg-[#F9FAFC] dark:bg-[#1e2536]/50 hover:bg-[#F0F4FF] dark:hover:bg-[#1e2536] transition-colors"
-                            >
-                                <div className="text-2xl shrink-0">{cat?.icone || "📍"}</div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <p className="text-sm font-semibold text-[#191918] dark:text-white truncate">
-                                            {p.nome}
-                                        </p>
-                                        {!p.temEmbedding && (
-                                            <span
-                                                title="Sem embedding — RAG não consegue buscar"
-                                                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-200 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200 border border-orange-400/50"
-                                            >
-                                                <AlertCircle className="size-3" />
-                                                sem embedding
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                        {cat ? cat.nome : p.categoria || "sem categoria"}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                                    <Button variant="ghost" size="sm" onClick={() => openEdit(p)} aria-label="Editar">
-                                        <Pencil className="size-4" />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleDelete(p)}
-                                        aria-label="Excluir"
-                                        className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                {!loading && filteredPasseios.length > 0 && (
+                    <div className="max-h-[420px] overflow-y-auto pr-2 -mr-2">
+                        <div className="space-y-2">
+                            {filteredPasseios.map((p) => {
+                                const cat = p.categoria ? catMap[p.categoria] : null;
+                                return (
+                                    <div
+                                        key={p.id}
+                                        className="group flex items-center gap-3 p-3 rounded-lg border border-[#E0E7FF] dark:border-[#3d4a60] bg-[#F9FAFC] dark:bg-[#1e2536]/50 hover:bg-[#F0F4FF] dark:hover:bg-[#1e2536] transition-colors"
                                     >
-                                        <Trash2 className="size-4" />
-                                    </Button>
-                                </div>
-                            </div>
-                        );
-                    })}
-
-                    {hasMore && (
-                        <div className="flex justify-center pt-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                            >
-                                Ver mais {Math.min(PAGE_SIZE, filteredPasseios.length - visibleCount)} ({filteredPasseios.length - visibleCount} restantes)
-                            </Button>
+                                        <div className="text-2xl shrink-0">{cat?.icone || "📍"}</div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <p className="text-sm font-semibold text-[#191918] dark:text-white truncate">
+                                                    {p.nome}
+                                                </p>
+                                                {!p.temEmbedding && (
+                                                    <span
+                                                        title="Sem embedding — RAG não consegue buscar"
+                                                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-200 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200 border border-orange-400/50"
+                                                    >
+                                                        <AlertCircle className="size-3" />
+                                                        sem embedding
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                {cat ? cat.nome : p.categoria || "sem categoria"}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                                            <Button variant="ghost" size="sm" onClick={() => openEdit(p)} aria-label="Editar">
+                                                <Pencil className="size-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleDelete(p)}
+                                                aria-label="Excluir"
+                                                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                            >
+                                                <Trash2 className="size-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
 
             {/* Modal */}
@@ -663,7 +653,7 @@ function CategoriasManager({
                     Gerenciar Categorias
                 </h3>
                 {!adding && !editingSlug && (
-                    <Button variant="outline" size="sm" onClick={startAdd}>
+                    <Button variant="secondary" size="sm" onClick={startAdd}>
                         <Plus className="size-3.5" /> Nova
                     </Button>
                 )}

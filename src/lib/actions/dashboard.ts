@@ -64,53 +64,53 @@ export async function getIaAtivaStats(): Promise<{
 }
 
 /**
- * Leads agrupados por mês (últimos 6 meses).
+ * Leads agrupados por mês (últimos 6 meses). Opcionalmente filtra por canal
+ * ("alegrando" | "festas") — útil pra UI que alterna entre os dois canais.
  */
-export async function getLeadsPorMes(): Promise<{ mes: string; leads: number }[]> {
+export async function getLeadsPorMes(
+    canal?: "alegrando" | "festas"
+): Promise<{ mes: string; leads: number }[]> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
-    const { data, error } = await supabase.rpc("get_leads_por_mes");
 
-    // Se a RPC não existir, fallback via query raw
-    if (error) {
+    // Fallback: buscar todos os leads dos últimos 6 meses e agrupar no JS.
+    // A RPC `get_leads_por_mes` não existe no banco, então sempre caímos aqui;
+    // aproveito pra suportar filtro por canal direto na query.
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-        // Fallback: buscar todos os leads dos últimos 6 meses e agrupar no JS
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    let query = supabase
+        .from("Clientes _WhatsApp")
+        .select("created_at")
+        .gte("created_at", sixMonthsAgo.toISOString())
+        .order("created_at", { ascending: true });
 
-        const { data: leads, error: fallbackError } = await supabase
-            .from("Clientes _WhatsApp")
-            .select("created_at")
-            .gte("created_at", sixMonthsAgo.toISOString())
-            .order("created_at", { ascending: true });
-
-        if (fallbackError || !leads) {
-            return [];
-        }
-
-        // Agrupar por mês no JS
-        const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-        const groups: Record<string, number> = {};
-
-        for (const lead of leads) {
-            if (!lead.created_at) continue;
-            const d = new Date(lead.created_at);
-            const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
-            groups[key] = (groups[key] || 0) + 1;
-        }
-
-        return Object.entries(groups)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([key, count]) => {
-                const [, monthStr] = key.split("-");
-                return { mes: meses[parseInt(monthStr)], leads: count };
-            });
+    if (canal) {
+        query = query.eq("canal", canal);
     }
 
-    return (data || []).map((row: { mes: string; leads: number }) => ({
-        mes: row.mes,
-        leads: Number(row.leads),
-    }));
+    const { data: leads, error } = await query;
+
+    if (error || !leads) {
+        return [];
+    }
+
+    const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    const groups: Record<string, number> = {};
+
+    for (const lead of leads) {
+        if (!lead.created_at) continue;
+        const d = new Date(lead.created_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
+        groups[key] = (groups[key] || 0) + 1;
+    }
+
+    return Object.entries(groups)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, count]) => {
+            const [, monthStr] = key.split("-");
+            return { mes: meses[parseInt(monthStr)], leads: count };
+        });
 }
 
 /**
