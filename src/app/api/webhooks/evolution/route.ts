@@ -164,17 +164,31 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
 
         // Garantir que o cliente exista no canal festas (mesmo número pode estar
         // também em "alegrando" — unique (telefone, canal) permite os dois).
+        // NÃO incluímos `nome` no upsert: senão sobrescreveríamos um nome
+        // editado manualmente pela equipe toda vez que o cliente mandasse uma
+        // mensagem (o pushName do WhatsApp pode ser apelido/genérico).
         await supabaseEarly.from("Clientes _WhatsApp").upsert(
             {
                 telefone: phone,
                 canal: "festas",
                 ia_ativa: false,
-                ...(pushName ? { nome: pushName } : {}),
             },
             { onConflict: "telefone,canal" }
         );
 
-        // Backfill de foto: se o lead ainda não tem foto_url, busca via Evolution API
+        // Popular `nome` com pushName SÓ quando o lead ainda não tem nome —
+        // permite que apagar no painel "volte a puxar do WhatsApp".
+        if (pushName) {
+            await supabaseEarly
+                .from("Clientes _WhatsApp")
+                .update({ nome: pushName })
+                .eq("telefone", phone)
+                .eq("canal", "festas")
+                .is("nome", null);
+        }
+
+        // Backfill de foto: se o lead ainda não tem foto_url, busca via Evolution
+        // API e faz proxy para o Storage (URLs WhatsApp expiram em ~6 dias).
         supabaseEarly
             .from("Clientes _WhatsApp")
             .select("telefone, foto_url")
@@ -185,16 +199,21 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
             .then(async ({ data: leadSemFoto }) => {
                 if (!leadSemFoto) return;
                 const url = await fetchEvolutionProfilePicture(phone);
-                if (url) {
-                    supabaseEarly
-                        .from("Clientes _WhatsApp")
-                        .update({ foto_url: url })
-                        .eq("telefone", phone)
-                        .eq("canal", "festas")
-                        .then(({ error }) => {
-                            if (error) console.error("[EVO-WEBHOOK] Falha backfill foto:", error.message);
-                        });
-                }
+                if (!url) return;
+                const { proxyPhotoToStorage } = await import("@/lib/whatsapp/photo-storage");
+                const cached = await proxyPhotoToStorage(supabaseEarly, url, phone);
+                // Só persistimos quando o proxy retornou URL permanente. Salvar
+                // URL crua do WhatsApp causava expiração em ~6 dias — backfill
+                // recobre depois (melhor sem foto do que foto que some).
+                if (!cached) return;
+                supabaseEarly
+                    .from("Clientes _WhatsApp")
+                    .update({ foto_url: cached })
+                    .eq("telefone", phone)
+                    .eq("canal", "festas")
+                    .then(({ error }) => {
+                        if (error) console.error("[EVO-WEBHOOK] Falha backfill foto:", error.message);
+                    });
             });
 
         // Salvar mensagem recebida do cliente

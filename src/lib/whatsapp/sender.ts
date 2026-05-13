@@ -422,8 +422,13 @@ export async function fetchZapiProfilePicture(telefone: string): Promise<string 
       console.warn(`[ZAPI-PIC] ${res.status} para ${phone}`);
       return null;
     }
-    const body = (await res.json()) as { link?: string };
-    return body.link || null;
+    const body = (await res.json()) as { link?: string; errorMessage?: string };
+    // Z-API devolve a STRING "null" (não JSON null) quando não há foto ou o bot
+    // não tem autorização — `"null" || null` é truthy e poluía o banco.
+    const link = body.link;
+    if (!link || link === "null" || link === "undefined") return null;
+    if (!link.startsWith("http")) return null;
+    return link;
   } catch (err) {
     console.error("[ZAPI-PIC] erro:", err);
     return null;

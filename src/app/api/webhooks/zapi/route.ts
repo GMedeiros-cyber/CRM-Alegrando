@@ -326,7 +326,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
       // Backfill foto do grupo (apenas se ainda não tiver) — fire-and-forget.
       // senderPhoto no payload de grupo geralmente é a foto do PARTICIPANTE,
-      // não do grupo. Buscamos a foto do grupo pelo endpoint profile-picture.
+      // não do grupo. Buscamos a foto do grupo pelo endpoint profile-picture
+      // e fazemos proxy para o Storage (URLs do WhatsApp expiram em ~6 dias).
       supabase
         .from("Clientes _WhatsApp")
         .select("foto_url")
@@ -336,16 +337,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         .then(async ({ data: needsPhoto }) => {
           if (!needsPhoto) return;
           const { fetchZapiProfilePicture } = await import("@/lib/whatsapp/sender");
+          const { proxyPhotoToStorage } = await import("@/lib/whatsapp/photo-storage");
           const url = await fetchZapiProfilePicture(groupId);
-          if (url) {
-            supabase
-              .from("Clientes _WhatsApp")
-              .update({ foto_url: url })
-              .eq("telefone", groupId)
-              .then(({ error }) => {
-                if (error) console.error("[ZAPI-PROXY] Falha foto grupo:", error.message);
-              });
-          }
+          if (!url) return;
+          const cached = await proxyPhotoToStorage(supabase, url, groupId);
+          // Só persistimos quando o proxy retornou URL permanente do Storage.
+          // Salvar a URL crua do WhatsApp causa expiração em ~6 dias — backfill
+          // recobre depois (sem foto > foto que some).
+          if (!cached) return;
+          supabase
+            .from("Clientes _WhatsApp")
+            .update({ foto_url: cached })
+            .eq("telefone", groupId)
+            .then(({ error }) => {
+              if (error) console.error("[ZAPI-PROXY] Falha foto grupo:", error.message);
+            });
         });
 
       const { content: rawContent, media_type } = extractMessageContent(payload);
@@ -470,15 +476,39 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         });
     }
 
-    if (payload.senderPhoto) {
+    // Popula `nome` com o pushName do WhatsApp (senderName) quando o lead ainda
+    // não tem nome no banco — o usuário pode ter apagado o nome no painel pra
+    // "puxar de novo do WhatsApp". Nunca sobrescreve um nome já editado.
+    if (payload.senderName) {
+      const pushName = payload.senderName;
       supabase
         .from("Clientes _WhatsApp")
-        .update({ foto_url: payload.senderPhoto })
+        .update({ nome: pushName })
         .or(`telefone.eq.${realPhone},telefone.eq.${phoneWithout55}`)
         .eq("canal", "alegrando")
+        .is("nome", null)
         .then(({ error }) => {
-          if (error) console.error("[ZAPI-PROXY] Falha ao atualizar foto:", error.message);
+          if (error) console.error("[ZAPI-PROXY] Falha ao popular nome:", error.message);
         });
+    }
+
+    if (payload.senderPhoto) {
+      const senderPhoto = payload.senderPhoto;
+      (async () => {
+        const { proxyPhotoToStorage } = await import("@/lib/whatsapp/photo-storage");
+        const cached = await proxyPhotoToStorage(supabase, senderPhoto, realPhone);
+        // Só persistimos quando temos URL permanente do Storage. URLs cruas do
+        // WhatsApp expiram em ~6d e poluíam o banco; backfill recobre depois.
+        if (!cached) return;
+        supabase
+          .from("Clientes _WhatsApp")
+          .update({ foto_url: cached })
+          .or(`telefone.eq.${realPhone},telefone.eq.${phoneWithout55}`)
+          .eq("canal", "alegrando")
+          .then(({ error }) => {
+            if (error) console.error("[ZAPI-PROXY] Falha ao atualizar foto:", error.message);
+          });
+      })();
     }
 
     // Se não veio senderPhoto, busca proativamente na Z-API quando lead
@@ -494,17 +524,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         .then(async ({ data: leadSemFoto }) => {
           if (!leadSemFoto) return;
           const { fetchZapiProfilePicture } = await import("@/lib/whatsapp/sender");
+          const { proxyPhotoToStorage } = await import("@/lib/whatsapp/photo-storage");
           const url = await fetchZapiProfilePicture(String(leadSemFoto.telefone));
-          if (url) {
-            supabase
-              .from("Clientes _WhatsApp")
-              .update({ foto_url: url })
-              .eq("telefone", leadSemFoto.telefone)
-              .eq("canal", "alegrando")
-              .then(({ error }) => {
-                if (error) console.error("[ZAPI-PROXY] Falha backfill foto:", error.message);
-              });
-          }
+          if (!url) return;
+          const cached = await proxyPhotoToStorage(supabase, url, String(leadSemFoto.telefone));
+          if (!cached) return;
+          supabase
+            .from("Clientes _WhatsApp")
+            .update({ foto_url: cached })
+            .eq("telefone", leadSemFoto.telefone)
+            .eq("canal", "alegrando")
+            .then(({ error }) => {
+              if (error) console.error("[ZAPI-PROXY] Falha backfill foto:", error.message);
+            });
         });
     }
 
