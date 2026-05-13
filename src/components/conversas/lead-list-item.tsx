@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import Image from "next/image";
+import { Users } from "lucide-react";
 import type { ClienteListItem } from "@/lib/actions/leads";
 import { cn, isValidPhotoUrl } from "@/lib/utils";
 
@@ -68,7 +69,12 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
         >
             <div className="flex items-center gap-3">
                 {/* Avatar */}
-                <div className="w-9 h-9 rounded-full bg-[#E0E7FF] dark:bg-[#2d3347] shrink-0 border border-[#A5B4FC] dark:border-[#4a5568] overflow-hidden flex items-center justify-center text-sm font-bold text-[#191918] dark:text-white">
+                <div className={cn(
+                    "w-9 h-9 rounded-full shrink-0 border overflow-hidden flex items-center justify-center text-sm font-bold",
+                    isGroup
+                        ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400"
+                        : "bg-[#E0E7FF] dark:bg-[#2d3347] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white"
+                )}>
                     {isValidPhotoUrl(item.fotoUrl) ? (
                         <Image
                             src={item.fotoUrl}
@@ -83,6 +89,8 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
                             }}
                             unoptimized={item.fotoUrl.includes("pps.whatsapp.net")}
                         />
+                    ) : isGroup ? (
+                        <Users className="w-4 h-4" />
                     ) : (
                         (item.nome || telefoneStr).charAt(0).toUpperCase()
                     )}
