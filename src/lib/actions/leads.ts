@@ -208,7 +208,7 @@ export async function listClientes(params?: {
  * com contagem de mensagens. Mensagens sem sender_name caem em "Desconhecido".
  */
 export async function getGroupParticipants(telefone: string): Promise<{
-    name: string;
+    name: string | null;
     participantPhone: string | null;
     messageCount: number;
 }[]> {
@@ -225,16 +225,19 @@ export async function getGroupParticipants(telefone: string): Promise<{
 
     if (error || !data) return [];
 
-    const map = new Map<string, { name: string; participantPhone: string | null; count: number }>();
+    const map = new Map<string, { name: string | null; participantPhone: string | null; count: number }>();
     for (const m of data) {
         const meta = (m.metadata ?? {}) as Record<string, unknown>;
         const participantPhone = (meta.participantPhone as string | null) ?? null;
-        const name = m.sender_name || participantPhone || "Desconhecido";
-        const key = participantPhone || name;
+        const name = m.sender_name || null;
+        // Agrupar por telefone quando disponível; sem telefone e sem nome, todos
+        // os "anônimos" caem num único bucket "__unknown__".
+        const key = participantPhone || name || "__unknown__";
         const cur = map.get(key);
         if (cur) {
             cur.count += 1;
             if (!cur.participantPhone && participantPhone) cur.participantPhone = participantPhone;
+            if (!cur.name && name) cur.name = name;
         } else {
             map.set(key, { name, participantPhone, count: 1 });
         }
@@ -325,7 +328,10 @@ export async function toggleIaAtiva(telefone: string, iaAtiva: boolean, canal: s
 }
 
 /**
- * Atualiza dados do cliente.
+ * Atualiza dados do cliente. O parâmetro `canal` segrega o registro porque um
+ * mesmo telefone pode existir nos dois canais (alegrando + festas) — sem ele o
+ * update vazaria entre canais ou (no default antigo, hardcoded em "alegrando")
+ * silenciosamente atualizaria zero linhas para contatos festas.
  */
 export async function updateCliente(
     telefone: string,
@@ -351,7 +357,8 @@ export async function updateCliente(
         responsavel?: string | null;
         segundoNumero?: string | null;
         aniversariante?: string | null;
-    }
+    },
+    canal: string = "alegrando"
 ) {
     const userId = await requireAuth();
     const parsed = updateClienteSchema.parse(data);
@@ -398,7 +405,7 @@ export async function updateCliente(
         .from("Clientes _WhatsApp")
         .update(updateData)
         .eq("telefone", telefone)
-        .eq("canal", "alegrando");
+        .eq("canal", canal);
 
     return { success: true };
 }

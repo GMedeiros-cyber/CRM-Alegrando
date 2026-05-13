@@ -25,11 +25,13 @@ export function useTheme() {
 
         async function loadTheme() {
             if (user?.id) {
+                // maybeSingle (não single): linha pode não existir ainda quando
+                // o usuário acabou de logar — `.single()` retornaria HTTP 406.
                 const { data } = await supabase
                     .from("users")
                     .select("theme")
                     .eq("clerk_id", user.id)
-                    .single();
+                    .maybeSingle();
 
                 if (data?.theme) {
                     const t = data.theme as Theme;

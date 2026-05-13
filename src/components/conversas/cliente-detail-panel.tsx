@@ -35,6 +35,8 @@ import {
     CheckCircle2,
     Cake,
     Users,
+    MessageSquare,
+    HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { updateCliente, getGroupParticipants } from "@/lib/actions/leads";
@@ -186,7 +188,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
     const isGroup = isGroupTelefone(cliente.telefone);
 
     const [participants, setParticipants] = useState<{
-        name: string;
+        name: string | null;
         participantPhone: string | null;
         messageCount: number;
     }[]>([]);
@@ -241,18 +243,29 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                     ) : (
                         <ul className="space-y-1.5">
                             {participants.map((p, idx) => (
-                                <li key={`${p.participantPhone || p.name}-${idx}`} className="flex items-center gap-2 text-[12px]">
+                                <li key={`${p.participantPhone || p.name || "unknown"}-${idx}`} className="flex items-center gap-2 text-[12px]">
                                     <div className="flex-1 min-w-0">
-                                        <p className="font-semibold text-[#191918] dark:text-white truncate">
-                                            {p.name}
-                                        </p>
+                                        {p.name ? (
+                                            <p className="font-semibold text-[#191918] dark:text-white truncate">
+                                                {p.name}
+                                            </p>
+                                        ) : (
+                                            <p className="font-semibold italic text-amber-300 truncate flex items-center gap-1">
+                                                <HelpCircle className="w-3 h-3 shrink-0" />
+                                                Participante
+                                            </p>
+                                        )}
                                         {p.participantPhone && (
                                             <p className="text-[10px] font-mono text-[#6366F1] dark:text-[#94a3b8] truncate">
                                                 {p.participantPhone}
                                             </p>
                                         )}
                                     </div>
-                                    <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/15 px-1.5 py-0.5 rounded-full shrink-0">
+                                    <span
+                                        title={`${p.messageCount} ${p.messageCount === 1 ? "mensagem enviada" : "mensagens enviadas"} no grupo`}
+                                        className="text-[10px] font-semibold text-emerald-300/90 shrink-0 flex items-center gap-0.5"
+                                    >
+                                        <MessageSquare className="w-3 h-3" />
                                         {p.messageCount}
                                     </span>
                                 </li>
@@ -393,7 +406,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                                 try {
                                     await updateCliente(selectedTelefone, {
                                         kanbanColumnId: val || null,
-                                    });
+                                    }, cliente.canal);
                                     onToast({ type: "success", text: "Cliente atualizado!" });
                                 } catch (err) {
                                     onToast({ type: "error", text: `Erro ao salvar: ${err}` });
@@ -512,7 +525,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                                 onFormChange({ followupAtivo: checked });
                                 startSavingCliente(async () => {
                                     try {
-                                        await updateCliente(selectedTelefone, { followupAtivo: checked });
+                                        await updateCliente(selectedTelefone, { followupAtivo: checked }, cliente.canal);
                                         onToast({ type: "success", text: checked ? "Follow-up ativado!" : "Follow-up desativado!" });
                                     } catch {
                                         onToast({ type: "error", text: "Erro ao atualizar follow-up" });
@@ -560,7 +573,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                                     onClick={() => {
                                         startRunningAction(async () => {
                                             try {
-                                                await updateCliente(selectedTelefone, { followupAtivo: false });
+                                                await updateCliente(selectedTelefone, { followupAtivo: false }, cliente.canal);
                                                 onFormChange({ followupAtivo: false, followupEnviado: false, followupEnviadoEm: "" });
                                                 onToast({ type: "success", text: "Follow-up resetado." });
                                             } catch {
@@ -610,7 +623,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                                     onFormChange({ posPasseioAtivo: checked });
                                     startSavingCliente(async () => {
                                         try {
-                                            await updateCliente(selectedTelefone, { posPasseioAtivo: checked });
+                                            await updateCliente(selectedTelefone, { posPasseioAtivo: checked }, cliente.canal);
                                             onToast({ type: "success", text: checked ? "Pós-Passeio ativado!" : "Pós-Passeio desativado!" });
                                             if (!checked) setPosPasseioLink("");
                                         } catch {
@@ -664,7 +677,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                                         onClick={() => {
                                             startRunningAction(async () => {
                                                 try {
-                                                    await updateCliente(selectedTelefone, { posPasseioAtivo: false });
+                                                    await updateCliente(selectedTelefone, { posPasseioAtivo: false }, cliente.canal);
                                                     onFormChange({ posPasseioAtivo: false, posPasseioEnviado: false, posPasseioEnviadoEm: "" });
                                                     setPosPasseioLink("");
                                                 } catch {
