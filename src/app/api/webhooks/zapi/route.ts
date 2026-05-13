@@ -465,6 +465,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const realPhone = normalizePhone(rawPhone);
     const phoneWithout55 = realPhone.startsWith("55") ? realPhone.slice(2) : realPhone;
 
+    // Garante que o lead exista no canal alegrando. Contatos que entraram pelo
+    // canal festas (Evolution) não têm registro aqui — sem upsert as mensagens
+    // são salvas em "messages" mas o lead não aparece na lista de conversas.
+    // ignoreDuplicates=true: cria se não existe, não sobrescreve se já existe.
+    supabase
+      .from("Clientes _WhatsApp")
+      .upsert(
+        {
+          telefone: realPhone,
+          canal: "alegrando",
+          ia_ativa: false,
+          ...(payload.senderName ? { nome: payload.senderName } : {}),
+        },
+        { onConflict: "telefone,canal", ignoreDuplicates: true }
+      )
+      .then(({ error }) => {
+        if (error) console.error("[ZAPI-PROXY] Falha ao garantir lead alegrando:", error.message);
+      });
+
     if (chatLid) {
       supabase
         .from("Clientes _WhatsApp")
