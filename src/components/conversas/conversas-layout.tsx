@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { ChatWindow } from "./chat-window";
 import { EmojiPickerInput } from "./emoji-picker-input";
 import { NovoLeadModal } from "./novo-lead-modal";
-import { LeadListItem } from "./lead-list-item";
+import { LeadListItem, isGroupTelefone } from "./lead-list-item";
 import { AttachmentPreview } from "./attachment-preview";
 import { AudioPlayer } from "./audio-player";
 import { AudioRecorder } from "./audio-recorder";
@@ -62,6 +62,7 @@ import {
     ArrowUpDown,
     Check,
     ChevronDown,
+    Users,
 } from "lucide-react";
 import {
     Sheet,
@@ -214,6 +215,22 @@ function SortFilterDropdown({
 // =============================================
 
 const AGENDAMENTOS_TTL = 60_000; // 1 minuto
+const CLIENTE_DETAIL_TTL = 60_000; // 1 minuto — detalhes do cliente, mensagens etc.
+const CLIENTES_LIST_TTL = 30_000; // 30s — lista da sidebar (alterna entre canais)
+
+type ClienteDetailCacheEntry = {
+    data: Awaited<ReturnType<typeof getClienteByTelefone>>;
+    tasks: TaskItem[];
+    historico: PasseioHistorico[];
+    kanban: KanbanColumn[];
+    ts: number;
+};
+
+type ClientesListCacheEntry = {
+    data: ClienteListItem[];
+    total: number;
+    ts: number;
+};
 
 export function ConversasLayout() {
     const router = useRouter();
@@ -249,6 +266,10 @@ export function ConversasLayout() {
     const addOptimisticRef = useRef<((content: string, senderName?: string) => void) | null>(null);
     const loadClienteVersionRef = useRef(0);
     const agendamentosCache = useRef<{ data: AgendamentoEvent[]; ts: number } | null>(null);
+    // Cache em memória para alternância rápida entre conversas/canais já vistos.
+    // stale-while-revalidate: usa cache pra renderizar imediato e revalida em background.
+    const clienteCache = useRef<Map<string, ClienteDetailCacheEntry>>(new Map());
+    const clientesListCache = useRef<Map<string, ClientesListCacheEntry>>(new Map());
     const [replyTo, setReplyTo] = useState<import("@/lib/actions/leads").LeadMessage | null>(null);
 
     // Tasks
@@ -377,11 +398,33 @@ export function ConversasLayout() {
             return 0;
         });
 
-    // Load clientes list (page 1)
+    // Load clientes list (page 1) — com cache em memória por (search, canal).
+    // Stale-while-revalidate: alternar Alegrando ↔ Festas (ou voltar a uma busca
+    // recente) mostra a lista cacheada instantaneamente e revalida em background.
     const loadList = useCallback(async () => {
-        setClientesList([]);
-        setTotalClientes(0);
-        setLoading(true);
+        const cacheKey = `${searchTerm || ""}|${canalFiltro}`;
+        const cached = clientesListCache.current.get(cacheKey);
+        const hasFreshCache = cached && Date.now() - cached.ts < CLIENTES_LIST_TTL;
+
+        if (hasFreshCache) {
+            // Cache fresco: renderiza imediato, sem spinner.
+            setClientesList(cached.data);
+            loadedCountRef.current = cached.data.length;
+            setTotalClientes(cached.total);
+            setLoading(false);
+        } else if (cached) {
+            // Cache stale: renderiza enquanto revalida em background, sem spinner.
+            setClientesList(cached.data);
+            loadedCountRef.current = cached.data.length;
+            setTotalClientes(cached.total);
+            setLoading(false);
+        } else {
+            // Sem cache: limpa e mostra spinner (comportamento original).
+            setClientesList([]);
+            setTotalClientes(0);
+            setLoading(true);
+        }
+
         try {
             const result = await listClientes({ search: searchTerm || undefined, page: 1, limit: CLIENTES_LIMIT, canal: canalFiltro });
             // Deduplicar por telefone (previne duplicatas caso o backend retorne)
@@ -395,6 +438,11 @@ export function ConversasLayout() {
             setClientesList(unique);
             loadedCountRef.current = unique.length;
             setTotalClientes(result.total);
+            clientesListCache.current.set(cacheKey, {
+                data: unique,
+                total: result.total,
+                ts: Date.now(),
+            });
         } catch (err) {
             console.error("[conversas] Erro ao carregar lista:", err);
         } finally {
@@ -494,27 +542,92 @@ export function ConversasLayout() {
         };
     }, [selectedTelefone]);
 
-    // Load selected cliente
+    // Load selected cliente — com cache em memória stale-while-revalidate.
+    // Cache key = `${telefone}|${canal}`. Re-clicar mesmo cliente na sessão é
+    // instantâneo (sem spinner); cache expira em 60s e revalida em background.
     const loadCliente = useCallback(async (telefone: string, canal: string = "alegrando") => {
         const version = ++loadClienteVersionRef.current;
-        setLoadingCliente(true);
-        setLoadingAgendamentos(true);
-        setTasks([]);
-        setAgendamentos([]);
-        setPaseiosHistorico([]);
+        const cacheKey = `${telefone}|${canal}`;
+        const cached = clienteCache.current.get(cacheKey);
+        const hasFreshCache = cached && Date.now() - cached.ts < CLIENTE_DETAIL_TTL;
+
+        // Helper que aplica uma entry do cache aos states. Reaproveitado em
+        // cache hit (sem spinner) e fim do fetch (após revalidação).
+        const applyEntry = (entry: ClienteDetailCacheEntry, todosAgendamentos: AgendamentoEvent[]) => {
+            const { data: clienteData, tasks: tasksData, historico, kanban } = entry;
+            setPaseiosHistorico(historico);
+            if (!clienteData) return;
+            setCliente(clienteData);
+            setKanbanColumns(kanban);
+            setForm({
+                nome: clienteData.nome || "",
+                email: clienteData.email || "",
+                cpf: clienteData.cpf || "",
+                status: clienteData.status || "",
+                linkedin: clienteData.linkedin || "",
+                facebook: clienteData.facebook || "",
+                instagram: clienteData.instagram || "",
+                endereco: clienteData.endereco || "",
+                responsavel: clienteData.responsavel || "",
+                segundoNumero: clienteData.segundoNumero || "",
+                aniversariante: clienteData.aniversariante || "",
+                kanbanColumnId: clienteData.kanbanColumnId || "",
+                ultimoPasseio: clienteData.ultimoPasseio || "",
+                followupDias: clienteData.followupDias ?? 45,
+                followupHora: clienteData.followupHora || "09:00",
+                followupAtivo: clienteData.followupAtivo ?? false,
+                followupEnviado: clienteData.followupEnviado ?? false,
+                followupEnviadoEm: clienteData.followupEnviadoEm || "",
+                posPasseioAtivo: clienteData.posPasseioAtivo ?? false,
+                posPasseioEnviado: clienteData.posPasseioEnviado ?? false,
+                posPasseioEnviadoEm: clienteData.posPasseioEnviadoEm || "",
+            });
+            setPosPasseioLink("");
+            setTasks(tasksData);
+            if (clienteData.nome) {
+                const filtrados = todosAgendamentos.filter(
+                    (ev) =>
+                        ev.extendedProps.nomeEscola?.toLowerCase().trim() ===
+                        clienteData.nome!.toLowerCase().trim()
+                );
+                setAgendamentos(filtrados);
+            } else {
+                setAgendamentos([]);
+            }
+        };
+
+        if (hasFreshCache) {
+            // Cache fresco: renderiza imediato, sem spinner, sem flicker.
+            applyEntry(cached, agendamentosCache.current?.data ?? []);
+            setLoadingCliente(false);
+            setLoadingAgendamentos(false);
+        } else if (cached) {
+            // Cache stale: renderiza enquanto revalida em background, sem spinner.
+            applyEntry(cached, agendamentosCache.current?.data ?? []);
+            setLoadingCliente(false);
+            setLoadingAgendamentos(false);
+        } else {
+            // Sem cache: limpa states e mostra spinner (comportamento original).
+            setLoadingCliente(true);
+            setLoadingAgendamentos(true);
+            setTasks([]);
+            setAgendamentos([]);
+            setPaseiosHistorico([]);
+        }
         setAddingPasseio(false);
 
         try {
             const tel = parseInt(telefone, 10);
 
-            // As chamadas disparam em paralelo
-            const [clienteData, tasksData, todosAgendamentos, historico] = await Promise.all([
+            // Todas as chamadas em paralelo, incluindo getKanbanColumns
+            // (antes era sequencial após o resto — -1 round trip percebido).
+            const [clienteData, tasksData, todosAgendamentos, historico, kanban] = await Promise.all([
                 getClienteByTelefone(telefone, canal),
                 !isNaN(tel) ? getLeadTasks(tel) : Promise.resolve([]),
                 (() => {
-                    const cache = agendamentosCache.current;
-                    if (cache && Date.now() - cache.ts < AGENDAMENTOS_TTL) {
-                        return Promise.resolve(cache.data);
+                    const ac = agendamentosCache.current;
+                    if (ac && Date.now() - ac.ts < AGENDAMENTOS_TTL) {
+                        return Promise.resolve(ac.data);
                     }
                     return getAgendamentos().then(data => {
                         agendamentosCache.current = { data, ts: Date.now() };
@@ -522,56 +635,20 @@ export function ConversasLayout() {
                     });
                 })(),
                 getPasseiosHistorico(telefone),
+                getKanbanColumns(canal),
             ]);
 
             if (loadClienteVersionRef.current !== version) return;
 
-            setPaseiosHistorico(historico);
-
-            if (clienteData) {
-                setCliente(clienteData);
-                getKanbanColumns(clienteData.canal ?? "alegrando").then(setKanbanColumns);
-                setForm({
-                    nome: clienteData.nome || "",
-                    email: clienteData.email || "",
-                    cpf: clienteData.cpf || "",
-                    status: clienteData.status || "",
-                    linkedin: clienteData.linkedin || "",
-                    facebook: clienteData.facebook || "",
-                    instagram: clienteData.instagram || "",
-                    endereco: clienteData.endereco || "",
-                    responsavel: clienteData.responsavel || "",
-                    segundoNumero: clienteData.segundoNumero || "",
-                    aniversariante: clienteData.aniversariante || "",
-                    kanbanColumnId: clienteData.kanbanColumnId || "",
-                    ultimoPasseio: clienteData.ultimoPasseio || "",
-                    followupDias: clienteData.followupDias ?? 45,
-                    followupHora: clienteData.followupHora || "09:00",
-                    followupAtivo: clienteData.followupAtivo ?? false,
-                    followupEnviado: clienteData.followupEnviado ?? false,
-                    followupEnviadoEm: clienteData.followupEnviadoEm || "",
-                    posPasseioAtivo: clienteData.posPasseioAtivo ?? false,
-                    posPasseioEnviado: clienteData.posPasseioEnviado ?? false,
-                    posPasseioEnviadoEm: clienteData.posPasseioEnviadoEm || "",
-                });
-
-                setPosPasseioLink("");
-
-                // Tasks
-                setTasks(tasksData);
-
-                // Agendamentos — filtra pelo nome do cliente (pode ser null)
-                if (clienteData.nome) {
-                    const filtrados = todosAgendamentos.filter(
-                        (ev) =>
-                            ev.extendedProps.nomeEscola?.toLowerCase().trim() ===
-                            clienteData.nome!.toLowerCase().trim()
-                    );
-                    setAgendamentos(filtrados);
-                } else {
-                    setAgendamentos([]);
-                }
-            }
+            const entry: ClienteDetailCacheEntry = {
+                data: clienteData,
+                tasks: tasksData,
+                historico,
+                kanban,
+                ts: Date.now(),
+            };
+            clienteCache.current.set(cacheKey, entry);
+            applyEntry(entry, todosAgendamentos);
         } catch (err) {
             setToast({ type: "error", text: `Erro ao carregar cliente: ${err}` });
         } finally {
@@ -650,15 +727,23 @@ export function ConversasLayout() {
                     followupDias: form.followupDias,
                     followupHora: form.followupHora,
                     followupAtivo: form.followupAtivo,
-                });
+                }, selectedCanal);
                 setToast({ type: "success", text: "Cliente atualizado!" });
+                // Atualiza o estado local com o nome que acabou de ser salvo,
+                // INCLUSIVE quando vira string vazia (usuário apagou). O fallback
+                // anterior `form.nome || c.nome` mantinha o nome antigo no card
+                // após o servidor ter recebido NULL — o card ficava "hardcoded".
+                const novoNome = form.nome.trim() || null;
                 setClientesList((prev) =>
                     prev.map((c) =>
-                        String(c.telefone) === String(selectedTelefone)
-                            ? { ...c, nome: form.nome || c.nome }
+                        String(c.telefone) === String(selectedTelefone) && c.canal === selectedCanal
+                            ? { ...c, nome: novoNome }
                             : c
                     )
                 );
+                // Invalida cache deste cliente — próxima visita vai re-fetch
+                // pra refletir os campos editados.
+                clienteCache.current.delete(`${selectedTelefone}|${selectedCanal}`);
             } catch (err) {
                 setToast({ type: "error", text: `Erro ao salvar: ${err}` });
             }
@@ -679,6 +764,8 @@ export function ConversasLayout() {
                             : c
                     )
                 );
+                // Invalida cache deste cliente — flag ia_ativa mudou.
+                clienteCache.current.delete(`${selectedTelefone}|${selectedCanal}`);
                 setToast({
                     type: "success",
                     text: newVal
@@ -791,6 +878,10 @@ export function ConversasLayout() {
         startRunningAction(async () => {
             const result = await deleteCliente(selectedTelefone, selectedCanal);
             if (result.success) {
+                // Invalida caches: detalhes do cliente excluído + listas (todas
+                // as variações de search/canal podem ter referência a ele).
+                clienteCache.current.delete(`${selectedTelefone}|${selectedCanal}`);
+                clientesListCache.current.clear();
                 setSelectedTelefone(null);
                 setCliente(null);
                 setMobileView("list");
@@ -1146,7 +1237,12 @@ export function ConversasLayout() {
                                     <ArrowLeft className="w-5 h-5" />
                                 </button>
                                 <div className="flex items-center gap-3 min-w-0">
-                                    <div className="w-10 h-10 rounded-full bg-[#E0E7FF] dark:bg-[#2d3347] shrink-0 border border-[#A5B4FC] dark:border-[#4a5568] overflow-hidden flex items-center justify-center text-sm font-bold text-[#191918] dark:text-white">
+                                    <div className={cn(
+                                        "w-10 h-10 rounded-full shrink-0 border overflow-hidden flex items-center justify-center text-sm font-bold",
+                                        isGroupTelefone(cliente.telefone)
+                                            ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400"
+                                            : "bg-[#E0E7FF] dark:bg-[#2d3347] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white"
+                                    )}>
                                         {isValidPhotoUrl(cliente.fotoUrl) ? (
                                             <Image
                                                 src={cliente.fotoUrl}
@@ -1157,6 +1253,8 @@ export function ConversasLayout() {
                                                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                                                 unoptimized={cliente.fotoUrl.includes("pps.whatsapp.net")}
                                             />
+                                        ) : isGroupTelefone(cliente.telefone) ? (
+                                            <Users className="w-5 h-5" />
                                         ) : (
                                             (cliente.nome || String(cliente.telefone)).charAt(0).toUpperCase()
                                         )}
@@ -1166,7 +1264,7 @@ export function ConversasLayout() {
                                             {cliente.nome || "Sem nome"}
                                         </h3>
                                         <p className="text-xs text-[#191918] dark:text-white font-mono font-medium tracking-wide mt-0.5">
-                                            {cliente.telefone}
+                                            {isGroupTelefone(cliente.telefone) ? "Grupo WhatsApp" : cliente.telefone}
                                         </p>
                                     </div>
                                 </div>
