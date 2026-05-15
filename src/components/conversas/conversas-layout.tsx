@@ -71,8 +71,18 @@ import {
 import { cn, isValidPhotoUrl } from "@/lib/utils";
 import { supabase } from "@/lib/supabase/client";
 import { listLabels } from "@/lib/actions/labels";
-import type { Label } from "@/lib/types/labels";
+import type { Label, LabelColor } from "@/lib/types/labels";
 import { LabelFilterButton } from "@/components/labels/label-filter-button";
+
+function mapRowToLabel(row: Record<string, unknown>): Label {
+    return {
+        id: row.id as string,
+        name: row.name as string,
+        color: row.color as LabelColor,
+        createdAt: new Date(row.created_at as string),
+        updatedAt: new Date(row.updated_at as string),
+    };
+}
 
 // =============================================
 // STATUS STYLES
@@ -273,6 +283,17 @@ export function ConversasLayout() {
     // stale-while-revalidate: usa cache pra renderizar imediato e revalida em background.
     const clienteCache = useRef<Map<string, ClienteDetailCacheEntry>>(new Map());
     const clientesListCache = useRef<Map<string, ClientesListCacheEntry>>(new Map());
+    // Marca uma janela curta após uma ação local optimistic em labels/lead_labels.
+    // O Realtime de lead_labels ecoa de volta nossa própria escrita (Supabase
+    // entrega INSERT/DELETE pra quem fez); sem isso o eco invalidaria os caches
+    // e o próximo load redesenharia. 500ms cobre o round-trip do servidor.
+    const recentlyOptimisticLabelChange = useRef<boolean>(false);
+    function markOptimisticChange() {
+        recentlyOptimisticLabelChange.current = true;
+        setTimeout(() => {
+            recentlyOptimisticLabelChange.current = false;
+        }, 500);
+    }
     const [replyTo, setReplyTo] = useState<import("@/lib/actions/leads").LeadMessage | null>(null);
 
     // Tasks
@@ -567,28 +588,85 @@ export function ConversasLayout() {
         };
     }, []);
 
-    // Realtime: sync de labels (criar/editar/deletar) e lead_labels (atribuição).
-    // Renomear/excluir uma label reflete no filtro e nos badges sem refresh.
+    // Realtime: aplica mudanças no state local sem refetch agressivo.
+    // Eco do próprio browser (após optimistic) é ignorado via ref de janela curta
+    // pra não duplicar/re-renderizar — Realtime entrega INSERT do servidor mesmo
+    // pra quem fez a escrita.
     useEffect(() => {
         const channel = supabase
             .channel("labels-sync-realtime")
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "labels" },
-                async () => {
-                    const fresh = await listLabels();
-                    setAvailableLabels(fresh);
-                    // Lista de leads também precisa relê-las pra mostrar nomes/cores novos.
+                (payload) => {
+                    if (payload.eventType === "INSERT") {
+                        const newLabel = mapRowToLabel(payload.new);
+                        setAvailableLabels((prev) => {
+                            // Idempotência: se já existe (optimistic local), não duplica.
+                            if (prev.some((l) => l.id === newLabel.id)) return prev;
+                            return [...prev, newLabel].sort((a, b) =>
+                                a.name.localeCompare(b.name)
+                            );
+                        });
+                    } else if (payload.eventType === "UPDATE") {
+                        const updated = mapRowToLabel(payload.new);
+                        const compact = { id: updated.id, name: updated.name, color: updated.color };
+                        setAvailableLabels((prev) =>
+                            prev.map((l) => (l.id === updated.id ? updated : l))
+                        );
+                        setClientesList((prev) =>
+                            prev.map((c) => ({
+                                ...c,
+                                labels: (c.labels || []).map((l) =>
+                                    l.id === updated.id ? compact : l
+                                ),
+                            }))
+                        );
+                        setCliente((prev) =>
+                            prev
+                                ? {
+                                      ...prev,
+                                      labels: (prev.labels || []).map((l) =>
+                                          l.id === updated.id ? compact : l
+                                      ),
+                                  }
+                                : prev
+                        );
+                    } else if (payload.eventType === "DELETE") {
+                        const deletedId = (payload.old as { id?: string }).id;
+                        if (!deletedId) return;
+                        setAvailableLabels((prev) => prev.filter((l) => l.id !== deletedId));
+                        setClientesList((prev) =>
+                            prev.map((c) => ({
+                                ...c,
+                                labels: (c.labels || []).filter((l) => l.id !== deletedId),
+                            }))
+                        );
+                        setCliente((prev) =>
+                            prev
+                                ? {
+                                      ...prev,
+                                      labels: (prev.labels || []).filter((l) => l.id !== deletedId),
+                                  }
+                                : prev
+                        );
+                        setLabelFiltro((prev) => prev.filter((id) => id !== deletedId));
+                    }
+                    // Invalida cache pra próximo load reler badges/cores corretos.
                     clientesListCache.current.clear();
-                    await loadList();
                 }
             )
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "lead_labels" },
-                async () => {
+                () => {
+                    // Eco de uma ação optimistic local: já refletida no state, ignora.
+                    if (recentlyOptimisticLabelChange.current) return;
+                    // Mudança vinda de outro browser/sessão: invalida caches.
+                    // Não dispara loadList — próximo trigger natural (filtro,
+                    // troca de canal) repopula com a verdade do servidor.
+                    clienteCache.current.clear();
                     clientesListCache.current.clear();
-                    await loadList();
                 }
             )
             .subscribe();
@@ -596,7 +674,7 @@ export function ConversasLayout() {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [loadList]);
+    }, []);
 
     // Load selected cliente — com cache em memória stale-while-revalidate.
     // Cache key = `${telefone}|${canal}`. Re-clicar mesmo cliente na sessão é
@@ -1140,14 +1218,125 @@ export function ConversasLayout() {
             onToast={setToast}
             leadLabels={cliente.labels}
             availableLabels={availableLabels}
-            onLabelsChanged={async () => {
-                // Invalida cache do cliente atual e refaz fetch — propaga labels novos.
+            onLabelToggleLocal={(labelId, action) => {
+                markOptimisticChange();
+                // 1. Cliente atual (badge no painel)
+                setCliente((prev) => {
+                    if (!prev) return prev;
+                    if (action === "add") {
+                        const label = availableLabels.find((l) => l.id === labelId);
+                        if (!label) return prev;
+                        if ((prev.labels || []).some((l) => l.id === labelId)) return prev;
+                        return {
+                            ...prev,
+                            labels: [
+                                ...(prev.labels || []),
+                                { id: label.id, name: label.name, color: label.color },
+                            ],
+                        };
+                    }
+                    return {
+                        ...prev,
+                        labels: (prev.labels || []).filter((l) => l.id !== labelId),
+                    };
+                });
+                // 2. Item na lista lateral (badge na sidebar)
+                setClientesList((prev) =>
+                    prev.map((c) => {
+                        if (
+                            String(c.telefone) !== String(selectedTelefone) ||
+                            c.canal !== selectedCanal
+                        ) {
+                            return c;
+                        }
+                        if (action === "add") {
+                            const label = availableLabels.find((l) => l.id === labelId);
+                            if (!label) return c;
+                            if ((c.labels || []).some((l) => l.id === labelId)) return c;
+                            return {
+                                ...c,
+                                labels: [
+                                    ...(c.labels || []),
+                                    { id: label.id, name: label.name, color: label.color },
+                                ],
+                            };
+                        }
+                        return {
+                            ...c,
+                            labels: (c.labels || []).filter((l) => l.id !== labelId),
+                        };
+                    })
+                );
+                // 3. Invalida cache pro próximo load reler do servidor.
                 clienteCache.current.delete(`${selectedTelefone}|${selectedCanal}`);
                 clientesListCache.current.clear();
-                const fresh = await listLabels();
-                setAvailableLabels(fresh);
-                await loadCliente(selectedTelefone, selectedCanal);
-                await loadList();
+            }}
+            onLabelCreatedLocal={(label) => {
+                markOptimisticChange();
+                setAvailableLabels((prev) => {
+                    if (prev.some((l) => l.id === label.id)) return prev;
+                    return [...prev, label].sort((a, b) => a.name.localeCompare(b.name));
+                });
+            }}
+            onLabelUpdatedLocal={(labelId, updates) => {
+                markOptimisticChange();
+                setAvailableLabels((prev) =>
+                    prev.map((l) => (l.id === labelId ? { ...l, ...updates } : l))
+                );
+                setClientesList((prev) =>
+                    prev.map((c) => ({
+                        ...c,
+                        labels: (c.labels || []).map((l) =>
+                            l.id === labelId
+                                ? {
+                                      id: l.id,
+                                      name: updates.name ?? l.name,
+                                      color: updates.color ?? l.color,
+                                  }
+                                : l
+                        ),
+                    }))
+                );
+                setCliente((prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              labels: (prev.labels || []).map((l) =>
+                                  l.id === labelId
+                                      ? {
+                                            id: l.id,
+                                            name: updates.name ?? l.name,
+                                            color: updates.color ?? l.color,
+                                        }
+                                      : l
+                              ),
+                          }
+                        : prev
+                );
+                clientesListCache.current.clear();
+                if (selectedTelefone) {
+                    clienteCache.current.delete(`${selectedTelefone}|${selectedCanal}`);
+                }
+            }}
+            onLabelDeletedLocal={(labelId) => {
+                markOptimisticChange();
+                setAvailableLabels((prev) => prev.filter((l) => l.id !== labelId));
+                setClientesList((prev) =>
+                    prev.map((c) => ({
+                        ...c,
+                        labels: (c.labels || []).filter((l) => l.id !== labelId),
+                    }))
+                );
+                setCliente((prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              labels: (prev.labels || []).filter((l) => l.id !== labelId),
+                          }
+                        : prev
+                );
+                setLabelFiltro((prev) => prev.filter((id) => id !== labelId));
+                clientesListCache.current.clear();
             }}
         />
     ) : (
