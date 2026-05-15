@@ -34,7 +34,6 @@ import { Plus, Search, X } from "lucide-react";
 interface KanbanBoardProps {
     initialColumns: KanbanColumnType[];
     initialLeads: KanbanLead[];
-    onDataChanged?: () => void;
     canal?: string;
 }
 
