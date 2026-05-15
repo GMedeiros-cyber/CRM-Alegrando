@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { fetchEvolutionProfilePicture } from "@/lib/whatsapp/sender";
 import { verifyEvolutionWebhook } from "@/lib/webhook-auth";
-import { proxyAudioToStorage } from "@/lib/whatsapp/audio-storage";
+import { proxyMediaFromEvolution } from "@/lib/whatsapp/media-storage";
 import { fetchWithTimeout } from "@/lib/fetch-utils";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -78,11 +79,11 @@ type EvoMediaType = "text" | "image" | "video" | "audio" | "document" | "sticker
 interface EvoMessage {
     conversation?: string;
     extendedTextMessage?: { text?: string };
-    audioMessage?: { url?: string; mediaUrl?: string };
-    imageMessage?: { url?: string; mediaUrl?: string; caption?: string };
-    videoMessage?: { url?: string; mediaUrl?: string; caption?: string };
-    documentMessage?: { url?: string; mediaUrl?: string; fileName?: string; caption?: string };
-    stickerMessage?: { url?: string; mediaUrl?: string };
+    audioMessage?: { url?: string; mediaUrl?: string; seconds?: number; mimetype?: string };
+    imageMessage?: { url?: string; mediaUrl?: string; caption?: string; mimetype?: string };
+    videoMessage?: { url?: string; mediaUrl?: string; caption?: string; mimetype?: string };
+    documentMessage?: { url?: string; mediaUrl?: string; fileName?: string; caption?: string; mimetype?: string };
+    stickerMessage?: { url?: string; mediaUrl?: string; mimetype?: string };
 }
 
 function extractEvoContent(msg: EvoMessage | undefined): { content: string; media_type: EvoMediaType } | null {
@@ -113,6 +114,80 @@ function extractEvoContent(msg: EvoMessage | undefined): { content: string; medi
         return { content: msg.stickerMessage.url ?? msg.stickerMessage.mediaUrl ?? "", media_type: "sticker" };
     }
     return null;
+}
+
+interface ApplyMediaProxyParams {
+    supabase: SupabaseClient;
+    rawContent: string;
+    mediaType: EvoMediaType;
+    msg: EvoMessage | undefined;
+    key: { fromMe?: boolean; remoteJid?: string; id?: string } | undefined;
+    telefone: string;
+    messageId: string;
+}
+
+/**
+ * Para mensagens de mídia do canal festas, baixa o conteúdo decifrado via
+ * Evolution (`getBase64FromMediaMessage`), envia ao Storage e retorna o content
+ * final (`publicUrl|||caption` quando aplicável) + audioSeconds.
+ *
+ * Em caso de falha, retorna o `rawContent` como fallback (mensagem ainda chega,
+ * porém apontando pra URL `.enc` — registrado em log para diagnóstico).
+ */
+async function applyMediaProxy(
+    params: ApplyMediaProxyParams,
+): Promise<{ content: string; audioSeconds?: number }> {
+    const { supabase, rawContent, mediaType, msg, key, telefone, messageId } = params;
+
+    if (mediaType === "text" || !msg || !key) {
+        return { content: rawContent };
+    }
+
+    const audioSeconds =
+        mediaType === "audio" && typeof msg.audioMessage?.seconds === "number"
+            ? msg.audioMessage.seconds
+            : undefined;
+
+    const proxied = await proxyMediaFromEvolution(supabase, {
+        key,
+        message: msg,
+        telefone,
+        mediaType,
+    });
+
+    if (!proxied) {
+        console.error(
+            `[EVO-WEBHOOK] proxy falhou — messageId=${messageId} media_type=${mediaType} — usando URL bruta`,
+        );
+        return { content: rawContent, audioSeconds };
+    }
+
+    const publicUrl = proxied.publicUrl;
+    let content = publicUrl;
+    switch (mediaType) {
+        case "image": {
+            const cap = msg.imageMessage?.caption ?? "";
+            content = cap ? `${publicUrl}|||${cap}` : publicUrl;
+            break;
+        }
+        case "video": {
+            const cap = msg.videoMessage?.caption ?? "";
+            content = cap ? `${publicUrl}|||${cap}` : publicUrl;
+            break;
+        }
+        case "document": {
+            const label =
+                msg.documentMessage?.fileName ?? msg.documentMessage?.caption ?? "";
+            content = label ? `${publicUrl}|||${label}` : publicUrl;
+            break;
+        }
+        case "audio":
+        case "sticker":
+        default:
+            content = publicUrl;
+    }
+
+    return { content, audioSeconds };
 }
 
 async function forwardToMarcia(payload: Record<string, unknown>): Promise<void> {
@@ -229,28 +304,45 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
                 .maybeSingle();
 
             if (!existingClient) {
-                let { content: clientContent, media_type: clientMediaType } = extractedClient;
-                if (clientMediaType === "audio" && clientContent.startsWith("http")) {
-                    const proxied = await proxyAudioToStorage(supabaseEarly, clientContent, phone, messageIdClient);
-                    if (proxied) clientContent = proxied;
+                const { content: clientContent, media_type: clientMediaType } = extractedClient;
+                const { content: finalClientContent, audioSeconds: clientAudioSeconds } =
+                    await applyMediaProxy({
+                        supabase: supabaseEarly,
+                        rawContent: clientContent,
+                        mediaType: clientMediaType,
+                        msg: data?.message,
+                        key: data?.key,
+                        telefone: phone,
+                        messageId: messageIdClient,
+                    });
+
+                const clientMetadata: Record<string, unknown> = {
+                    messageId: messageIdClient,
+                    source: "evolution-marcia",
+                };
+                if (clientAudioSeconds !== undefined) {
+                    clientMetadata.audioSeconds = clientAudioSeconds;
                 }
+
                 await supabaseEarly.from("messages").insert({
                     telefone: phone,
                     canal: "festas",
                     sender_type: "cliente",
                     sender_name: pushName || "Cliente",
-                    content: clientContent,
+                    content: finalClientContent,
                     media_type: clientMediaType,
                     created_at: data?.messageTimestamp
                         ? new Date(data.messageTimestamp * 1000).toISOString()
                         : new Date().toISOString(),
-                    metadata: { messageId: messageIdClient, source: "evolution-marcia" },
+                    metadata: clientMetadata,
                 });
             }
         }
 
-        // Encaminhar ao n8n da Márcia para processamento IA (await: evita abort na Vercel)
-        await forwardToMarcia(payload);
+        // Encaminhar ao n8n da Márcia em background — Next.js é o dono da
+        // persistência da mensagem, então não bloqueamos a resposta do webhook
+        // esperando o n8n. `after()` (Next 15+) garante execução pós-response.
+        after(() => forwardToMarcia(payload));
         return NextResponse.json({ status: "ok" });
     }
 
@@ -276,11 +368,15 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
 
     if (existing) return NextResponse.json({ status: "duplicate" });
 
-    let finalContent = rawContent;
-    if (media_type === "audio" && rawContent.startsWith("http")) {
-        const proxied = await proxyAudioToStorage(supabase, rawContent, phone, messageId);
-        if (proxied) finalContent = proxied;
-    }
+    const { content: finalContent, audioSeconds } = await applyMediaProxy({
+        supabase,
+        rawContent,
+        mediaType: media_type,
+        msg: data.message,
+        key: data.key,
+        telefone: phone,
+        messageId,
+    });
 
     // Garantir que o cliente exista no canal festas antes de salvar a mensagem.
     // NÃO incluir nome aqui: quando fromMe=true, data.pushName é o nome da operadora
@@ -299,6 +395,9 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
     // último caso "Festas". Antes era hardcoded "Márcia" — apagava a info real.
     const senderName = data.pushName || instance || "Festas";
 
+    const metadata: Record<string, unknown> = { messageId, source: "evolution-marcia" };
+    if (audioSeconds !== undefined) metadata.audioSeconds = audioSeconds;
+
     await supabase.from("messages").insert({
         telefone: phone,
         canal: "festas",
@@ -309,8 +408,10 @@ async function handleUpsert(payload: Record<string, unknown>): Promise<NextRespo
         created_at: data.messageTimestamp
             ? new Date(data.messageTimestamp * 1000).toISOString()
             : new Date().toISOString(),
-        metadata: { messageId, source: "evolution-marcia" },
+        metadata,
     });
 
+    // fromMe da equipe: não encaminha pro n8n (a IA é a equipe — não responde
+    // ao próprio envio). Mantém o comportamento prévio do webhook.
     return NextResponse.json({ status: "ok" });
 }

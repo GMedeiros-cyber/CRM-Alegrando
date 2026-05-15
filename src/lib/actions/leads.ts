@@ -127,6 +127,13 @@ export type LeadMessage = {
     reactions?: Record<string, string[]>;
     pinned?: boolean;
     replyTo?: { content: string; senderName: string | null } | null;
+    /**
+     * Duração do áudio em segundos vinda do header do WhatsApp (gravada no
+     * metadata pelos webhooks Evolution/Z-API). Permite ao AudioPlayer exibir
+     * a duração correta antes do `<audio>` decodificar o stream — crítico pra
+     * OGG/Opus, que chega com `duration = Infinity` na maioria dos browsers.
+     */
+    audioSeconds?: number;
     _optimistic?: boolean;
 };
 
