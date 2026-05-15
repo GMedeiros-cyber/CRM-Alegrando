@@ -9,6 +9,7 @@ import { ChatWindow } from "./chat-window";
 import { EmojiPickerInput } from "./emoji-picker-input";
 import { NovoLeadModal } from "./novo-lead-modal";
 import { LeadListItem, isGroupTelefone } from "./lead-list-item";
+import { LeadListSkeleton } from "./lead-list-skeleton";
 import { AttachmentPreview } from "./attachment-preview";
 import { AudioPlayer } from "./audio-player";
 import { AudioRecorder } from "./audio-recorder";
@@ -260,6 +261,9 @@ export function ConversasLayout() {
     const [cliente, setCliente] = useState<ClienteDetail | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [loading, setLoading] = useState(true);
+    // Skeleton separado do `loading` (spinner central): aparece só na transição
+    // entre filtros (canal/labels/search) quando o cache anterior seria errado.
+    const [showFilterSkeleton, setShowFilterSkeleton] = useState(false);
     const [loadingCliente, setLoadingCliente] = useState(false);
     const [isSendingMessage, startSendingMessage] = useTransition();
     const [isSavingCliente, startSavingCliente] = useTransition();
@@ -278,6 +282,11 @@ export function ConversasLayout() {
     const [chatMessage, setChatMessage] = useState("");
     const addOptimisticRef = useRef<((content: string, senderName?: string) => void) | null>(null);
     const loadClienteVersionRef = useRef(0);
+    const loadListVersionRef = useRef(0);
+    // Última cache key fetchada com sucesso. Quando muda (canal/labels/search),
+    // o cache anterior é semanticamente errado — próximo fetch mostra skeleton
+    // em vez de stale.
+    const lastFetchedKeyRef = useRef<string | null>(null);
     const agendamentosCache = useRef<{ data: AgendamentoEvent[]; ts: number } | null>(null);
     // Cache em memória para alternância rápida entre conversas/canais já vistos.
     // stale-while-revalidate: usa cache pra renderizar imediato e revalida em background.
@@ -439,27 +448,41 @@ export function ConversasLayout() {
     // Stale-while-revalidate: alternar Alegrando ↔ Festas (ou voltar a uma busca
     // recente) mostra a lista cacheada instantaneamente e revalida em background.
     const loadList = useCallback(async () => {
+        const version = ++loadListVersionRef.current;
         const cacheKey = `${searchTerm || ""}|${canalFiltro}|${[...labelFiltro].sort().join(",")}`;
         const cached = clientesListCache.current.get(cacheKey);
         const hasFreshCache = cached && Date.now() - cached.ts < CLIENTES_LIST_TTL;
 
+        // Cache key da última resposta bem-sucedida. Quando diverge da atual,
+        // o cache anterior é semanticamente errado (canal/tags diferentes) —
+        // mostra skeleton em vez de stale pra evitar a sensação de "carregou
+        // errado mas se conserta".
+        const keyChanged = lastFetchedKeyRef.current !== null
+            && lastFetchedKeyRef.current !== cacheKey;
+
         if (hasFreshCache) {
-            // Cache fresco: renderiza imediato, sem spinner.
             setClientesList(cached.data);
             loadedCountRef.current = cached.data.length;
             setTotalClientes(cached.total);
             setLoading(false);
-        } else if (cached) {
-            // Cache stale: renderiza enquanto revalida em background, sem spinner.
+            setShowFilterSkeleton(false);
+        } else if (cached && !keyChanged) {
+            // SWR clássico: stale da MESMA key, revalida em background.
             setClientesList(cached.data);
             loadedCountRef.current = cached.data.length;
             setTotalClientes(cached.total);
+            setLoading(false);
+            setShowFilterSkeleton(false);
+        } else if (keyChanged) {
+            // Mudança de filtro: skeleton dedicado em vez de stale errado.
+            setShowFilterSkeleton(true);
             setLoading(false);
         } else {
-            // Sem cache: limpa e mostra spinner (comportamento original).
+            // Primeira carga, sem cache: spinner central padrão.
             setClientesList([]);
             setTotalClientes(0);
             setLoading(true);
+            setShowFilterSkeleton(false);
         }
 
         try {
@@ -470,7 +493,10 @@ export function ConversasLayout() {
                 canal: canalFiltro,
                 labelIds: labelFiltro,
             });
-            // Deduplicar por telefone (previne duplicatas caso o backend retorne)
+            // Descarta respostas obsoletas — resolve a race condition em
+            // sequências rápidas de troca de canal/filtro.
+            if (loadListVersionRef.current !== version) return;
+
             const seen = new Set<string>();
             const unique = result.data.filter(c => {
                 const key = String(c.telefone);
@@ -486,10 +512,15 @@ export function ConversasLayout() {
                 total: result.total,
                 ts: Date.now(),
             });
+            lastFetchedKeyRef.current = cacheKey;
         } catch (err) {
+            if (loadListVersionRef.current !== version) return;
             console.error("[conversas] Erro ao carregar lista:", err);
         } finally {
-            setLoading(false);
+            if (loadListVersionRef.current === version) {
+                setLoading(false);
+                setShowFilterSkeleton(false);
+            }
         }
     }, [searchTerm, canalFiltro, labelFiltro]);
 
@@ -1440,6 +1471,8 @@ export function ConversasLayout() {
                         <div className="flex items-center justify-center py-12">
                             <Loader2 className="w-5 h-5 animate-spin text-[#6366F1] dark:text-[#94a3b8]" />
                         </div>
+                    ) : showFilterSkeleton ? (
+                        <LeadListSkeleton count={7} />
                     ) : clientesList.length === 0 ? (
                         <div className="text-center py-12 text-sm text-[#6366F1] dark:text-[#94a3b8]">
                             Nenhum cliente encontrado
