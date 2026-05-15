@@ -24,8 +24,12 @@ interface LabelPickerProps {
     onToggle: (labelId: string, currentlyAssigned: boolean) => void | Promise<void>;
     /** Fechar o popover. */
     onClose: () => void;
-    /** Notificar quando uma label foi criada/editada/deletada (pra refetch externo). */
-    onLabelsChanged?: () => void;
+    /** Aplica criação no state externo (optimistic). */
+    onLabelCreatedLocal: (label: Label) => void;
+    /** Aplica edição no state externo (optimistic). */
+    onLabelUpdatedLocal: (labelId: string, updates: Partial<Label>) => void;
+    /** Aplica exclusão no state externo (optimistic). */
+    onLabelDeletedLocal: (labelId: string) => void;
     /** Toast handler. */
     onToast?: (toast: { type: "success" | "error"; text: string }) => void;
 }
@@ -35,7 +39,9 @@ export function LabelPicker({
     availableLabels,
     onToggle,
     onClose,
-    onLabelsChanged,
+    onLabelCreatedLocal,
+    onLabelUpdatedLocal,
+    onLabelDeletedLocal,
     onToast,
 }: LabelPickerProps) {
     const wrapperRef = useRef<HTMLDivElement>(null);
@@ -70,10 +76,14 @@ export function LabelPicker({
         const res = await createLabel({ name, color: newColor });
         setBusy(false);
         if (res.ok) {
+            // Não temos id antes da resposta do servidor; o create só fica
+            // optimistic *depois* que o servidor confirma. Mas como o resto da
+            // pipeline (cache invalidation, Realtime echo) não dispara reload
+            // agressivo, isso já elimina o flicker.
+            onLabelCreatedLocal(res.label);
             setNewName("");
             setCreating(false);
             onToast?.({ type: "success", text: "Tag criada!" });
-            onLabelsChanged?.();
         } else {
             onToast?.({ type: "error", text: res.error });
         }
@@ -89,29 +99,48 @@ export function LabelPicker({
         if (!editingId) return;
         const name = editName.trim();
         if (!name) return;
+        const previous = availableLabels.find((l) => l.id === editingId);
+        if (!previous) return;
+
+        // 1. Optimistic: aplica no state local imediatamente
+        onLabelUpdatedLocal(editingId, { name, color: editColor });
+        setEditingId(null);
+
+        // 2. Persiste
         setBusy(true);
         const res = await updateLabel({ id: editingId, name, color: editColor });
         setBusy(false);
-        if (res.ok) {
-            setEditingId(null);
-            onToast?.({ type: "success", text: "Tag atualizada!" });
-            onLabelsChanged?.();
-        } else {
+
+        // 3. Reverte se falhar
+        if (!res.ok) {
+            onLabelUpdatedLocal(editingId, { name: previous.name, color: previous.color });
             onToast?.({ type: "error", text: res.error });
+        } else {
+            onToast?.({ type: "success", text: "Tag atualizada!" });
         }
     }
 
     async function handleConfirmDelete() {
         if (!deletingId) return;
+        const previous = availableLabels.find((l) => l.id === deletingId);
+        if (!previous) return;
+
+        // 1. Optimistic: tira da lista
+        onLabelDeletedLocal(deletingId);
+        const deletedId = deletingId;
+        setDeletingId(null);
+
+        // 2. Persiste
         setBusy(true);
-        const res = await deleteLabel(deletingId);
+        const res = await deleteLabel(deletedId);
         setBusy(false);
-        if (res.ok) {
-            setDeletingId(null);
-            onToast?.({ type: "success", text: "Tag excluída." });
-            onLabelsChanged?.();
-        } else {
+
+        // 3. Reverte se falhar — readiciona a label
+        if (!res.ok) {
+            onLabelCreatedLocal(previous);
             onToast?.({ type: "error", text: res.error });
+        } else {
+            onToast?.({ type: "success", text: "Tag excluída." });
         }
     }
 

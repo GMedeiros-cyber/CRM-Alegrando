@@ -146,7 +146,14 @@ export interface ClienteDetailPanelProps {
     // Labels
     leadLabels: LeadLabel[];
     availableLabels: LabelType[];
-    onLabelsChanged: () => void | Promise<void>;
+    /** Toggle optimistic da associação lead↔label (sem refetch). */
+    onLabelToggleLocal: (labelId: string, action: "add" | "remove") => void;
+    /** Optimistic: label criada. */
+    onLabelCreatedLocal: (label: LabelType) => void;
+    /** Optimistic: label editada. */
+    onLabelUpdatedLocal: (labelId: string, updates: Partial<LabelType>) => void;
+    /** Optimistic: label excluída. */
+    onLabelDeletedLocal: (labelId: string) => void;
 }
 
 const ClienteDetailPanelInner = function ClienteDetailPanel({
@@ -192,7 +199,10 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
     onToast,
     leadLabels,
     availableLabels,
-    onLabelsChanged,
+    onLabelToggleLocal,
+    onLabelCreatedLocal,
+    onLabelUpdatedLocal,
+    onLabelDeletedLocal,
 }: ClienteDetailPanelProps) {
     const pendingTasks = tasks.filter((t) => !t.done);
     const doneTasks = tasks.filter((t) => t.done);
@@ -203,21 +213,32 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
     const [labelPickerOpen, setLabelPickerOpen] = useState(false);
 
     async function handleToggleLabel(labelId: string, currentlyAssigned: boolean) {
-        const res = currentlyAssigned
+        const action: "add" | "remove" = currentlyAssigned ? "remove" : "add";
+
+        // 1. Optimistic: aplica UI imediatamente
+        onLabelToggleLocal(labelId, action);
+
+        // 2. Persiste no servidor
+        const res = action === "remove"
             ? await removeLabel({ telefone: cliente.telefone, canal: cliente.canal, labelId })
             : await assignLabel({ telefone: cliente.telefone, canal: cliente.canal, labelId });
-        if (res.ok) {
-            await onLabelsChanged();
-        } else {
+
+        // 3. Reverte em caso de erro
+        if (!res.ok) {
+            onLabelToggleLocal(labelId, action === "remove" ? "add" : "remove");
             onToast({ type: "error", text: res.error });
         }
     }
 
     async function handleRemoveLabel(labelId: string) {
-        const res = await removeLabel({ telefone: cliente.telefone, canal: cliente.canal, labelId });
-        if (res.ok) {
-            await onLabelsChanged();
-        } else {
+        onLabelToggleLocal(labelId, "remove");
+        const res = await removeLabel({
+            telefone: cliente.telefone,
+            canal: cliente.canal,
+            labelId,
+        });
+        if (!res.ok) {
+            onLabelToggleLocal(labelId, "add");
             onToast({ type: "error", text: res.error });
         }
     }
@@ -372,7 +393,9 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                                 availableLabels={availableLabels}
                                 onToggle={handleToggleLabel}
                                 onClose={() => setLabelPickerOpen(false)}
-                                onLabelsChanged={onLabelsChanged}
+                                onLabelCreatedLocal={onLabelCreatedLocal}
+                                onLabelUpdatedLocal={onLabelUpdatedLocal}
+                                onLabelDeletedLocal={onLabelDeletedLocal}
                                 onToast={onToast}
                             />
                         )}
