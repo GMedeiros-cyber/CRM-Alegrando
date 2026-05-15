@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useCallback } from "react";
+import { useState, useEffect, useTransition, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -69,8 +69,10 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     const [dateError, setDateError] = useState<string | null>(null);
     const [saveError, setSaveError] = useState<string | null>(null);
 
-    // Clientes list for the select
+    // Clientes list for the select — lazy load quando o modal abre
     const [clientes, setClientes] = useState<ClienteListItem[]>([]);
+    const [loadingClientes, setLoadingClientes] = useState(false);
+    const clientesLoadedRef = useRef(false);
 
     // Modal state
     const [modalOpen, setModalOpen] = useState(false);
@@ -119,19 +121,30 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     }, [onEventsChange]);
 
     const loadClientes = useCallback(async () => {
+        // Idempotente: uma vez carregado por sessão do componente, reusa.
+        if (clientesLoadedRef.current) return;
         try {
+            setLoadingClientes(true);
             const result = await listClientes({ limit: 1000 });
             setClientes(result.data);
+            clientesLoadedRef.current = true;
+            if (result.total > result.data.length) {
+                console.warn(
+                    `[agenda] ${result.total - result.data.length} clientes não foram ` +
+                    `carregados no dropdown (limit=1000). Considere implementar search async.`
+                );
+            }
         } catch (err) {
             console.error("[agenda] Erro ao carregar clientes:", err);
+        } finally {
+            setLoadingClientes(false);
         }
     }, []);
 
     // Load initial data
     useEffect(() => {
         loadEvents();
-        loadClientes();
-    }, [loadEvents, loadClientes]);
+    }, [loadEvents]);
 
     // Reset confirmingDelete when modal closes or event changes
     useEffect(() => {
@@ -181,8 +194,9 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
             horaFim: "17:00",
             clienteTelefone: "",
         });
+        loadClientes();
         setModalOpen(true);
-    }, []);
+    }, [loadClientes]);
 
     const handleCreateEvent = useCallback(() => {
         openCreateModal();
@@ -202,12 +216,13 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                 setModalMode("view");
                 setSelectedEvent(evt);
                 setEditing(true);
+                loadClientes();
                 setModalOpen(true);
             }
         }
         window.addEventListener("agenda:open-event", handleOpenEvent);
         return () => window.removeEventListener("agenda:open-event", handleOpenEvent);
-    }, [allEvents]);
+    }, [allEvents, loadClientes]);
 
     function handleDateClick(info: DateClickArg) {
         setModalMode("create");
@@ -221,6 +236,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
             horaFim: "17:00",
             clienteTelefone: "",
         });
+        loadClientes();
         setModalOpen(true);
     }
 
@@ -232,6 +248,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
             setSaveError(null);
             setDateError(null);
             setEditing(true);
+            loadClientes();
             setModalOpen(true);
         }
     }
@@ -528,15 +545,24 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             <SelectValue placeholder="Selecione um cliente..." />
                                         </SelectTrigger>
                                         <SelectContent className="bg-[#EEF2FF] dark:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]">
-                                            {clientes.map((cliente) => (
-                                                <SelectItem
-                                                    key={cliente.telefone}
-                                                    value={cliente.telefone}
-                                                >
-                                                    {cliente.nome || cliente.telefone}
-                                                </SelectItem>
-                                            ))}
-                                            <SelectItem value="__none__">— Nenhum —</SelectItem>
+                                            {loadingClientes && clientes.length === 0 ? (
+                                                <div className="flex items-center justify-center py-3 text-sm text-muted-foreground gap-2">
+                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                    Carregando clientes...
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    {clientes.map((cliente) => (
+                                                        <SelectItem
+                                                            key={cliente.telefone}
+                                                            value={cliente.telefone}
+                                                        >
+                                                            {cliente.nome || cliente.telefone}
+                                                        </SelectItem>
+                                                    ))}
+                                                    <SelectItem value="__none__">— Nenhum —</SelectItem>
+                                                </>
+                                            )}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -720,12 +746,21 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                                 <SelectValue placeholder="Selecione um cliente..." />
                                             </SelectTrigger>
                                             <SelectContent className="bg-[#EEF2FF] dark:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]">
-                                                {clientes.map((c) => (
-                                                    <SelectItem key={c.telefone} value={c.telefone}>
-                                                        {c.nome || c.telefone}
-                                                    </SelectItem>
-                                                ))}
-                                                <SelectItem value="__none__">— Nenhum —</SelectItem>
+                                                {loadingClientes && clientes.length === 0 ? (
+                                                    <div className="flex items-center justify-center py-3 text-sm text-muted-foreground gap-2">
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                        Carregando clientes...
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        {clientes.map((c) => (
+                                                            <SelectItem key={c.telefone} value={c.telefone}>
+                                                                {c.nome || c.telefone}
+                                                            </SelectItem>
+                                                        ))}
+                                                        <SelectItem value="__none__">— Nenhum —</SelectItem>
+                                                    </>
+                                                )}
                                             </SelectContent>
                                         </Select>
                                     </div>
