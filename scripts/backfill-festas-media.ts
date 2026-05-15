@@ -86,9 +86,13 @@ function storagePath(mediaType: MediaType, telefone: string, messageId: string, 
   if (mediaType === "audio") {
     return { bucket: "audios", path: `${digits}/bf-${safeId}.${ext}` };
   }
-  const name = fileName ? `${sanitizeName(fileName)}` : `bf-${safeId}.${ext}`;
-  const safeName = name.includes(".") ? name : `${name}.${ext}`;
-  return { bucket: "documents", path: `chat-festas/${digits}/bf-${safeId}-${safeName}` };
+  // Com fileName: bf-{id}-{fileName}  →  idempotência + nome legível
+  // Sem fileName: bf-{id}.{ext}
+  const suffix = fileName
+    ? `-${sanitizeName(fileName)}`
+    : `.${ext}`;
+  const safeSuffix = suffix.includes(".") ? suffix : `${suffix}.${ext}`;
+  return { bucket: "documents", path: `chat-festas/${digits}/bf-${safeId}${safeSuffix}` };
 }
 
 // ─── Evolution API ────────────────────────────────────────────────────────────
