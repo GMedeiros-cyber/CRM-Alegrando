@@ -25,7 +25,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-    getUsers,
+    getUsersList,
     getTaskBoard,
     createTaskList,
     renameTaskList,
@@ -925,7 +925,7 @@ export default function TarefasPage() {
     }, [findListIdOfCard]);
 
     useEffect(() => {
-        Promise.all([getTaskBoard(), getUsers()])
+        Promise.all([getTaskBoard(), getUsersList()])
             .then(([boardData, userData]) => {
                 setLists(boardData);
                 setUsers(userData);

@@ -34,7 +34,44 @@ function normalizeAssignedUserIds(card: { assigned_user_ids?: unknown; assigned_
     return [];
 }
 
-export async function getUsers() {
+/**
+ * Leitura leve da tabela users (sem chamar Clerk). Use isso em qualquer lugar
+ * que só precisa renderizar avatares/nomes — não dispara o pipeline de sync
+ * (Clerk list → DELETE órfãos → UPSERT), que é caro (200-500ms + 2 writes).
+ *
+ * O sync é responsabilidade do app layout (e idealmente, de webhooks do Clerk
+ * pra incremental). Pra forçar sync explicitamente, chame `syncUsersFromClerk`.
+ */
+export async function getUsersList() {
+    await requireAuth();
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+        .from("users")
+        .select("id, name, avatar_url")
+        .order("name", { ascending: true });
+
+    if (error) {
+        console.error("[tasks] Erro ao listar usuários:", error.message);
+        return [];
+    }
+
+    return (data || []).map((row) => ({
+        id: row.id as string,
+        name: (row.name as string) || "Sem nome",
+        avatarUrl: (row.avatar_url as string) || null,
+    }));
+}
+
+/**
+ * Sincroniza a tabela `users` com a Clerk API: lista usuários, remove órfãos
+ * que não existem mais no Clerk, e faz UPSERT do conjunto atual. Caro: chama
+ * API externa (rate-limited) + 2 writes no banco.
+ *
+ * Use no app layout (uma vez por navegação) ou em webhooks do Clerk.
+ * Para leitura simples, prefira `getUsersList`.
+ */
+export async function syncUsersFromClerk() {
     await requireAuth();
     const supabase = createServerSupabaseClient();
 
@@ -97,6 +134,13 @@ export async function getUsers() {
     }
 }
 
+/**
+ * @deprecated Use `getUsersList()` para leitura (leve) ou
+ * `syncUsersFromClerk()` para sincronização (caro). Alias temporário pra
+ * não quebrar consumidores; remover em cleanup futuro.
+ */
+export const getUsers = getUsersList;
+
 // ---------------------------------------------------------
 // GET
 // ---------------------------------------------------------
@@ -111,7 +155,7 @@ export async function getTaskBoard() {
             supabase.from("task_cards").select("*").order("position", { ascending: true }),
         ]);
 
-        const allUsers = await getUsers();
+        const allUsers = await getUsersList();
         const usersById = new Map(allUsers.map((user) => [user.id, user]));
 
         const lists = listsRes.data || [];
