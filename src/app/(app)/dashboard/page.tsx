@@ -26,32 +26,36 @@ const LeadsPorMesChart = dynamic(
         ),
     },
 );
-import { getTotalLeadsByCanal, getEventosDoMes, getFollowupsAtivos, getIaAtivaStats } from "@/lib/actions/dashboard";
+import { getDashboardStats, getFollowupsAtivos } from "@/lib/actions/dashboard";
+import type { DashboardStats } from "@/lib/actions/dashboard";
 import { updateCliente } from "@/lib/actions/leads";
 import { getAgendamentos } from "@/lib/actions/agenda";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
 
+type FollowupItem = {
+    telefone: string;
+    nome: string;
+    ultimoPasseio: string | null;
+    followupDias: number;
+    followupHora: string;
+    followupEnviado: boolean;
+};
+
 // =============================================
 // FOLLOW-UPS ATIVOS CARD
 // =============================================
-function FollowupsAtivosCard({ onDesativado }: { onDesativado?: () => void }) {
-    const [followups, setFollowups] = useState<{
-        telefone: string; nome: string; ultimoPasseio: string | null;
-        followupDias: number; followupHora: string; followupEnviado: boolean;
-    }[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        getFollowupsAtivos().then(data => {
-            setFollowups(data);
-            setLoading(false);
-        });
-    }, []);
-
+function FollowupsAtivosCard({
+    followups,
+    loading,
+    onDesativar,
+}: {
+    followups: FollowupItem[];
+    loading: boolean;
+    onDesativar: (telefone: string) => void;
+}) {
     async function handleDesativar(telefone: string) {
         await updateCliente(telefone, { followupAtivo: false });
-        setFollowups(prev => prev.filter(f => f.telefone !== telefone));
-        onDesativado?.();
+        onDesativar(telefone);
     }
 
     return (
@@ -125,33 +129,33 @@ function FollowupsAtivosCard({ onDesativado }: { onDesativado?: () => void }) {
 // DASHBOARD PAGE
 // =============================================
 export default function DashboardPage() {
-    const [leadsData, setLeadsData] = useState<{
-        total: number;
-        alegrando: number;
-        festas: number;
-    } | null>(null);
+    const [stats, setStats] = useState<DashboardStats | null>(null);
+    const [followupsDetalhe, setFollowupsDetalhe] = useState<FollowupItem[]>([]);
     const [eventosDoMes, setEventosDoMes] = useState<number | null>(null);
-    const [followupsAtivos, setFollowupsAtivos] = useState<number | null>(null);
-    const [iaStats, setIaStats] = useState<{ iaAtiva: number; manual: number; total: number } | null>(null);
     const [proximosEventos, setProximosEventos] = useState<AgendamentoEvent[]>([]);
     const [loadingEventos, setLoadingEventos] = useState(true);
+    const [loadingFollowups, setLoadingFollowups] = useState(true);
 
     const mesAtual = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
     useEffect(() => {
         Promise.all([
-            getTotalLeadsByCanal(),
-            getEventosDoMes(),
+            getDashboardStats(),
             getFollowupsAtivos(),
             getAgendamentos(),
-            getIaAtivaStats(),
-        ]).then(([leads, eventos, followups, agendamentos, ia]) => {
-            setLeadsData(leads);
-            setEventosDoMes(eventos);
-            setFollowupsAtivos(followups.length);
-            setIaStats(ia);
+        ]).then(([s, followups, agendamentos]) => {
+            setStats(s);
+            setFollowupsDetalhe(followups);
+            setLoadingFollowups(false);
 
             const now = new Date();
+            const fimDoMes = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+            const countMes = agendamentos.filter((e) => {
+                const d = new Date(e.start);
+                return d >= now && d <= fimDoMes;
+            }).length;
+            setEventosDoMes(countMes);
+
             const in7Days = new Date();
             in7Days.setDate(now.getDate() + 7);
             const upcoming = agendamentos
@@ -181,10 +185,10 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 <MetricCard
                     title="Total de Leads"
-                    value={leadsData !== null ? leadsData.total : "..."}
+                    value={stats !== null ? stats.leadsTotal : "..."}
                     subtitle={
-                        leadsData !== null
-                            ? `🎒 ${leadsData.alegrando} Alegrando · 🎉 ${leadsData.festas} Festas`
+                        stats !== null
+                            ? `🎒 ${stats.leadsAlegrando} Alegrando · 🎉 ${stats.leadsFestas} Festas`
                             : "Acumulado geral"
                     }
                     icon={Users}
@@ -205,7 +209,7 @@ export default function DashboardPage() {
                 />
                 <MetricCard
                     title="Follow-ups Ativos"
-                    value={followupsAtivos !== null ? followupsAtivos : "..."}
+                    value={stats !== null ? stats.followupsCount : "..."}
                     subtitle="Leads com follow-up programado"
                     icon={Target}
                     gradient="kpi-gradient-emerald"
@@ -214,10 +218,10 @@ export default function DashboardPage() {
                 />
                 <MetricCard
                     title="IA Ativa"
-                    value={iaStats !== null ? iaStats.iaAtiva : "..."}
+                    value={stats !== null ? stats.iaAtiva : "..."}
                     subtitle={
-                        iaStats !== null && iaStats.total > 0
-                            ? `${Math.round((iaStats.iaAtiva / iaStats.total) * 100)}% dos contatos`
+                        stats !== null && stats.leadsTotal > 0
+                            ? `${Math.round((stats.iaAtiva / stats.leadsTotal) * 100)}% dos contatos`
                             : "Contatos atendidos pela Jade"
                     }
                     icon={Bot}
@@ -228,10 +232,10 @@ export default function DashboardPage() {
                 />
                 <MetricCard
                     title="Modo Manual"
-                    value={iaStats !== null ? iaStats.manual : "..."}
+                    value={stats !== null ? stats.iaManual : "..."}
                     subtitle={
-                        iaStats !== null && iaStats.total > 0
-                            ? `${Math.round((iaStats.manual / iaStats.total) * 100)}% dos contatos`
+                        stats !== null && stats.leadsTotal > 0
+                            ? `${Math.round((stats.iaManual / stats.leadsTotal) * 100)}% dos contatos`
                             : "Contatos atendidos pela equipe"
                     }
                     icon={UserCheck}
@@ -245,7 +249,14 @@ export default function DashboardPage() {
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <LeadsPorMesChart />
-                <FollowupsAtivosCard onDesativado={() => setFollowupsAtivos(prev => (prev ?? 1) - 1)} />
+                <FollowupsAtivosCard
+                    followups={followupsDetalhe}
+                    loading={loadingFollowups}
+                    onDesativar={(telefone) => {
+                        setFollowupsDetalhe(prev => prev.filter(f => f.telefone !== telefone));
+                        setStats(prev => prev ? { ...prev, followupsCount: prev.followupsCount - 1 } : prev);
+                    }}
+                />
             </div>
 
             {/* Próximos Eventos */}
