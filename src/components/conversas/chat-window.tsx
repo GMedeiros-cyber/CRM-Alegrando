@@ -166,7 +166,7 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
                 </div>
             );
         }
-        return <AudioPlayer src={url} variant={isSelf ? "sent" : "received"} />;
+        return <AudioPlayer src={url} variant={isSelf ? "sent" : "received"} initialDuration={message.audioSeconds} />;
     }
     if (message.mediaType === "image") {
         const { url, caption } = parseMediaContent(message.content || "");
@@ -242,7 +242,10 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
     if (message.mediaType === "document") {
         const { url, caption } = parseMediaContent(message.content || "");
         if (url.startsWith("http")) {
-            const rawFileName = url.split("/").pop()?.split("?")[0] || "Documento";
+            // Prioriza a caption (fileName real persistido após `|||`) sobre o
+            // último segmento da URL — que vira hash sem extensão pra arquivos
+            // do Storage com prefixo de timestamp.
+            const rawFileName = caption || url.split("/").pop()?.split("?")[0] || "Documento";
             const fileName = (() => {
                 try { return decodeURIComponent(rawFileName); } catch { return rawFileName; }
             })();
