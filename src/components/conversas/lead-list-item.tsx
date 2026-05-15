@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Users } from "lucide-react";
 import type { ClienteListItem } from "@/lib/actions/leads";
 import { cn, isValidPhotoUrl } from "@/lib/utils";
+import { LabelBadge } from "@/components/labels/label-badge";
 
 function isRecentlyCreated(createdAt: Date | null): boolean {
     if (!createdAt) return false;
@@ -119,7 +120,7 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
                     </p>
                 </div>
             </div>
-            <div className="mt-2 flex justify-end gap-1.5 min-h-[20px]">
+            <div className="mt-2 flex flex-wrap justify-end gap-1.5 min-h-[20px]">
                 {item.statusAtendimento === "novo" && isRecentlyCreated(item.createdAt) && (
                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40">
                         NOVO
@@ -138,6 +139,18 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
                 {!isGroup && item.canal === "festas" && (
                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-pink-200 text-pink-800 border border-pink-400">
                         🎉 Festas
+                    </span>
+                )}
+                {/* Tags: limita a 3 visíveis, "+N" no excedente */}
+                {item.labels.slice(0, 3).map((l) => (
+                    <LabelBadge key={l.id} name={l.name} color={l.color} size="sm" />
+                ))}
+                {item.labels.length > 3 && (
+                    <span
+                        title={item.labels.slice(3).map((l) => l.name).join(", ")}
+                        className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-[#C7D2FE] dark:bg-[#3d4a60]/60 text-[#37352F] dark:text-[#cbd5e1] border border-[#A5B4FC] dark:border-[#4a5568]"
+                    >
+                        +{item.labels.length - 3}
                     </span>
                 )}
             </div>

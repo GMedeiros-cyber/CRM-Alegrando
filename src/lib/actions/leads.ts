@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/auth";
 import { z } from "zod";
 import { getSetting } from "@/lib/actions/settings";
 import { applyPlaceholders } from "@/lib/settings_helper";
+import type { LabelColor, LeadLabel } from "@/lib/types/labels";
 
 // =============================================
 // VALIDATION SCHEMAS
@@ -78,6 +79,7 @@ export type ClienteListItem = {
     createdAt: Date | null;
     fotoUrl: string | null;
     canal: string;
+    labels: LeadLabel[];
 };
 
 /** Detalhe completo do cliente selecionado */
@@ -111,6 +113,7 @@ export type ClienteDetail = {
     responsavel: string | null;
     segundoNumero: string | null;
     aniversariante: string | null;
+    labels: LeadLabel[];
 };
 
 /** Mensagem individual do chat */
@@ -153,6 +156,7 @@ export async function listClientes(params?: {
     page?: number;
     limit?: number;
     canal?: string;
+    labelIds?: string[];
 }): Promise<{ data: ClienteListItem[]; total: number }> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
@@ -161,12 +165,14 @@ export async function listClientes(params?: {
     const limit = params?.limit ?? 50;
     const offset = (page - 1) * limit;
     const canal = params?.canal && params.canal !== "todos" ? params.canal : null;
+    const labelIds = params?.labelIds && params.labelIds.length > 0 ? params.labelIds : null;
 
     const { data, error } = await supabase.rpc("list_clientes_by_last_msg", {
         p_canal: canal,
         p_search: search || null,
         p_offset: offset,
         p_limit: limit,
+        p_label_ids: labelIds,
     });
 
     if (error) {
@@ -188,6 +194,7 @@ export async function listClientes(params?: {
         last_message_at: string | null;
         unread_count: number | string | null;
         total_count: number | string | null;
+        labels: Array<{ id: string; name: string; color: string }> | null;
     }>;
 
     const total = rows.length > 0 ? Number(rows[0].total_count || 0) : 0;
@@ -204,6 +211,11 @@ export async function listClientes(params?: {
         createdAt: r.created_at ? new Date(r.created_at) : null,
         fotoUrl: r.foto_url || null,
         canal: r.canal || "alegrando",
+        labels: (r.labels || []).map(l => ({
+            id: l.id,
+            name: l.name,
+            color: l.color as LabelColor,
+        })),
     }));
 
     return { data: mapped, total };
@@ -286,6 +298,23 @@ export async function getClienteByTelefone(
 
     if (error || !data) return null;
 
+    // Labels: usa o id do cliente como FK em lead_labels
+    const { data: labelsRows } = await supabase
+        .from("lead_labels")
+        .select("labels:label_id(id, name, color)")
+        .eq("lead_id", data.id);
+
+    const labels: LeadLabel[] = (labelsRows || [])
+        .map((r) => {
+            // O Supabase JS retorna a relação como objeto único ou array dependendo
+            // da config; normaliza pra unwrappear.
+            const lr = r as { labels: { id: string; name: string; color: string } | Array<{ id: string; name: string; color: string }> | null };
+            const obj = Array.isArray(lr.labels) ? lr.labels[0] : lr.labels;
+            if (!obj) return null;
+            return { id: obj.id, name: obj.name, color: obj.color as LabelColor };
+        })
+        .filter((l): l is LeadLabel => l !== null);
+
     return {
         telefone: String(data.telefone),
         nome: data.nome,
@@ -316,6 +345,7 @@ export async function getClienteByTelefone(
         responsavel: data.responsavel || null,
         segundoNumero: data.segundo_numero || null,
         aniversariante: data.aniversariante || null,
+        labels,
     };
 }
 
