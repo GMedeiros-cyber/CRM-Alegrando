@@ -37,7 +37,7 @@ export default function KanbanPage() {
         type: "success" | "error";
         text: string;
     } | null>(null);
-    const [isPending] = useTransition();
+    const [isRefreshing, startRefresh] = useTransition();
     const [kanbanCanal, setKanbanCanal] = useState<"alegrando" | "festas">(() => {
         if (typeof window !== "undefined") {
             return (localStorage.getItem("crm_kanban_canal") as "alegrando" | "festas") || "alegrando";
@@ -69,6 +69,16 @@ export default function KanbanPage() {
             setMessage({ type: "error", text: `Erro ao carregar dados: ${err}` });
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function loadDataSilent(canal?: string) {
+        try {
+            const data = await getKanbanData(canal ?? kanbanCanal);
+            setColumns(data.columns);
+            setLeads(data.leads);
+        } catch (err) {
+            setMessage({ type: "error", text: `Erro ao atualizar: ${err}` });
         }
     }
 
@@ -110,11 +120,16 @@ export default function KanbanPage() {
                         </button>
                     ))}
                     <button
-                        onClick={() => { setMessage(null); loadData(); }}
-                        disabled={isPending}
+                        onClick={() => {
+                            setMessage(null);
+                            startRefresh(async () => {
+                                await loadDataSilent();
+                            });
+                        }}
+                        disabled={isRefreshing}
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 border-border bg-card text-sm font-medium text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 transition-all"
                     >
-                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+                        <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
                         <span className="hidden sm:inline">Atualizar</span>
                     </button>
                 </div>
@@ -168,7 +183,6 @@ export default function KanbanPage() {
                     <KanbanBoard
                         initialColumns={columns}
                         initialLeads={leads}
-                        onDataChanged={loadData}
                         canal={kanbanCanal}
                     />
                 </div>

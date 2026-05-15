@@ -28,7 +28,6 @@ export type KanbanLead = {
     iaAtiva: boolean;
     createdAt: Date | null;
     tasks: { id: string; text: string; done: boolean }[];
-    tags: { id: string; name: string; color: string }[];
 };
 
 export type KanbanData = {
@@ -54,7 +53,7 @@ export async function getKanbanData(canal: string = "alegrando"): Promise<Kanban
             .order("position", { ascending: true }),
         supabase
             .from("Clientes _WhatsApp")
-            .select("*")
+            .select("id, telefone, nome, status, destino, kanban_column_id, kanban_position, ia_ativa, created_at")
             .eq("canal", canal)
             .order("kanban_position", { ascending: true }),
     ]);
@@ -117,7 +116,6 @@ export async function getKanbanData(canal: string = "alegrando"): Promise<Kanban
                 text: t.text as string,
                 done: t.done as boolean,
             })),
-            tags: [],
         };
     });
 
