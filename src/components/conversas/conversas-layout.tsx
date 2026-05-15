@@ -349,6 +349,7 @@ export function ConversasLayout() {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const loadedCountRef = useRef(0);
     const loadMoreFnRef = useRef<() => void>(() => {});
+    const selectedTelefoneRef = useRef<string | null>(null);
 
     // NOVO badge ticker
     const [tick, setTick] = useState(0);
@@ -504,7 +505,9 @@ export function ConversasLayout() {
         return () => observer.disconnect();
     }, [loadingMore, clientesList.length, totalClientes]);
 
-    // Realtime: atualiza apenas o lead afetado em vez de rebuscar tudo
+    // Realtime: atualiza apenas o lead afetado em vez de rebuscar tudo.
+    // Usa ref para selectedTelefone — assim trocar de lead não recria o canal
+    // WebSocket (evita ~50ms de churn por troca).
     useEffect(() => {
         const channel = supabase
             .channel("conversas-list-realtime")
@@ -527,7 +530,7 @@ export function ConversasLayout() {
                                     : c.lastMessageAt,
                                 unreadCount:
                                     isFromCliente &&
-                                    String(selectedTelefone) !== telefone
+                                    String(selectedTelefoneRef.current) !== telefone
                                         ? (c.unreadCount || 0) + 1
                                         : c.unreadCount,
                             };
@@ -540,7 +543,7 @@ export function ConversasLayout() {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [selectedTelefone]);
+    }, []);
 
     // Load selected cliente — com cache em memória stale-while-revalidate.
     // Cache key = `${telefone}|${canal}`. Re-clicar mesmo cliente na sessão é
@@ -681,6 +684,7 @@ export function ConversasLayout() {
     );
 
     useEffect(() => {
+        selectedTelefoneRef.current = selectedTelefone;
         if (selectedTelefone) loadCliente(selectedTelefone, selectedCanal);
     }, [selectedTelefone, selectedCanal, loadCliente]);
 
