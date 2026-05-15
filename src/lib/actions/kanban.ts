@@ -21,7 +21,6 @@ export type KanbanLead = {
     telefone: string;
     temperatura: string;
     dataEvento: string | null;
-    destino: string | null;
     quantidadeAlunos: number | null;
     kanbanColumnId: string;
     kanbanPosition: number;
@@ -53,15 +52,17 @@ export async function getKanbanData(canal: string = "alegrando"): Promise<Kanban
             .order("position", { ascending: true }),
         supabase
             .from("Clientes _WhatsApp")
-            .select("id, telefone, nome, status, destino, kanban_column_id, kanban_position, ia_ativa, created_at")
+            .select("id, telefone, nome, status, kanban_column_id, kanban_position, ia_ativa, created_at")
             .eq("canal", canal)
             .order("kanban_position", { ascending: true }),
     ]);
 
     if (columnsRes.error) {
+        console.error("[kanban] Falha ao buscar colunas:", columnsRes.error.message);
         return { columns: [], leads: [] };
     }
     if (leadsRes.error) {
+        console.error("[kanban] Falha ao buscar leads:", leadsRes.error.message);
         return { columns: columnsRes.data.map(mapColumn), leads: [] };
     }
 
@@ -105,7 +106,6 @@ export async function getKanbanData(canal: string = "alegrando"): Promise<Kanban
             telefone: String(row.telefone || ""),
             temperatura: (row.status as string) || "frio",
             dataEvento: null,
-            destino: (row.destino as string) || null,
             quantidadeAlunos: null,
             kanbanColumnId: colId,
             kanbanPosition: (row.kanban_position as number) || 0,

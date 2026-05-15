@@ -137,12 +137,6 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                 <>
                     {/* Details */}
             <div className="space-y-1.5" onClick={onClick}>
-                {lead.destino && (
-                    <p className="text-xs text-muted-foreground truncate">
-                        📍 {lead.destino}
-                    </p>
-                )}
-
                 <div className="flex items-center gap-3 text-xs text-muted-foreground/70">
                     {lead.dataEvento && (
                         <span className="flex items-center gap-1">
