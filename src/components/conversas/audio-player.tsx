@@ -8,6 +8,13 @@ interface AudioPlayerProps {
   src: string;
   variant?: "sent" | "received";
   className?: string;
+  /**
+   * Duração em segundos vinda do servidor (ex: metadata.audioSeconds do
+   * Evolution/Z-API). Usado como inicial até o `<audio>` decodificar o header.
+   * Para Opus do WhatsApp, o header costuma chegar sem duration → sem isso,
+   * o player ficava em 0:00 até o usuário apertar play.
+   */
+  initialDuration?: number;
 }
 
 const SPEED_CYCLE = [1, 1.5, 2] as const;
@@ -20,14 +27,15 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function AudioPlayer({ src, variant = "received", className }: AudioPlayerProps) {
+export function AudioPlayer({ src, variant = "received", className, initialDuration }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [duration, setDuration] = useState(initialDuration ?? 0);
   const [speed, setSpeed] = useState<Speed>(1);
   const [isSeeking, setIsSeeking] = useState(false);
+  const infinityFixApplied = useRef(false);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -37,7 +45,30 @@ export function AudioPlayer({ src, variant = "received", className }: AudioPlaye
 
   const onLoadedMetadata = useCallback(() => {
     const audio = audioRef.current;
-    if (audio && isFinite(audio.duration)) setDuration(audio.duration);
+    if (!audio) return;
+    if (isFinite(audio.duration) && audio.duration > 0) {
+      setDuration(audio.duration);
+      return;
+    }
+    // Áudios do WhatsApp (OGG/Opus) chegam frequentemente com `duration =
+    // Infinity` porque o header não traz duração. Truque conhecido: seek pra um
+    // valor enorme força o browser a percorrer o stream e descobrir o tamanho
+    // real. Depois voltamos o currentTime pra 0 e capturamos o `durationchange`.
+    if (infinityFixApplied.current) return;
+    infinityFixApplied.current = true;
+    const onDurationChange = () => {
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        setDuration(audio.duration);
+        audio.currentTime = 0;
+        audio.removeEventListener("durationchange", onDurationChange);
+      }
+    };
+    audio.addEventListener("durationchange", onDurationChange);
+    try {
+      audio.currentTime = 1e101;
+    } catch {
+      audio.removeEventListener("durationchange", onDurationChange);
+    }
   }, []);
 
   const onTimeUpdate = useCallback(() => {
