@@ -83,6 +83,7 @@ export function Sidebar() {
                         <Link
                             key={item.name}
                             href={item.href}
+                            prefetch={true}
                             onClick={() => { if (isMobile) setExpanded(false); }}
                             className={cn(
                                 "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 overflow-hidden",
