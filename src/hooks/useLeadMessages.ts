@@ -120,6 +120,7 @@ export function useLeadMessages(telefone: string, canal: string = "alegrando") {
                         reactions: (newMsg.reactions as Record<string, string[]>) ?? {},
                         pinned: newMsg.pinned === true,
                         replyTo: (meta?.replyTo as { content: string; senderName: string | null }) ?? null,
+                        audioSeconds: typeof meta?.audioSeconds === "number" ? (meta.audioSeconds as number) : undefined,
                     };
 
                     if (isMounted) {
@@ -237,6 +238,7 @@ function mapRows(rows: Record<string, unknown>[]): LeadMessage[] {
             reactions: (row.reactions as Record<string, string[]>) ?? {},
             pinned: row.pinned === true,
             replyTo: (meta?.replyTo as { content: string; senderName: string | null }) ?? null,
+            audioSeconds: typeof meta?.audioSeconds === "number" ? (meta.audioSeconds as number) : undefined,
         };
     });
 }
