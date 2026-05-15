@@ -70,6 +70,9 @@ import {
 } from "@/components/ui/sheet";
 import { cn, isValidPhotoUrl } from "@/lib/utils";
 import { supabase } from "@/lib/supabase/client";
+import { listLabels } from "@/lib/actions/labels";
+import type { Label } from "@/lib/types/labels";
+import { LabelFilterButton } from "@/components/labels/label-filter-button";
 
 // =============================================
 // STATUS STYLES
@@ -286,6 +289,8 @@ export function ConversasLayout() {
     const [sortOrder, setSortOrder] = useState<string>("recent");
     const [canalFiltro, setCanalFiltro] = useState<"todos" | "alegrando" | "festas">("todos");
     const [iaFiltro, setIaFiltro] = useState<"todos" | "ia_ativa" | "manual">("todos");
+    const [labelFiltro, setLabelFiltro] = useState<string[]>([]);
+    const [availableLabels, setAvailableLabels] = useState<Label[]>([]);
     useEffect(() => {
         const stored = localStorage.getItem("crm_canal_filtro");
         if (stored === "todos" || stored === "alegrando" || stored === "festas") {
@@ -303,6 +308,16 @@ export function ConversasLayout() {
                 setIaFiltro(storedIa);
             }
         }
+        // Restaura filtro de labels do localStorage
+        const storedLabels = localStorage.getItem("crm_label_filtro");
+        if (storedLabels) {
+            try {
+                const parsed = JSON.parse(storedLabels);
+                if (Array.isArray(parsed)) setLabelFiltro(parsed.filter((x): x is string => typeof x === "string"));
+            } catch { /* localStorage corrompido, ignora */ }
+        }
+        // Carrega labels disponíveis
+        listLabels().then(setAvailableLabels);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     useEffect(() => {
@@ -403,7 +418,7 @@ export function ConversasLayout() {
     // Stale-while-revalidate: alternar Alegrando ↔ Festas (ou voltar a uma busca
     // recente) mostra a lista cacheada instantaneamente e revalida em background.
     const loadList = useCallback(async () => {
-        const cacheKey = `${searchTerm || ""}|${canalFiltro}`;
+        const cacheKey = `${searchTerm || ""}|${canalFiltro}|${[...labelFiltro].sort().join(",")}`;
         const cached = clientesListCache.current.get(cacheKey);
         const hasFreshCache = cached && Date.now() - cached.ts < CLIENTES_LIST_TTL;
 
@@ -427,7 +442,13 @@ export function ConversasLayout() {
         }
 
         try {
-            const result = await listClientes({ search: searchTerm || undefined, page: 1, limit: CLIENTES_LIMIT, canal: canalFiltro });
+            const result = await listClientes({
+                search: searchTerm || undefined,
+                page: 1,
+                limit: CLIENTES_LIMIT,
+                canal: canalFiltro,
+                labelIds: labelFiltro,
+            });
             // Deduplicar por telefone (previne duplicatas caso o backend retorne)
             const seen = new Set<string>();
             const unique = result.data.filter(c => {
@@ -449,7 +470,7 @@ export function ConversasLayout() {
         } finally {
             setLoading(false);
         }
-    }, [searchTerm, canalFiltro]);
+    }, [searchTerm, canalFiltro, labelFiltro]);
 
     // Load more clientes (next page)
     const loadMore = useCallback(async () => {
@@ -461,6 +482,7 @@ export function ConversasLayout() {
                 page: nextPage,
                 limit: CLIENTES_LIMIT,
                 canal: canalFiltro,
+                labelIds: labelFiltro,
             });
             setClientesList(prev => {
                 const existentes = new Set(prev.map(c => String(c.telefone)));
@@ -475,7 +497,7 @@ export function ConversasLayout() {
         } finally {
             setLoadingMore(false);
         }
-    }, [searchTerm, canalFiltro]);
+    }, [searchTerm, canalFiltro, labelFiltro]);
 
     useEffect(() => {
         loadList();
@@ -544,6 +566,37 @@ export function ConversasLayout() {
             supabase.removeChannel(channel);
         };
     }, []);
+
+    // Realtime: sync de labels (criar/editar/deletar) e lead_labels (atribuição).
+    // Renomear/excluir uma label reflete no filtro e nos badges sem refresh.
+    useEffect(() => {
+        const channel = supabase
+            .channel("labels-sync-realtime")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "labels" },
+                async () => {
+                    const fresh = await listLabels();
+                    setAvailableLabels(fresh);
+                    // Lista de leads também precisa relê-las pra mostrar nomes/cores novos.
+                    clientesListCache.current.clear();
+                    await loadList();
+                }
+            )
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "lead_labels" },
+                async () => {
+                    clientesListCache.current.clear();
+                    await loadList();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [loadList]);
 
     // Load selected cliente — com cache em memória stale-while-revalidate.
     // Cache key = `${telefone}|${canal}`. Re-clicar mesmo cliente na sessão é
@@ -1085,6 +1138,17 @@ export function ConversasLayout() {
             startSavingCliente={(fn) => startSavingCliente(fn)}
             startRunningAction={(fn) => startRunningAction(fn)}
             onToast={setToast}
+            leadLabels={cliente.labels}
+            availableLabels={availableLabels}
+            onLabelsChanged={async () => {
+                // Invalida cache do cliente atual e refaz fetch — propaga labels novos.
+                clienteCache.current.delete(`${selectedTelefone}|${selectedCanal}`);
+                clientesListCache.current.clear();
+                const fresh = await listLabels();
+                setAvailableLabels(fresh);
+                await loadCliente(selectedTelefone, selectedCanal);
+                await loadList();
+            }}
         />
     ) : (
         <div className="flex flex-col items-center justify-center h-full text-center px-6">
@@ -1125,16 +1189,26 @@ export function ConversasLayout() {
                         />
                     </div>
 
-                    <div className="mt-2 flex items-center justify-between">
+                    <div className="mt-2 flex items-center justify-between gap-2">
                         <span className="text-[10px] font-semibold text-[#6366F1] dark:text-[#94a3b8] uppercase tracking-wider">
                             Ordenar por:
                         </span>
-                        <SortFilterDropdown
-                            sortOrder={sortOrder}
-                            iaFiltro={iaFiltro}
-                            onSortChange={(v) => { setIaFiltro("todos"); setSortOrder(v); }}
-                            onIaChange={(v) => setIaFiltro(v)}
-                        />
+                        <div className="flex items-center gap-1.5">
+                            <SortFilterDropdown
+                                sortOrder={sortOrder}
+                                iaFiltro={iaFiltro}
+                                onSortChange={(v) => { setIaFiltro("todos"); setSortOrder(v); }}
+                                onIaChange={(v) => setIaFiltro(v)}
+                            />
+                            <LabelFilterButton
+                                selectedIds={labelFiltro}
+                                onChange={(ids) => {
+                                    setLabelFiltro(ids);
+                                    localStorage.setItem("crm_label_filtro", JSON.stringify(ids));
+                                }}
+                                availableLabels={availableLabels}
+                            />
+                        </div>
                     </div>
 
                     {/* Canal filter */}

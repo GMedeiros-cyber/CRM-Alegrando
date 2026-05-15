@@ -44,6 +44,11 @@ import type { ClienteDetail, PasseioHistorico } from "@/lib/actions/leads";
 import { isGroupTelefone } from "./lead-list-item";
 import type { KanbanColumn } from "@/lib/actions/kanban";
 import type { AgendamentoEvent } from "@/lib/actions/agenda";
+import { Tag } from "lucide-react";
+import { LabelBadge } from "@/components/labels/label-badge";
+import { LabelPicker } from "@/components/labels/label-picker";
+import { assignLabel, removeLabel } from "@/lib/actions/labels";
+import type { Label as LabelType, LeadLabel } from "@/lib/types/labels";
 
 export type TaskItem = { id: string; text: string; done: boolean };
 
@@ -137,6 +142,11 @@ export interface ClienteDetailPanelProps {
     startSavingCliente: (fn: () => Promise<void>) => void;
     startRunningAction: (fn: () => Promise<void>) => void;
     onToast: (toast: { type: "success" | "error"; text: string }) => void;
+
+    // Labels
+    leadLabels: LeadLabel[];
+    availableLabels: LabelType[];
+    onLabelsChanged: () => void | Promise<void>;
 }
 
 const ClienteDetailPanelInner = function ClienteDetailPanel({
@@ -180,12 +190,37 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
     startSavingCliente,
     startRunningAction,
     onToast,
+    leadLabels,
+    availableLabels,
+    onLabelsChanged,
 }: ClienteDetailPanelProps) {
     const pendingTasks = tasks.filter((t) => !t.done);
     const doneTasks = tasks.filter((t) => t.done);
     const sortedTasks = [...pendingTasks, ...doneTasks];
     const allTasksDone = tasks.length > 0 && pendingTasks.length === 0;
     const isGroup = isGroupTelefone(cliente.telefone);
+
+    const [labelPickerOpen, setLabelPickerOpen] = useState(false);
+
+    async function handleToggleLabel(labelId: string, currentlyAssigned: boolean) {
+        const res = currentlyAssigned
+            ? await removeLabel({ telefone: cliente.telefone, canal: cliente.canal, labelId })
+            : await assignLabel({ telefone: cliente.telefone, canal: cliente.canal, labelId });
+        if (res.ok) {
+            await onLabelsChanged();
+        } else {
+            onToast({ type: "error", text: res.error });
+        }
+    }
+
+    async function handleRemoveLabel(labelId: string) {
+        const res = await removeLabel({ telefone: cliente.telefone, canal: cliente.canal, labelId });
+        if (res.ok) {
+            await onLabelsChanged();
+        } else {
+            onToast({ type: "error", text: res.error });
+        }
+    }
 
     const [participants, setParticipants] = useState<{
         name: string | null;
@@ -307,6 +342,59 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                     />
                 </div>
             )}
+
+            {/* Tags */}
+            <div className="rounded-xl border border-[#C7D2FE] dark:border-[#3d4a60]/60 bg-[#EEF2FF]/50 dark:bg-[#1e2536]/40 p-3">
+                <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-brand-400/80" />
+                        <span className="text-xs font-bold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wide">
+                            Tags
+                        </span>
+                        {leadLabels.length > 0 && (
+                            <span className="text-[10px] bg-[#E0E7FF] dark:bg-[#2d3347]/80 text-[#6366F1] dark:text-[#94a3b8] px-1.5 py-0.5 rounded-full font-medium">
+                                {leadLabels.length}
+                            </span>
+                        )}
+                    </div>
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setLabelPickerOpen((v) => !v)}
+                            className="flex items-center gap-1 text-[10px] font-semibold text-brand-400 hover:text-brand-300 transition-colors"
+                        >
+                            <Plus className="w-3 h-3" />
+                            Tag
+                        </button>
+                        {labelPickerOpen && (
+                            <LabelPicker
+                                assignedIds={leadLabels.map((l) => l.id)}
+                                availableLabels={availableLabels}
+                                onToggle={handleToggleLabel}
+                                onClose={() => setLabelPickerOpen(false)}
+                                onLabelsChanged={onLabelsChanged}
+                                onToast={onToast}
+                            />
+                        )}
+                    </div>
+                </div>
+                {leadLabels.length === 0 ? (
+                    <p className="text-[11px] italic text-[#9B9A97] dark:text-[#64748b]">
+                        Sem tags. Clique em &quot;+ Tag&quot; para atribuir.
+                    </p>
+                ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                        {leadLabels.map((l) => (
+                            <LabelBadge
+                                key={l.id}
+                                name={l.name}
+                                color={l.color}
+                                onRemove={() => handleRemoveLabel(l.id)}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
 
             {/* Fields */}
             <div className="space-y-3">
