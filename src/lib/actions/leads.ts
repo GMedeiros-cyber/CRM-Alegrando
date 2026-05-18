@@ -520,28 +520,6 @@ export async function sendManualFollowup(telefone: string): Promise<{ success: b
     return { success: true, type: tipo };
 }
 
-/**
- * Busca os destinos únicos disponíveis na tabela documents.
- */
-export async function getAvailableDestinations(): Promise<string[]> {
-    await requireAuth();
-    const supabase = createServerSupabaseClient();
-    const { data, error } = await supabase
-        .from("documents")
-        .select("tipo_passeio")
-        .not("tipo_passeio", "is", null)
-        .order("tipo_passeio", { ascending: true });
-
-    if (error || !data) return [];
-
-    const unique = [...new Set(
-        data
-            .map(r => r.tipo_passeio as string)
-            .filter(v => v && v.trim() !== "")
-    )];
-    return unique.sort();
-}
-
 // =============================================
 // HISTÓRICO DE PASSEIOS
 // =============================================

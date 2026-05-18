@@ -1,26 +1,8 @@
 ﻿"use server";
 
-import { createClerkClient } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-
-type UserRow = {
-    id: string;
-    clerk_id: string | null;
-    name: string | null;
-    email?: string | null;
-    avatar_url: string | null;
-};
-
-
-function clerkUserName(user: { firstName?: string | null; lastName?: string | null }): string {
-    return [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || "Sem nome";
-}
-
-function clerkUserEmail(user: { primaryEmailAddress?: { emailAddress: string } | null; emailAddresses?: { emailAddress: string }[] }): string {
-    return user.primaryEmailAddress?.emailAddress || user.emailAddresses?.[0]?.emailAddress || "";
-}
 
 function normalizeAssignedUserIds(card: { assigned_user_ids?: unknown; assigned_user_id?: string }): string[] {
     if (Array.isArray(card.assigned_user_ids)) {
@@ -40,7 +22,7 @@ function normalizeAssignedUserIds(card: { assigned_user_ids?: unknown; assigned_
  * (Clerk list → DELETE órfãos → UPSERT), que é caro (200-500ms + 2 writes).
  *
  * O sync é responsabilidade do app layout (e idealmente, de webhooks do Clerk
- * pra incremental). Pra forçar sync explicitamente, chame `syncUsersFromClerk`.
+ * pra incremental).
  */
 export async function getUsersList() {
     await requireAuth();
@@ -62,84 +44,6 @@ export async function getUsersList() {
         avatarUrl: (row.avatar_url as string) || null,
     }));
 }
-
-/**
- * Sincroniza a tabela `users` com a Clerk API: lista usuários, remove órfãos
- * que não existem mais no Clerk, e faz UPSERT do conjunto atual. Caro: chama
- * API externa (rate-limited) + 2 writes no banco.
- *
- * Use no app layout (uma vez por navegação) ou em webhooks do Clerk.
- * Para leitura simples, prefira `getUsersList`.
- */
-export async function syncUsersFromClerk() {
-    await requireAuth();
-    const supabase = createServerSupabaseClient();
-
-    try {
-        const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-        const clerkUsers = await clerk.users.getUserList({ limit: 100 });
-
-        const validClerkIds = clerkUsers.data.map((user) => user.id).filter(Boolean);
-
-        if (validClerkIds.length > 0) {
-            const notInFilter = `(${validClerkIds.map((id: string) => `"${id}"`).join(",")})`;
-            await supabase.from("users").delete().not("clerk_id", "in", notInFilter);
-        } else {
-            await supabase.from("users").delete().not("clerk_id", "is", null);
-        }
-
-        const upsertRows = clerkUsers.data.map((user) => ({
-            clerk_id: user.id,
-            name: clerkUserName(user),
-            email: clerkUserEmail(user),
-            avatar_url: user.imageUrl || null,
-            updated_at: new Date().toISOString(),
-        }));
-
-        if (upsertRows.length > 0) {
-            await supabase.from("users").upsert(upsertRows, { onConflict: "clerk_id" });
-        }
-
-        if (validClerkIds.length === 0) {
-            return [];
-        }
-
-        const { data } = await supabase
-            .from("users")
-            .select("id, clerk_id, name, avatar_url")
-            .in("clerk_id", validClerkIds);
-
-        const rowByClerkId = new Map((data || []).map((row: UserRow) => [row.clerk_id, row]));
-
-        return validClerkIds
-            .map((clerkId: string) => rowByClerkId.get(clerkId))
-            .filter((row): row is UserRow => Boolean(row))
-            .map((row) => ({
-                id: row.id,
-                name: row.name || "Sem nome",
-                avatarUrl: row.avatar_url,
-            }));
-    } catch (err) {
-        console.error("[tasks] Erro ao sincronizar users com Clerk:", err);
-
-        const { data } = await supabase
-            .from("users")
-            .select("id, name, avatar_url");
-
-        return (data || []).map((user) => ({
-            id: user.id as string,
-            name: (user.name as string) || "Sem nome",
-            avatarUrl: user.avatar_url as string | null,
-        }));
-    }
-}
-
-/**
- * @deprecated Use `getUsersList()` para leitura (leve) ou
- * `syncUsersFromClerk()` para sincronização (caro). Alias temporário pra
- * não quebrar consumidores; remover em cleanup futuro.
- */
-export const getUsers = getUsersList;
 
 // ---------------------------------------------------------
 // GET
@@ -366,8 +270,4 @@ export async function assignMultipleTaskCard(cardId: string, userIds: string[]):
         console.error("[tasks] Erro ao atribuir multiplos usuarios:", err);
         return { success: false };
     }
-}
-
-export async function assignTaskCard(cardId: string, userId: string | null) {
-    return assignMultipleTaskCard(cardId, userId ? [userId] : []);
 }

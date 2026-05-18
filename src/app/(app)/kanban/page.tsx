@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 
-// Lazy: @dnd-kit + lead-detail-sheet pesam ~80KB+ — adia até a página abrir.
+// Lazy: @dnd-kit pesa ~80KB+ — adia até a página abrir.
 const KanbanBoard = dynamic(
     () => import("@/components/kanban/kanban-board").then((m) => ({ default: m.KanbanBoard })),
     {
