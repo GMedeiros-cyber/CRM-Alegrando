@@ -29,35 +29,6 @@ const sendMessageSchema = z.object({
 });
 
 /**
- * Server Action: dispara o webhook do n8n para envio via WhatsApp.
- */
-export async function sendMessageToN8n(payload: {
-    telefone: string;
-    mensagem: string;
-    sender_name: string;
-}) {
-    const webhookUrl = process.env.N8N_WEBHOOK_URL;
-    if (!webhookUrl) {
-        throw new Error("N8N_WEBHOOK_URL não configurada.");
-    }
-
-    await requireAuth();
-
-    const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-        console.error(`[sendMessageToN8n] n8n respondeu ${response.status}`);
-        throw new Error("Falha ao enviar mensagem via n8n");
-    }
-
-    return { success: true };
-}
-
-/**
  * Envio unificado de mensagem de texto.
  */
 export async function sendMessage(payload: {
