@@ -1113,16 +1113,21 @@ export function ConversasLayout() {
     // ========= File select handler (preview before send) =========
     function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
         const files = Array.from(e.target.files || []);
-        const maxSize = 10 * 1024 * 1024;
+        const FILE_MAX = 10 * 1024 * 1024;
+        const VIDEO_MAX = 16 * 1024 * 1024;
         for (const file of files) {
-            if (file.size > maxSize) {
-                setToast({ type: "error", text: `"${file.name}" é muito grande. Máximo 10MB.` });
+            const isVideo = file.type.startsWith("video/");
+            const limit = isVideo ? VIDEO_MAX : FILE_MAX;
+            if (file.size > limit) {
+                setToast({ type: "error", text: `"${file.name}" é muito grande. Máximo ${limit / 1024 / 1024}MB.` });
                 return;
             }
         }
         const newAttachments = files.map(file => ({
             file,
-            preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+            preview: file.type.startsWith("image/") || file.type.startsWith("video/")
+                ? URL.createObjectURL(file)
+                : null,
             caption: "",
             id: Date.now().toString() + Math.random().toString(36).slice(2),
         }));
@@ -1729,7 +1734,7 @@ export function ConversasLayout() {
                                     ref={fileInputRef}
                                     type="file"
                                     multiple
-                                    accept="image/*,application/pdf,.doc,.docx"
+                                    accept="image/*,video/*,application/pdf,.doc,.docx"
                                     className="hidden"
                                     onChange={handleFileSelect}
                                 />
@@ -1820,7 +1825,7 @@ export function ConversasLayout() {
             {showNewLeadModal && (
                 <NovoLeadModal
                     onClose={() => { setShowNewLeadModal(false); }}
-                    onCreated={(tel) => { loadList(); handleSelectCliente(tel); }}
+                    onCreated={(tel, canal) => { loadList(); handleSelectCliente(tel, canal); }}
                     onToast={setToast}
                 />
             )}

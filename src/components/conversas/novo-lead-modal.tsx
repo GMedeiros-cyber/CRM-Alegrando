@@ -10,7 +10,7 @@ import { Phone, User, UserRound, UserPlus, Plus, X, Loader2, Cake } from "lucide
 
 interface NovoLeadModalProps {
     onClose: () => void;
-    onCreated: (telefone: string) => void;
+    onCreated: (telefone: string, canal: string) => void;
     onToast: (toast: { type: "success" | "error"; text: string }) => void;
 }
 
@@ -70,7 +70,7 @@ export function NovoLeadModal({ onClose, onCreated, onToast }: NovoLeadModalProp
                 setNewLeadPhoto(null);
                 onToast({ type: "success", text: "Lead criado com sucesso!" });
                 onClose();
-                onCreated(tel);
+                onCreated(tel, newLeadCanal);
             } catch (err) {
                 onToast({ type: "error", text: `Erro ao criar lead: ${err}` });
             }

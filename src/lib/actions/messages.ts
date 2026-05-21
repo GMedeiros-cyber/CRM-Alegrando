@@ -5,6 +5,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
     sendWhatsAppMessage,
     sendWhatsAppImage,
+    sendWhatsAppVideo,
     sendWhatsAppDocument,
     sendWhatsAppAudio,
     sendWhatsAppReaction,
@@ -19,6 +20,7 @@ import {
 import { z } from "zod";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_VIDEO_SIZE = 16 * 1024 * 1024; // 16MB — limite confiável do WhatsApp para vídeo
 const MAX_AUDIO_SIZE = 16 * 1024 * 1024; // 16MB — limite do WhatsApp para áudio
 
 const sendMessageSchema = z.object({
@@ -153,8 +155,10 @@ export async function sendFileMessage(
         return { success: false, error: "Arquivo e telefone são obrigatórios." };
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-        return { success: false, error: "Arquivo muito grande. Máximo 10MB." };
+    const isVideoFile = file.type.startsWith("video/");
+    const sizeLimit = isVideoFile ? MAX_VIDEO_SIZE : MAX_FILE_SIZE;
+    if (file.size > sizeLimit) {
+        return { success: false, error: `Arquivo muito grande. Máximo ${sizeLimit / 1024 / 1024}MB.` };
     }
 
     const supabase = createServerSupabaseClient();
@@ -221,6 +225,8 @@ export async function sendFileMessage(
                 zapiResult = { success: false, error: String(err) };
             }
         }
+    } else if (isVideoFile) {
+        zapiResult = await sendWhatsAppVideo(String(telefone), publicUrl, caption);
     } else if (isImage) {
         zapiResult = await sendWhatsAppImage(String(telefone), publicUrl, caption);
     } else {
@@ -235,7 +241,11 @@ export async function sendFileMessage(
 
     // Persist in messages table
     // Format: "url|||caption" so the chat can display both
-    const mediaType = file.type.startsWith("image/") ? "image" : "document";
+    const mediaType = file.type.startsWith("image/")
+        ? "image"
+        : file.type.startsWith("video/")
+            ? "video"
+            : "document";
     const storedContent = caption.trim() ? `${publicUrl}|||${caption.trim()}` : publicUrl;
     const { error: dbErr } = await supabase.from("messages").insert({
         telefone: String(telefone),
