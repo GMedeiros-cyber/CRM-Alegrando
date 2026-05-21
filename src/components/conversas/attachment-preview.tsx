@@ -37,8 +37,11 @@ const AttachmentPreviewInner = function AttachmentPreview({
                             className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-[#191918]/30 text-[#191918] dark:text-white flex items-center justify-center hover:bg-black/80 transition-colors">
                             <X className="w-3 h-3" />
                         </button>
-                        {att.preview ? (
+                        {att.preview && att.file.type.startsWith("image/") ? (
                             <img src={att.preview} alt={att.file.name}
+                                className="w-full h-28 object-cover" />
+                        ) : att.preview && att.file.type.startsWith("video/") ? (
+                            <video src={att.preview} muted
                                 className="w-full h-28 object-cover" />
                         ) : (
                             <div className="w-full h-28 flex flex-col items-center justify-center gap-1 bg-[#F7F7F5] dark:bg-[#0f1829]/60">

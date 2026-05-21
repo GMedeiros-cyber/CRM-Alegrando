@@ -68,6 +68,52 @@ export async function sendWhatsAppImage(
 }
 
 /**
+ * Envia vídeo via WhatsApp usando endpoint /send-video da Z-API.
+ * Aceita URL pública do vídeo (o Z-API faz o fetch).
+ */
+export async function sendWhatsAppVideo(
+  telefone: string,
+  videoUrl: string,
+  caption?: string
+): Promise<{ success: boolean; error?: string }> {
+  const instance = process.env.ZAPI_INSTANCE;
+  const token = process.env.ZAPI_TOKEN;
+  const clientToken = process.env.ZAPI_CLIENT_TOKEN;
+
+  if (!instance || !token || !clientToken) {
+    console.error("[ZAPI-VIDEO] Variáveis ausentes");
+    return { success: false, error: "Variáveis Z-Api não configuradas" };
+  }
+
+  const phone = formatPhoneZapi(telefone);
+  if (!phone || phone.length < 10) {
+    return { success: false, error: "Telefone inválido: " + telefone };
+  }
+
+  console.log("[ZAPI-VIDEO] Enviando para:", phone, "url:", videoUrl);
+
+  try {
+    const response = await fetchWithTimeout(`${zapiBase(instance, token)}/send-video`, {
+      method: "POST",
+      headers: buildZapiHeaders(clientToken),
+      body: JSON.stringify({ phone, video: videoUrl, caption: caption || "" }),
+    });
+
+    const body = await response.text();
+    if (!response.ok) {
+      console.error(`[ZAPI-VIDEO] Erro ${response.status}:`, body);
+      return { success: false, error: `Z-Api video ${response.status}: ${body}` };
+    }
+
+    console.log("[ZAPI-VIDEO] Sucesso:", body);
+    return { success: true };
+  } catch (err) {
+    console.error("[ZAPI-VIDEO] Exceção:", err);
+    return { success: false, error: String(err) };
+  }
+}
+
+/**
  * Envia áudio via WhatsApp usando endpoint /send-audio da Z-API.
  * Aceita URL pública do áudio (o Z-API faz o fetch).
  */
