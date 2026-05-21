@@ -18,6 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
     Plus,
     Pencil,
@@ -300,11 +301,11 @@ export function PasseiosPanel() {
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             placeholder="Buscar passeio..."
-                            className="pl-9"
+                            className="pl-9 border-2 border-[#A5B4FC]/40 dark:border-[#3d4a60] hover:border-[#6366F1]/60 dark:hover:border-[#A5B4FC]/60 transition-colors"
                         />
                     </div>
                     <Select value={filterCat} onValueChange={setFilterCat}>
-                        <SelectTrigger className="w-[180px]">
+                        <SelectTrigger className="w-[180px] border-2 border-[#A5B4FC]/40 dark:border-[#3d4a60] hover:border-[#6366F1]/60 dark:hover:border-[#A5B4FC]/60 transition-colors">
                             <SelectValue placeholder="Categoria" />
                         </SelectTrigger>
                         <SelectContent>
@@ -321,6 +322,7 @@ export function PasseiosPanel() {
                         size="sm"
                         onClick={() => setSortOrder((o) => (o === "az" ? "za" : "az"))}
                         title={sortOrder === "az" ? "A → Z" : "Z → A"}
+                        className="border-2 border-[#A5B4FC]/40 dark:border-[#3d4a60] hover:border-[#6366F1]/60 dark:hover:border-[#A5B4FC]/60 transition-colors"
                     >
                         {sortOrder === "az" ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />}
                         {sortOrder === "az" ? "A → Z" : "Z → A"}
@@ -723,6 +725,82 @@ function CategoriasManager({
     );
 }
 
+const EMOJI_OPTIONS = [
+    // Natureza e animais
+    "🌿", "🌲", "🌳", "🦁", "🦒", "🐘", "🐠", "🦋", "🌻", "🌾",
+    // Cultura e história
+    "🏛️", "🎭", "🖼️", "📚", "🏺", "⚗️", "🔬", "🔭",
+    // Diversão e temáticos
+    "🎢", "🎡", "🎠", "🎪", "🎯", "🏊", "⛺",
+    // Comida e fazenda
+    "🌽", "🐄", "🐔", "🥕", "☕",
+    // Outros úteis
+    "🏫", "🚌", "🎒", "📍", "⭐", "🎓",
+];
+
+function IconePicker({
+    value,
+    onChange,
+}: {
+    value: string;
+    onChange: (v: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    title="Escolher ícone"
+                    className="w-10 h-10 flex items-center justify-center rounded-lg border-2 border-[#A5B4FC] dark:border-[#3d4a60] bg-[#EEF2FF] dark:bg-[#1e2536] text-xl hover:border-[#6366F1] dark:hover:border-[#A5B4FC] transition-colors shrink-0"
+                >
+                    {value || "📍"}
+                </button>
+            </PopoverTrigger>
+            <PopoverContent
+                align="start"
+                className="w-64 p-3 bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60] rounded-xl shadow-lg"
+            >
+                {/* Grid de emojis pré-definidos */}
+                <div className="grid grid-cols-8 gap-1 mb-3">
+                    {EMOJI_OPTIONS.map((emoji) => (
+                        <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => {
+                                onChange(emoji);
+                                setOpen(false);
+                            }}
+                            className={cn(
+                                "w-7 h-7 flex items-center justify-center rounded-md text-base hover:bg-[#C7D2FE] dark:hover:bg-[#2d3a4f] transition-colors",
+                                value === emoji && "bg-[#C7D2FE] dark:bg-[#2d3a4f] ring-1 ring-[#6366F1]"
+                            )}
+                            title={emoji}
+                        >
+                            {emoji}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Fallback: emoji customizado */}
+                <div className="border-t border-[#C7D2FE] dark:border-[#3d4a60] pt-2">
+                    <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider font-semibold">
+                        Ou cole um emoji
+                    </p>
+                    <Input
+                        value={value}
+                        onChange={(e) => onChange(e.target.value)}
+                        placeholder="📍"
+                        maxLength={4}
+                        className="h-8 text-center text-lg bg-[#F7F7F5] dark:bg-[#0f1829] border-[#A5B4FC] dark:border-[#4a5568]"
+                    />
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 function CategoriaEditRow({
     draftNome,
     draftIcone,
@@ -745,13 +823,7 @@ function CategoriaEditRow({
     return (
         <div className="flex flex-col gap-2 px-2 py-2 rounded-md bg-card border border-[#C7D2FE] dark:border-[#3d4a60]">
             <div className="flex items-center gap-2">
-                <Input
-                    value={draftIcone}
-                    onChange={(e) => setDraftIcone(e.target.value)}
-                    placeholder="📍"
-                    className="w-16 text-center text-lg"
-                    maxLength={4}
-                />
+                <IconePicker value={draftIcone} onChange={setDraftIcone} />
                 <Input
                     value={draftNome}
                     onChange={(e) => setDraftNome(e.target.value)}
