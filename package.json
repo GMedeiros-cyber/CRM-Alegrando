@@ -10,7 +10,8 @@
     "backfill:pics": "tsx scripts/backfill-profile-pictures.ts",
     "backfill:audios": "tsx scripts/backfill-audio-storage.ts",
     "backfill:messages": "tsx scripts/backfill-messages.ts",
-    "backfill:festas-media": "tsx scripts/backfill-festas-media.ts"
+    "backfill:festas-media": "tsx scripts/backfill-festas-media.ts",
+    "backfill:embeddings": "tsx scripts/backfill-embeddings.ts"
   },
   "dependencies": {
     "@clerk/localizations": "^3.37.0",
