@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useCallback, useRef } from "react";
+import { useState, useEffect, useTransition, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -12,13 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TimePicker } from "@/components/ui/time-picker";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
     Dialog,
     DialogContent,
@@ -36,6 +30,9 @@ import {
     Loader2,
     RefreshCw,
     FileText,
+    Search,
+    Check,
+    ChevronsUpDown,
 } from "lucide-react";
 import {
     getAgendamentos,
@@ -47,6 +44,118 @@ import type { AgendamentoEvent } from "@/lib/actions/agenda";
 import { listClientes } from "@/lib/actions/leads";
 import type { ClienteListItem } from "@/lib/actions/leads";
 import { format } from "date-fns";
+
+// =============================================
+// CLIENTE COMBOBOX (Popover + busca embutida)
+// Definido em nível de módulo: se fosse declarado dentro de AgendaCalendar,
+// cada tecla digitada recriaria o componente e o input perderia o foco.
+// =============================================
+interface ClienteComboboxProps {
+    value: string;
+    onChange: (v: string) => void;
+    open: boolean;
+    setOpen: (v: boolean) => void;
+    clientes: ClienteListItem[];
+    clientesFiltrados: ClienteListItem[];
+    loadingClientes: boolean;
+    buscaCliente: string;
+    setBuscaCliente: (v: string) => void;
+}
+
+function ClienteCombobox({
+    value,
+    onChange,
+    open,
+    setOpen,
+    clientes,
+    clientesFiltrados,
+    loadingClientes,
+    buscaCliente,
+    setBuscaCliente,
+}: ClienteComboboxProps) {
+    const selecionado = clientes.find((c) => c.telefone === value);
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    className="w-full flex items-center justify-between h-10 px-3 rounded-xl text-sm bg-[#F7F7F5] dark:bg-[#0f1829] border border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white hover:border-[#6366F1] dark:hover:border-[#A5B4FC] transition-colors"
+                >
+                    <span className={selecionado ? "text-[#191918] dark:text-white" : "text-muted-foreground"}>
+                        {selecionado ? (selecionado.nome || selecionado.telefone) : "Selecione um cliente..."}
+                    </span>
+                    <ChevronsUpDown className="w-4 h-4 text-muted-foreground shrink-0 ml-2" />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent
+                className="w-[--radix-popover-trigger-width] p-0 bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60] rounded-xl shadow-lg"
+                align="start"
+            >
+                {/* Input de busca */}
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-[#C7D2FE] dark:border-[#3d4a60]">
+                    <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <input
+                        autoFocus
+                        type="text"
+                        value={buscaCliente}
+                        onChange={(e) => setBuscaCliente(e.target.value)}
+                        placeholder="Buscar por nome ou telefone..."
+                        className="flex-1 bg-transparent text-sm text-[#191918] dark:text-white placeholder:text-muted-foreground outline-none"
+                    />
+                </div>
+
+                {/* Lista */}
+                <div className="max-h-52 overflow-y-auto py-1">
+                    {loadingClientes && clientes.length === 0 ? (
+                        <div className="flex items-center justify-center py-4 gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Carregando...
+                        </div>
+                    ) : clientesFiltrados.length === 0 ? (
+                        <div className="py-4 text-center text-sm text-muted-foreground">
+                            Nenhum cliente encontrado
+                        </div>
+                    ) : (
+                        <>
+                            {clientesFiltrados.map((c) => (
+                                <button
+                                    key={c.telefone}
+                                    type="button"
+                                    onClick={() => {
+                                        onChange(c.telefone);
+                                        setBuscaCliente("");
+                                        setOpen(false);
+                                    }}
+                                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-[#191918] dark:text-white hover:bg-[#C7D2FE]/40 dark:hover:bg-[#2d3a4f] transition-colors text-left"
+                                >
+                                    <span>{c.nome || c.telefone}</span>
+                                    {value === c.telefone && (
+                                        <Check className="w-3.5 h-3.5 text-[#6366F1] shrink-0" />
+                                    )}
+                                </button>
+                            ))}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onChange("__none__");
+                                    setBuscaCliente("");
+                                    setOpen(false);
+                                }}
+                                className="w-full flex items-center justify-between px-3 py-2 text-sm text-muted-foreground hover:bg-[#C7D2FE]/40 dark:hover:bg-[#2d3a4f] transition-colors"
+                            >
+                                — Nenhum —
+                                {value === "__none__" && (
+                                    <Check className="w-3.5 h-3.5 text-[#6366F1] shrink-0" />
+                                )}
+                            </button>
+                        </>
+                    )}
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
 
 // =============================================
 // COMPONENT
@@ -73,6 +182,9 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
     const [clientes, setClientes] = useState<ClienteListItem[]>([]);
     const [loadingClientes, setLoadingClientes] = useState(false);
     const clientesLoadedRef = useRef(false);
+    const [buscaCliente, setBuscaCliente] = useState("");
+    const [openClienteCreate, setOpenClienteCreate] = useState(false);
+    const [openClienteEdit, setOpenClienteEdit] = useState(false);
 
     // Modal state
     const [modalOpen, setModalOpen] = useState(false);
@@ -125,7 +237,7 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         if (clientesLoadedRef.current) return;
         try {
             setLoadingClientes(true);
-            const result = await listClientes({ limit: 1000 });
+            const result = await listClientes({ limit: 1000, canal: "alegrando" });
             setClientes(result.data);
             clientesLoadedRef.current = true;
             if (result.total > result.data.length) {
@@ -141,14 +253,29 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
         }
     }, []);
 
+    // Lista filtrada pela busca de texto (nome ou telefone) — em memória, sem nova query.
+    const clientesFiltrados = useMemo(() => {
+        const termo = buscaCliente.toLowerCase().trim();
+        if (!termo) return clientes;
+        return clientes.filter((c) =>
+            (c.nome || "").toLowerCase().includes(termo) ||
+            String(c.telefone).includes(termo)
+        );
+    }, [clientes, buscaCliente]);
+
     // Load initial data
     useEffect(() => {
         loadEvents();
     }, [loadEvents]);
 
-    // Reset confirmingDelete when modal closes or event changes
+    // Reset confirmingDelete e busca quando modal fecha ou evento muda
     useEffect(() => {
-        if (!modalOpen) setConfirmingDelete(false);
+        if (!modalOpen) {
+            setConfirmingDelete(false);
+            setBuscaCliente("");
+            setOpenClienteCreate(false);
+            setOpenClienteEdit(false);
+        }
     }, [modalOpen]);
 
     // Inicializa editForm quando evento selecionado
@@ -535,36 +662,17 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                         <School className="w-3 h-3" />
                                         Vincular a um Cliente
                                     </Label>
-                                    <Select
+                                    <ClienteCombobox
                                         value={form.clienteTelefone}
-                                        onValueChange={(v) =>
-                                            setForm((f) => ({ ...f, clienteTelefone: v }))
-                                        }
-                                    >
-                                        <SelectTrigger className="bg-[#F7F7F5] dark:bg-[#0f1829] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white rounded-xl">
-                                            <SelectValue placeholder="Selecione um cliente..." />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-[#EEF2FF] dark:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]">
-                                            {loadingClientes && clientes.length === 0 ? (
-                                                <div className="flex items-center justify-center py-3 text-sm text-muted-foreground gap-2">
-                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                    Carregando clientes...
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    {clientes.map((cliente) => (
-                                                        <SelectItem
-                                                            key={cliente.telefone}
-                                                            value={cliente.telefone}
-                                                        >
-                                                            {cliente.nome || cliente.telefone}
-                                                        </SelectItem>
-                                                    ))}
-                                                    <SelectItem value="__none__">— Nenhum —</SelectItem>
-                                                </>
-                                            )}
-                                        </SelectContent>
-                                    </Select>
+                                        onChange={(v) => setForm((f) => ({ ...f, clienteTelefone: v }))}
+                                        open={openClienteCreate}
+                                        setOpen={setOpenClienteCreate}
+                                        clientes={clientes}
+                                        clientesFiltrados={clientesFiltrados}
+                                        loadingClientes={loadingClientes}
+                                        buscaCliente={buscaCliente}
+                                        setBuscaCliente={setBuscaCliente}
+                                    />
                                 </div>
 
                                 {/* Erro de data */}
@@ -738,31 +846,17 @@ export function AgendaCalendar({ onEventsChange }: AgendaCalendarProps) {
                                             <School className="w-3 h-3" />
                                             Vincular a um Cliente
                                         </Label>
-                                        <Select
+                                        <ClienteCombobox
                                             value={editForm.clienteTelefone}
-                                            onValueChange={(v) => setEditForm((f) => ({ ...f, clienteTelefone: v }))}
-                                        >
-                                            <SelectTrigger className="bg-[#F7F7F5] dark:bg-[#0f1829] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white rounded-xl">
-                                                <SelectValue placeholder="Selecione um cliente..." />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-[#EEF2FF] dark:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]">
-                                                {loadingClientes && clientes.length === 0 ? (
-                                                    <div className="flex items-center justify-center py-3 text-sm text-muted-foreground gap-2">
-                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                        Carregando clientes...
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        {clientes.map((c) => (
-                                                            <SelectItem key={c.telefone} value={c.telefone}>
-                                                                {c.nome || c.telefone}
-                                                            </SelectItem>
-                                                        ))}
-                                                        <SelectItem value="__none__">— Nenhum —</SelectItem>
-                                                    </>
-                                                )}
-                                            </SelectContent>
-                                        </Select>
+                                            onChange={(v) => setEditForm((f) => ({ ...f, clienteTelefone: v }))}
+                                            open={openClienteEdit}
+                                            setOpen={setOpenClienteEdit}
+                                            clientes={clientes}
+                                            clientesFiltrados={clientesFiltrados}
+                                            loadingClientes={loadingClientes}
+                                            buscaCliente={buscaCliente}
+                                            setBuscaCliente={setBuscaCliente}
+                                        />
                                     </div>
                                     {dateError && (
                                         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm">
