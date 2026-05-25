@@ -106,7 +106,7 @@ function ClienteCombobox({
                 </div>
 
                 {/* Lista */}
-                <div className="max-h-52 overflow-y-auto py-1">
+                <div className="max-h-52 overflow-y-scroll overscroll-contain py-1">
                     {loadingClientes && clientes.length === 0 ? (
                         <div className="flex items-center justify-center py-4 gap-2 text-sm text-muted-foreground">
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />

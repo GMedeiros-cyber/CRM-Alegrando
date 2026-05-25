@@ -163,44 +163,7 @@
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #4a5568; }
 [data-theme="dark"] ::-webkit-scrollbar-track { background: #0f1829; }
 
-/* FullCalendar */
-[data-theme="dark"] .fc {
-  --fc-border-color: #3d4a60;
-  --fc-neutral-bg-color: #1e2536;
-  --fc-list-event-hover-bg-color: #2d3347;
-  --fc-page-bg-color: #0f1829;
-  background-color: #0f1829;
-}
-[data-theme="dark"] .fc-toolbar-title { color: #ffffff !important; }
-[data-theme="dark"] .fc-button {
-  background-color: #1e2536 !important;
-  border-color: #3d4a60 !important;
-  color: #ffffff !important;
-}
-[data-theme="dark"] .fc-button:hover { background-color: #2d3347 !important; }
-[data-theme="dark"] .fc-col-header-cell {
-  background-color: #1e2536 !important;
-  border-color: #3d4a60 !important;
-}
-[data-theme="dark"] .fc-col-header-cell-cushion { color: #cbd5e1 !important; }
-[data-theme="dark"] .fc-daygrid-day {
-  background-color: #0f1829 !important;
-  border-color: #3d4a60 !important;
-}
-[data-theme="dark"] .fc-daygrid-day-number { color: #ffffff !important; }
-[data-theme="dark"] .fc-day-other .fc-daygrid-day-number { color: #64748b !important; }
-[data-theme="dark"] .fc-timegrid-slot { border-color: #3d4a60 !important; }
-[data-theme="dark"] .fc-timegrid-slot-label-cushion { color: #94a3b8 !important; }
-[data-theme="dark"] .fc-popover {
-  background-color: #1e2536 !important;
-  border-color: #3d4a60 !important;
-}
-[data-theme="dark"] .fc-popover-header {
-  background-color: #2d3347 !important;
-  color: #ffffff !important;
-}
-[data-theme="dark"] td,
-[data-theme="dark"] th { border-color: #3d4a60 !important; }
+/* FullCalendar — estilos unificados na seção FULLCALENDAR UNIVERSAL (abaixo) */
 
 @keyframes gradientShift {
   0% { background-position: 0% 50%; }
@@ -381,31 +344,83 @@ main > div {
 }
 
 /* ============================================
-   FULLCALENDAR DARK MODE OVERRIDES
+   FULLCALENDAR — UNIVERSAL (claro e escuro)
+   Mesmo layout/tipografia nos dois temas; só as
+   paletas mudam via variáveis CSS.
    ============================================ */
-:root:not([data-theme="dark"]) .agenda-dark-calendar {
-  --fc-border-color: #C7D2FE;
-  --fc-page-bg-color: transparent;
-  --fc-neutral-bg-color: #EEF2FF;
-  --fc-list-event-hover-bg-color: #C7D2FE;
-  --fc-today-bg-color: rgba(239, 85, 68, 0.08);
-  --fc-highlight-color: rgba(239, 85, 68, 0.12);
-  --fc-non-business-color: rgba(15, 23, 42, 0.5);
-  --fc-event-text-color: #ffffff;
+
+/* Paleta — tema claro (default) */
+.agenda-dark-calendar {
+  --cal-bg:               #F7F7F5;
+  --cal-cell-bg:          transparent;
+  --cal-header-bg:        #EEF2FF;
+  --cal-border:           #C7D2FE;
+  --cal-text:             #191918;
+  --cal-text-muted:       #6366F1;
+  --cal-text-other:       #A5B4FC;
+  --cal-btn-bg:           #EEF2FF;
+  --cal-btn-border:       #A5B4FC;
+  --cal-btn-text:         #37352F;
+  --cal-btn-hover-bg:     #C7D2FE;
+  --cal-btn-hover-border: #6366F1;
+  --cal-btn-active-bg:    #6366F1;
+  --cal-btn-active-text:  #ffffff;
+  --cal-day-hover-bg:     #E0E7FF;
+  --cal-today-bg:         rgba(239, 85, 68, 0.06);
+  --cal-accent:           #ef5544;
+  --cal-event-text:       #ffffff;
+  --cal-popover-bg:       #EEF2FF;
+  --cal-popover-header:   #C7D2FE;
+}
+
+/* Paleta — tema escuro */
+[data-theme="dark"] .agenda-dark-calendar {
+  --cal-bg:               #0f1829;
+  --cal-cell-bg:          #0f1829;
+  --cal-header-bg:        #1e2536;
+  --cal-border:           #3d4a60;
+  --cal-text:             #ffffff;
+  --cal-text-muted:       #cbd5e1;
+  --cal-text-other:       #64748b;
+  --cal-btn-bg:           #1e2536;
+  --cal-btn-border:       #3d4a60;
+  --cal-btn-text:         #ffffff;
+  --cal-btn-hover-bg:     #2d3347;
+  --cal-btn-hover-border: #4a5568;
+  --cal-btn-active-bg:    #6366F1;
+  --cal-btn-active-text:  #ffffff;
+  --cal-day-hover-bg:     #1e2536;
+  --cal-today-bg:         rgba(239, 85, 68, 0.08);
+  --cal-accent:           #ef5544;
+  --cal-event-text:       #ffffff;
+  --cal-popover-bg:       #1e2536;
+  --cal-popover-header:   #2d3347;
+}
+
+/* Variáveis nativas do FullCalendar */
+.agenda-dark-calendar {
+  --fc-border-color:              var(--cal-border);
+  --fc-page-bg-color:             var(--cal-bg);
+  --fc-neutral-bg-color:          var(--cal-header-bg);
+  --fc-today-bg-color:            var(--cal-today-bg);
+  --fc-list-event-hover-bg-color: var(--cal-btn-hover-bg);
+  --fc-event-text-color:          var(--cal-event-text);
+  background-color: var(--cal-bg);
 }
 
 /* Toolbar */
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-toolbar-title {
-  color: #191918 !important;
+.agenda-dark-calendar .fc-toolbar-title {
+  color: var(--cal-text) !important;
   font-family: var(--font-display) !important;
   font-weight: 700 !important;
   font-size: 1.25rem !important;
 }
 
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button {
-  background-color: #EEF2FF !important;
-  border-color: #A5B4FC !important;
-  color: #37352F !important;
+/* Botões */
+.agenda-dark-calendar .fc-button {
+  background-color: var(--cal-btn-bg) !important;
+  border-color: var(--cal-btn-border) !important;
+  color: var(--cal-btn-text) !important;
   font-size: 0.8rem !important;
   font-weight: 600 !important;
   padding: 0.4rem 0.8rem !important;
@@ -414,144 +429,144 @@ main > div {
   transition: all 0.15s !important;
 }
 
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button:hover {
-  background-color: #C7D2FE !important;
-  border-color: #6366F1 !important;
-  color: #ffffff !important;
+.agenda-dark-calendar .fc-button:hover {
+  background-color: var(--cal-btn-hover-bg) !important;
+  border-color: var(--cal-btn-hover-border) !important;
+  color: var(--cal-btn-text) !important;
 }
 
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button-active,
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button:active {
-  background-color: #ef5544 !important;
-  border-color: #ef5544 !important;
-  color: #ffffff !important;
+.agenda-dark-calendar .fc-button-active,
+.agenda-dark-calendar .fc-button:focus,
+.agenda-dark-calendar .fc-button-primary:not(:disabled).fc-button-active {
+  background-color: var(--cal-btn-active-bg) !important;
+  border-color: var(--cal-btn-active-bg) !important;
+  color: var(--cal-btn-active-text) !important;
+  box-shadow: none !important;
 }
 
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button-group .fc-button {
+/* Grupos de botões (toolbar) — pílulas unidas */
+.agenda-dark-calendar .fc-button-group .fc-button {
   border-radius: 0 !important;
 }
-
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button-group .fc-button:first-child {
+.agenda-dark-calendar .fc-button-group .fc-button:first-child {
   border-radius: 0.75rem 0 0 0.75rem !important;
 }
-
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-button-group .fc-button:last-child {
+.agenda-dark-calendar .fc-button-group .fc-button:last-child {
   border-radius: 0 0.75rem 0.75rem 0 !important;
 }
 
-/* Day headers */
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-col-header-cell {
-  background-color: #EEF2FF !important;
-  border-color: #C7D2FE !important;
+/* Header dias da semana */
+.agenda-dark-calendar .fc-col-header-cell {
+  background-color: var(--cal-header-bg) !important;
+  border-color: var(--cal-border) !important;
 }
 
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-col-header-cell-cushion {
-  color: #9B9A97 !important;
-  font-weight: 600 !important;
+.agenda-dark-calendar .fc-col-header-cell-cushion {
+  color: var(--cal-text-muted) !important;
   font-size: 0.75rem !important;
+  font-weight: 600 !important;
   text-transform: uppercase !important;
   letter-spacing: 0.05em !important;
+  text-decoration: none !important;
   padding: 0.6rem 0 !important;
 }
 
-/* Day cells */
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-daygrid-day {
-  background-color: transparent !important;
-  border-color: #C7D2FE !important;
+/* Células dos dias */
+.agenda-dark-calendar .fc-daygrid-day {
+  background-color: var(--cal-cell-bg) !important;
+  border-color: var(--cal-border) !important;
   cursor: pointer !important;
   transition: background-color 0.15s ease !important;
 }
 
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-daygrid-day:hover {
-  background-color: #E0E7FF !important;
+.agenda-dark-calendar .fc-daygrid-day:hover {
+  background-color: var(--cal-day-hover-bg) !important;
 }
 
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-daygrid-day:hover .fc-daygrid-day-number {
-  color: #ef5544 !important;
-}
-
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-daygrid-day-number {
-  color: #191918 !important;
+.agenda-dark-calendar .fc-daygrid-day-number {
+  color: var(--cal-text) !important;
   font-weight: 500 !important;
+  text-decoration: none !important;
   font-size: 0.85rem !important;
   padding: 0.5rem !important;
 }
 
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-day-today .fc-daygrid-day-number {
-  color: #ef5544 !important;
+.agenda-dark-calendar .fc-day-today .fc-daygrid-day-number {
+  color: var(--cal-accent) !important;
   font-weight: 800 !important;
 }
 
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-day-other .fc-daygrid-day-number {
-  color: #A5B4FC !important;
+.agenda-dark-calendar .fc-day-other .fc-daygrid-day-number {
+  color: var(--cal-text-other) !important;
 }
 
-/* Events */
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-event {
-  border-radius: 0.5rem !important;
+/* Bordas gerais */
+.agenda-dark-calendar table,
+.agenda-dark-calendar td,
+.agenda-dark-calendar th {
+  border-color: var(--cal-border) !important;
+}
+
+/* Timegrid */
+.agenda-dark-calendar .fc-timegrid-slot {
+  border-color: var(--cal-border) !important;
+}
+
+.agenda-dark-calendar .fc-timegrid-slot-label-cushion,
+.agenda-dark-calendar .fc-timegrid-axis-cushion {
+  color: var(--cal-text-muted) !important;
+  font-size: 0.7rem !important;
+}
+
+/* Eventos */
+.agenda-dark-calendar .fc-event {
   border-width: 0 !important;
   border-left-width: 3px !important;
   padding: 2px 6px !important;
   font-size: 0.75rem !important;
   font-weight: 600 !important;
   cursor: pointer !important;
-  transition: transform 0.1s, box-shadow 0.1s !important;
 }
 
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-event:hover {
-  transform: translateY(-1px) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+/* Título de evento — truncar quando longo */
+.agenda-dark-calendar .fc-event-title {
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
 }
 
-/* "more" link */
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-daygrid-more-link {
-  color: #ef5544 !important;
+.agenda-dark-calendar .fc-daygrid-event {
+  overflow: hidden !important;
+  border-radius: 0.375rem !important;
+}
+
+/* Link "+N mais" */
+.agenda-dark-calendar .fc-daygrid-more-link {
+  color: var(--cal-accent) !important;
   font-weight: 700 !important;
   font-size: 0.7rem !important;
 }
 
-/* Time grid */
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-timegrid-slot {
-  border-color: #C7D2FE !important;
+/* Popover "+N mais" */
+.agenda-dark-calendar .fc-popover {
+  background-color: var(--cal-popover-bg) !important;
+  border-color: var(--cal-border) !important;
+  border-radius: 0.75rem !important;
+  overflow: hidden !important;
 }
 
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-timegrid-slot-label-cushion {
-  color: #6366F1 !important;
-  font-size: 0.7rem !important;
+.agenda-dark-calendar .fc-popover-header {
+  background-color: var(--cal-popover-header) !important;
+  color: var(--cal-text) !important;
 }
 
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-timegrid-axis-cushion {
-  color: #6366F1 !important;
-}
-
-/* Now indicator */
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-timegrid-now-indicator-line {
-  border-color: #ef5544 !important;
+/* Indicador de "agora" */
+.agenda-dark-calendar .fc-timegrid-now-indicator-line {
+  border-color: rgba(239, 85, 68, 0.7) !important;
   border-width: 2px !important;
 }
-
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-timegrid-now-indicator-arrow {
-  border-color: #ef5544 !important;
-}
-
-/* Popover */
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-popover {
-  background-color: #EEF2FF !important;
-  border-color: #A5B4FC !important;
-  border-radius: 0.75rem !important;
-  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15) !important;
-}
-
-:root:not([data-theme="dark"]) .agenda-dark-calendar .fc-popover-header {
-  background-color: #C7D2FE !important;
-  color: #191918 !important;
-  border-radius: 0.75rem 0.75rem 0 0 !important;
-}
-
-/* Table borders */
-:root:not([data-theme="dark"]) .agenda-dark-calendar table,
-:root:not([data-theme="dark"]) .agenda-dark-calendar td,
-:root:not([data-theme="dark"]) .agenda-dark-calendar th {
-  border-color: #C7D2FE !important;
+.agenda-dark-calendar .fc-timegrid-now-indicator-arrow {
+  border-color: rgba(239, 85, 68, 0.7) !important;
 }
 
