@@ -15,10 +15,11 @@
  */
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { proxyAudioToStorage } from "@/lib/whatsapp/audio-storage";
+import { proxyMediaFromZapi } from "@/lib/whatsapp/media-storage";
 import { verifyZapiWebhook } from "@/lib/webhook-auth";
 import { fetchWithTimeout } from "@/lib/fetch-utils";
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Tipos de evento que representam uma mensagem real chegando.
 // Callbacks de status (DeliveryCallback, ReadCallback, etc.) são ignorados.
@@ -30,6 +31,48 @@ const MESSAGE_EVENT_TYPES = new Set([
 
 type MediaType = "text" | "image" | "document" | "audio" | "video"
                | "sticker" | "location" | "contact";
+
+/**
+ * Tipos de mídia que devem ser persistidos no Supabase Storage.
+ * text/location/contact não têm arquivo. Documentos no fallback
+ * (content "📎 ...") são excluídos pelo guard startsWith("http").
+ */
+const PROXYABLE_MEDIA = new Set(["audio", "image", "video", "document", "sticker"]);
+
+/**
+ * Persiste a mídia no Storage e retorna o content remontado (preservando
+ * caption no formato url|||caption). Se não for mídia proxiável, ou o proxy
+ * falhar, retorna o content original inalterado.
+ */
+async function persistMediaContent(
+  supabase: SupabaseClient,
+  rawContent: string,
+  mediaType: string,
+  telefone: string,
+  messageId: string,
+): Promise<string> {
+  if (!PROXYABLE_MEDIA.has(mediaType)) return rawContent;
+
+  // Separa url e caption (formato "url|||caption" para image/video/document)
+  const sepIndex = rawContent.indexOf("|||");
+  const url = sepIndex >= 0 ? rawContent.slice(0, sepIndex) : rawContent;
+  const caption = sepIndex >= 0 ? rawContent.slice(sepIndex + 3) : "";
+
+  if (!url.startsWith("http")) return rawContent;
+
+  const proxied = await proxyMediaFromZapi(
+    supabase,
+    url,
+    telefone,
+    messageId,
+    mediaType as "audio" | "image" | "video" | "document" | "sticker",
+  );
+
+  if (!proxied) return rawContent; // falhou — mantém URL original
+
+  // Remonta preservando caption
+  return caption ? `${proxied.publicUrl}|||${caption}` : proxied.publicUrl;
+}
 
 interface ZApiTextPayload {
   message: string;
@@ -367,13 +410,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         .maybeSingle();
 
       if (!existingGroupMsg) {
-        let content = rawContent;
-        if (media_type === "audio" && rawContent.startsWith("http")) {
-          const proxied = await proxyAudioToStorage(
-            supabase, rawContent, groupId, payload.messageId
-          );
-          if (proxied) content = proxied;
-        }
+        const content = await persistMediaContent(supabase, rawContent, media_type, groupId, payload.messageId);
 
         await supabase.from("messages").insert({
           telefone: groupId,
@@ -406,13 +443,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           ? new Date(payload.momment).toISOString()
           : new Date().toISOString();
 
-        let content = rawContent;
-        if (media_type === "audio" && rawContent.startsWith("http")) {
-          const proxied = await proxyAudioToStorage(
-            supabase, rawContent, groupId, payload.messageId
-          );
-          if (proxied) content = proxied;
-        }
+        const content = await persistMediaContent(supabase, rawContent, media_type, groupId, payload.messageId);
 
         await supabase.from("messages").insert({
           telefone: groupId,
@@ -593,13 +624,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         if (recentDup) {
           console.log(`[ZAPI-PROXY] Dedup multi-device: conteúdo idêntico em 2s para ${realPhone}. Ignorando.`);
         } else {
-          let content = rawContent;
-          if (media_type === "audio" && rawContent.startsWith("http")) {
-            const proxied = await proxyAudioToStorage(
-              supabase, rawContent, realPhone, payload.messageId
-            );
-            if (proxied) content = proxied;
-          }
+          const content = await persistMediaContent(supabase, rawContent, media_type, realPhone, payload.messageId);
 
           supabase.from("messages").insert({
             telefone: realPhone,
@@ -675,13 +700,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             ? new Date(payload.momment).toISOString()
             : new Date().toISOString();
 
-          let content = rawContent;
-          if (media_type === "audio" && rawContent.startsWith("http")) {
-            const proxied = await proxyAudioToStorage(
-              supabase, rawContent, phone, payload.messageId
-            );
-            if (proxied) content = proxied;
-          }
+          const content = await persistMediaContent(supabase, rawContent, media_type, phone, payload.messageId);
 
           const { error: insertErr } = await supabase.from("messages").insert({
             telefone: phone,
