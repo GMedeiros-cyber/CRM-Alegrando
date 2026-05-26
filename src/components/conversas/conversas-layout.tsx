@@ -280,7 +280,8 @@ export function ConversasLayout() {
 
     // Chat
     const [chatMessage, setChatMessage] = useState("");
-    const addOptimisticRef = useRef<((content: string, senderName?: string) => void) | null>(null);
+    const addOptimisticRef = useRef<((content: string, senderName?: string, mediaType?: import("@/lib/actions/leads").LeadMessage["mediaType"]) => string) | null>(null);
+    const removeOptimisticRef = useRef<((id: string) => void) | null>(null);
     const loadClienteVersionRef = useRef(0);
     const loadListVersionRef = useRef(0);
     // Última cache key fetchada com sucesso. Quando muda (canal/labels/search),
@@ -1182,21 +1183,40 @@ export function ConversasLayout() {
         const toSend = attachments;
         setIsSendingFile(true);
         setAttachments([]); // limpa preview imediatamente para impedir reenvio
+
+        const senderName = cliente.canal === "festas" ? "Festas" : "Alegrando";
+
         (async () => {
             try {
                 for (const att of toSend) {
+                    // Optimistic APENAS para vídeo (upload lento, 2-5s). Imagem/documento
+                    // sobem rápido e o Realtime cobre. Guarda o id pra remover
+                    // explicitamente na confirmação: o content (blob URL) nunca bate
+                    // com a URL real do Storage, então o dedup por content não cobriria.
+                    let optimisticId: string | null = null;
+                    if (att.file.type.startsWith("video/") && att.preview) {
+                        const content = att.caption.trim()
+                            ? `${att.preview}|||${att.caption.trim()}`
+                            : att.preview;
+                        optimisticId = addOptimisticRef.current?.(content, senderName, "video") ?? null;
+                    }
+
                     try {
                         const formData = new FormData();
                         formData.append("file", att.file);
                         formData.append("telefone", cliente.telefone);
-                        formData.append("sender_name", cliente.canal === "festas" ? "Festas" : "Alegrando");
+                        formData.append("sender_name", senderName);
                         formData.append("caption", att.caption);
                         formData.append("canal", cliente.canal ?? "alegrando");
                         const res = await sendFileMessage(formData);
+                        // Remove o optimistic (sucesso ou falha). A mensagem real
+                        // chega pelo Realtime; remover aqui é no-op se já chegou.
+                        if (optimisticId) removeOptimisticRef.current?.(optimisticId);
                         if (!res.success) {
                             setToast({ type: "error", text: res.error || "Erro ao enviar arquivo." });
                         }
                     } catch (err) {
+                        if (optimisticId) removeOptimisticRef.current?.(optimisticId);
                         setToast({ type: "error", text: `Erro ao enviar arquivo: ${err}` });
                     }
                 }
@@ -1657,7 +1677,10 @@ export function ConversasLayout() {
                             telefone={cliente.telefone}
                             canal={cliente.canal}
                             leadName={cliente.nome}
-                            onReady={(fns) => { addOptimisticRef.current = fns.addOptimisticMessage; }}
+                            onReady={(fns) => {
+                                addOptimisticRef.current = fns.addOptimisticMessage;
+                                removeOptimisticRef.current = fns.removeMessageById;
+                            }}
                             onReply={(msg) => setReplyTo(msg)}
                         />
 
