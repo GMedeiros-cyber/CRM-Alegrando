@@ -193,18 +193,26 @@ export function useLeadMessages(telefone: string, canal: string = "alegrando") {
         }
     }, [telefone, canal, hasMore, loadingMore]);
 
-    const addOptimisticMessage = useCallback((content: string, senderName?: string) => {
+    const addOptimisticMessage = useCallback((
+        content: string,
+        senderName?: string,
+        mediaType: LeadMessage["mediaType"] = "text",
+    ): string => {
+        // Sufixo aleatório evita colisão de id se dois envios caírem no mesmo ms.
+        // O dedup do INSERT extrai o timestamp via parseInt (para no primeiro não-dígito).
+        const id = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const optimistic: LeadMessage = {
-            id: `optimistic-${Date.now()}`,
+            id,
             senderType: "equipe",
             senderName: senderName ?? "Alegrando",
             content,
-            mediaType: "text",
+            mediaType,
             createdAt: new Date(),
             createdBy: "optimistic",
             _optimistic: true,
         };
         setMessages((prev) => [...prev, optimistic]);
+        return id;
     }, []);
 
     /** Atualiza campos de uma mensagem na UI imediatamente (optimistic). */

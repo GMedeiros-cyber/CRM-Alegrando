@@ -30,7 +30,12 @@ function colorForParticipant(name: string): string {
 }
 
 export interface ChatWindowHandles {
-    addOptimisticMessage: (content: string, senderName?: string) => void;
+    addOptimisticMessage: (
+        content: string,
+        senderName?: string,
+        mediaType?: LeadMessage["mediaType"],
+    ) => string;
+    removeMessageById: (id: string) => void;
 }
 
 interface ChatWindowProps {
@@ -194,7 +199,7 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
     }
     if (message.mediaType === "video") {
         const { url, caption } = parseMediaContent(message.content || "");
-        if (url.startsWith("http")) {
+        if (url.startsWith("http") || url.startsWith("blob:")) {
             return (
                 <div>
                     <video controls src={url} width={320} className="rounded-xl max-w-[320px]" />
@@ -457,8 +462,8 @@ export function ChatWindow({ telefone, canal, leadName, onReady, onReply }: Chat
     }, []);
 
     useEffect(() => {
-        onReady?.({ addOptimisticMessage });
-    }, [onReady, addOptimisticMessage]);
+        onReady?.({ addOptimisticMessage, removeMessageById });
+    }, [onReady, addOptimisticMessage, removeMessageById]);
 
     const pinnedMessages = useMemo(() => messages.filter((m) => m.pinned), [messages]);
 
