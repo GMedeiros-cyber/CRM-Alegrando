@@ -29,7 +29,7 @@ export async function sendWhatsAppImage(
   telefone: string,
   imageUrl: string,
   caption?: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; zapiMessageId?: string; error?: string }> {
   const instance = process.env.ZAPI_INSTANCE;
   const token = process.env.ZAPI_TOKEN;
   const clientToken = process.env.ZAPI_CLIENT_TOKEN;
@@ -59,8 +59,10 @@ export async function sendWhatsAppImage(
       return { success: false, error: `Z-Api image ${response.status}: ${body}` };
     }
 
-    console.log("[ZAPI-IMG] Sucesso:", body);
-    return { success: true };
+    let zapiMessageId: string | undefined;
+    try { zapiMessageId = (JSON.parse(body) as Record<string, unknown>).messageId as string | undefined; } catch { /* ignore */ }
+    console.log("[ZAPI-IMG] Sucesso:", zapiMessageId ?? body);
+    return { success: true, zapiMessageId };
   } catch (err) {
     console.error("[ZAPI-IMG] Exceção:", err);
     return { success: false, error: String(err) };
@@ -75,7 +77,7 @@ export async function sendWhatsAppVideo(
   telefone: string,
   videoUrl: string,
   caption?: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; zapiMessageId?: string; error?: string }> {
   const instance = process.env.ZAPI_INSTANCE;
   const token = process.env.ZAPI_TOKEN;
   const clientToken = process.env.ZAPI_CLIENT_TOKEN;
@@ -105,8 +107,10 @@ export async function sendWhatsAppVideo(
       return { success: false, error: `Z-Api video ${response.status}: ${body}` };
     }
 
-    console.log("[ZAPI-VIDEO] Sucesso:", body);
-    return { success: true };
+    let zapiMessageId: string | undefined;
+    try { zapiMessageId = (JSON.parse(body) as Record<string, unknown>).messageId as string | undefined; } catch { /* ignore */ }
+    console.log("[ZAPI-VIDEO] Sucesso:", zapiMessageId ?? body);
+    return { success: true, zapiMessageId };
   } catch (err) {
     console.error("[ZAPI-VIDEO] Exceção:", err);
     return { success: false, error: String(err) };
@@ -173,7 +177,7 @@ export async function sendWhatsAppDocument(
   fileContentBase64: string,
   fileName: string,
   caption?: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; zapiMessageId?: string; error?: string }> {
   const instance = process.env.ZAPI_INSTANCE;
   const token = process.env.ZAPI_TOKEN;
   const clientToken = process.env.ZAPI_CLIENT_TOKEN;
@@ -230,8 +234,10 @@ export async function sendWhatsAppDocument(
       return { success: false, error: `Z-Api doc ${response.status}: ${body}` };
     }
 
-    console.log("[ZAPI-DOC] Sucesso:", body);
-    return { success: true };
+    let zapiMessageId: string | undefined;
+    try { zapiMessageId = (JSON.parse(body) as Record<string, unknown>).messageId as string | undefined; } catch { /* ignore */ }
+    console.log("[ZAPI-DOC] Sucesso:", zapiMessageId ?? body);
+    return { success: true, zapiMessageId };
   } catch (err) {
     console.error("[ZAPI-DOC] Exceção:", err);
     return { success: false, error: String(err) };

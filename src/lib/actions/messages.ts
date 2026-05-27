@@ -191,7 +191,7 @@ export async function sendFileMessage(
 
     // Send via API correta por canal
     const isImage = file.type.startsWith("image/");
-    let zapiResult: { success: boolean; error?: string };
+    let zapiResult: { success: boolean; zapiMessageId?: string; error?: string };
 
     if (isFestas) {
         const evoUrl = process.env.EVOLUTION_API_URL;
@@ -218,9 +218,18 @@ export async function sendFileMessage(
                         caption: caption || "",
                     }),
                 });
-                zapiResult = res.ok
-                    ? { success: true }
-                    : { success: false, error: `Evolution sendMedia ${res.status}` };
+                if (res.ok) {
+                    let evoMessageId: string | undefined;
+                    try {
+                        const parsed = (await res.json()) as Record<string, unknown>;
+                        // Evolution v2 retorna { key: { id: "..." }, ... }; fallback p/ messageId no topo
+                        evoMessageId = (parsed?.key as Record<string, unknown>)?.id as string | undefined
+                            ?? (parsed?.messageId as string | undefined);
+                    } catch { /* ignore */ }
+                    zapiResult = { success: true, zapiMessageId: evoMessageId };
+                } else {
+                    zapiResult = { success: false, error: `Evolution sendMedia ${res.status}` };
+                }
             } catch (err) {
                 zapiResult = { success: false, error: String(err) };
             }
@@ -255,6 +264,10 @@ export async function sendFileMessage(
         content: storedContent,
         media_type: mediaType,
         created_by: userId,
+        // Persiste messageId p/ habilitar "apagar para todos" / pin / react no WhatsApp depois
+        metadata: zapiResult.zapiMessageId
+            ? { messageId: zapiResult.zapiMessageId }
+            : null,
     });
 
     if (dbErr) {
