@@ -63,3 +63,8 @@ history.json
 relatorio-jade-testes.md
 
 .vercel
+
+# Playwright visual output
+e2e/__screenshots__/
+test-results/
+playwright-report/
