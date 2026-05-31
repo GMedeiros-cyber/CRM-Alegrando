@@ -90,8 +90,8 @@ export default function KanbanPage() {
     return (
         <div className="space-y-4">
             {/* Header */}
-            <div className="flex items-center justify-between bento-enter">
-                <div className="px-6 py-4 rounded-xl bg-[#EEF2FF] dark:bg-[#1e2536] border-2 border-[#818CF8] dark:border-[#4a5568] shadow-sm flex flex-col gap-1 w-fit min-w-[320px]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bento-enter">
+                <div className="px-6 py-4 rounded-xl bg-[#EEF2FF] dark:bg-[#1e2536] border-2 border-[#818CF8] dark:border-[#4a5568] shadow-sm flex flex-col gap-1 w-full sm:w-fit sm:min-w-[320px]">
                     <h1 className="text-2xl font-bold text-[#191918] dark:text-white tracking-tight">
                         Kanban
                     </h1>
