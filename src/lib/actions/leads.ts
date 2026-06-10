@@ -33,6 +33,11 @@ const updateClienteSchema = z.object({
     responsavel: z.string().max(200).nullable().optional(),
     segundoNumero: z.string().max(20).nullable().optional(),
     aniversariante: z.string().max(200).nullable().optional(),
+    instituicao: z.string().max(255).nullable().optional(),
+    diretoraNome: z.string().max(255).nullable().optional(),
+    diretoraNumero: z.string().max(255).nullable().optional(),
+    coordenadoraNome: z.string().max(255).nullable().optional(),
+    coordenadoraNumero: z.string().max(255).nullable().optional(),
 }).strict();
 
 const createClienteSchema = z.object({
@@ -113,6 +118,11 @@ export type ClienteDetail = {
     responsavel: string | null;
     segundoNumero: string | null;
     aniversariante: string | null;
+    instituicao: string | null;
+    diretoraNome: string | null;
+    diretoraNumero: string | null;
+    coordenadoraNome: string | null;
+    coordenadoraNumero: string | null;
     labels: LeadLabel[];
 };
 
@@ -345,6 +355,11 @@ export async function getClienteByTelefone(
         responsavel: data.responsavel || null,
         segundoNumero: data.segundo_numero || null,
         aniversariante: data.aniversariante || null,
+        instituicao: data.instituicao || null,
+        diretoraNome: data.diretora_nome || null,
+        diretoraNumero: data.diretora_numero || null,
+        coordenadoraNome: data.coordenadora_nome || null,
+        coordenadoraNumero: data.coordenadora_numero || null,
         labels,
     };
 }
@@ -394,6 +409,11 @@ export async function updateCliente(
         responsavel?: string | null;
         segundoNumero?: string | null;
         aniversariante?: string | null;
+        instituicao?: string | null;
+        diretoraNome?: string | null;
+        diretoraNumero?: string | null;
+        coordenadoraNome?: string | null;
+        coordenadoraNumero?: string | null;
     },
     canal: string = "alegrando"
 ) {
@@ -437,6 +457,11 @@ export async function updateCliente(
     if (parsed.responsavel !== undefined) updateData.responsavel = parsed.responsavel;
     if (parsed.segundoNumero !== undefined) updateData.segundo_numero = parsed.segundoNumero;
     if (parsed.aniversariante !== undefined) updateData.aniversariante = parsed.aniversariante;
+    if (parsed.instituicao !== undefined) updateData.instituicao = parsed.instituicao;
+    if (parsed.diretoraNome !== undefined) updateData.diretora_nome = parsed.diretoraNome;
+    if (parsed.diretoraNumero !== undefined) updateData.diretora_numero = parsed.diretoraNumero;
+    if (parsed.coordenadoraNome !== undefined) updateData.coordenadora_nome = parsed.coordenadoraNome;
+    if (parsed.coordenadoraNumero !== undefined) updateData.coordenadora_numero = parsed.coordenadoraNumero;
 
     await supabase
         .from("Clientes _WhatsApp")
