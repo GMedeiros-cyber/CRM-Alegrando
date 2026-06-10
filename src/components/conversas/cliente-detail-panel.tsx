@@ -37,6 +37,8 @@ import {
     Users,
     MessageSquare,
     HelpCircle,
+    Building2,
+    GraduationCap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { updateCliente, getGroupParticipants } from "@/lib/actions/leads";
@@ -64,6 +66,11 @@ export type FormState = {
     responsavel: string;
     segundoNumero: string;
     aniversariante: string;
+    instituicao: string;
+    diretoraNome: string;
+    diretoraNumero: string;
+    coordenadoraNome: string;
+    coordenadoraNumero: string;
     kanbanColumnId: string;
     ultimoPasseio: string;
     followupDias: number;
@@ -88,6 +95,11 @@ export const INITIAL_FORM: FormState = {
     responsavel: "",
     segundoNumero: "",
     aniversariante: "",
+    instituicao: "",
+    diretoraNome: "",
+    diretoraNumero: "",
+    coordenadoraNome: "",
+    coordenadoraNumero: "",
     kanbanColumnId: "",
     ultimoPasseio: "",
     followupDias: 45,
@@ -507,6 +519,67 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                         />
                     </FieldGroup>
                 </div>
+
+                {cliente.canal === "alegrando" && (
+                    <div className="pt-2 border-t border-[#C7D2FE] dark:border-[#3d4a60]/60 space-y-3">
+                        <div className="flex items-center gap-1.5 mb-2">
+                            <GraduationCap className="w-3.5 h-3.5 text-brand-400/70" />
+                            <h4 className="text-xs font-semibold text-[#37352F] dark:text-[#cbd5e1] tracking-tight">
+                                Dados Institucionais
+                            </h4>
+                        </div>
+
+                        <FieldGroup icon={<Building2 className="w-3 h-3" />} label="Instituição">
+                            <Input
+                                value={form.instituicao}
+                                onChange={(e) => onFormChange({ instituicao: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="Nome da instituição"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+
+                        <FieldGroup icon={<UserRound className="w-3 h-3" />} label="Nome da Diretor(a)">
+                            <Input
+                                value={form.diretoraNome}
+                                onChange={(e) => onFormChange({ diretoraNome: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="Nome da diretor(a)"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+
+                        <FieldGroup icon={<Phone className="w-3 h-3" />} label="Número da Diretor(a)">
+                            <Input
+                                value={form.diretoraNumero}
+                                onChange={(e) => onFormChange({ diretoraNumero: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="(opcional)"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+
+                        <FieldGroup icon={<UserRound className="w-3 h-3" />} label="Nome da Coordenador(a)">
+                            <Input
+                                value={form.coordenadoraNome}
+                                onChange={(e) => onFormChange({ coordenadoraNome: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="Nome da coordenador(a)"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+
+                        <FieldGroup icon={<Phone className="w-3 h-3" />} label="Número da Coordenador(a)">
+                            <Input
+                                value={form.coordenadoraNumero}
+                                onChange={(e) => onFormChange({ coordenadoraNumero: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="(opcional)"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+                    </div>
+                )}
 
                 <FieldGroup label="Status (Kanban)">
                     <Select
