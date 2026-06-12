@@ -67,10 +67,17 @@ export type FormState = {
     segundoNumero: string;
     aniversariante: string;
     instituicao: string;
+    instituicaoEndereco: string;
+    instituicaoTelefone: string;
+    instituicaoEmail: string;
     diretoraNome: string;
     diretoraNumero: string;
+    diretoraEmail: string;
+    diretoraCpf: string;
     coordenadoraNome: string;
     coordenadoraNumero: string;
+    coordenadoraEmail: string;
+    coordenadoraCpf: string;
     kanbanColumnId: string;
     ultimoPasseio: string;
     followupDias: number;
@@ -96,10 +103,17 @@ export const INITIAL_FORM: FormState = {
     segundoNumero: "",
     aniversariante: "",
     instituicao: "",
+    instituicaoEndereco: "",
+    instituicaoTelefone: "",
+    instituicaoEmail: "",
     diretoraNome: "",
     diretoraNumero: "",
+    diretoraEmail: "",
+    diretoraCpf: "",
     coordenadoraNome: "",
     coordenadoraNumero: "",
+    coordenadoraEmail: "",
+    coordenadoraCpf: "",
     kanbanColumnId: "",
     ultimoPasseio: "",
     followupDias: 45,
@@ -529,7 +543,15 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                             </h4>
                         </div>
 
-                        <FieldGroup icon={<Building2 className="w-3 h-3" />} label="Instituição">
+                        {/* ===== Instituição ===== */}
+                        <div className="flex items-center gap-1.5">
+                            <Building2 className="w-3 h-3 text-brand-400/70" />
+                            <h5 className="text-[10px] font-bold uppercase tracking-wider text-[#6366F1] dark:text-[#94a3b8]">
+                                Instituição
+                            </h5>
+                        </div>
+
+                        <FieldGroup icon={<Building2 className="w-3 h-3" />} label="Nome do local">
                             <Input
                                 value={form.instituicao}
                                 onChange={(e) => onFormChange({ instituicao: e.target.value })}
@@ -539,27 +561,45 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                             />
                         </FieldGroup>
 
-                        <FieldGroup icon={<UserRound className="w-3 h-3" />} label="Nome da Diretor(a)">
+                        <FieldGroup icon={<MapPin className="w-3 h-3" />} label="Endereço">
                             <Input
-                                value={form.diretoraNome}
-                                onChange={(e) => onFormChange({ diretoraNome: e.target.value })}
+                                value={form.instituicaoEndereco}
+                                onChange={(e) => onFormChange({ instituicaoEndereco: e.target.value })}
                                 onBlur={onSave}
-                                placeholder="Nome da diretor(a)"
+                                placeholder="Rua, número, bairro, cidade"
                                 className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
                             />
                         </FieldGroup>
 
-                        <FieldGroup icon={<Phone className="w-3 h-3" />} label="Número da Diretor(a)">
+                        <FieldGroup icon={<Phone className="w-3 h-3" />} label="Telefone">
                             <Input
-                                value={form.diretoraNumero}
-                                onChange={(e) => onFormChange({ diretoraNumero: e.target.value })}
+                                value={form.instituicaoTelefone}
+                                onChange={(e) => onFormChange({ instituicaoTelefone: e.target.value })}
                                 onBlur={onSave}
                                 placeholder="(opcional)"
                                 className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
                             />
                         </FieldGroup>
 
-                        <FieldGroup icon={<UserRound className="w-3 h-3" />} label="Nome da Coordenador(a)">
+                        <FieldGroup label="E-mail">
+                            <Input
+                                value={form.instituicaoEmail}
+                                onChange={(e) => onFormChange({ instituicaoEmail: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="email@instituicao.com"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+
+                        {/* ===== Coordenadora ===== */}
+                        <div className="flex items-center gap-1.5 pt-1">
+                            <UserRound className="w-3 h-3 text-brand-400/70" />
+                            <h5 className="text-[10px] font-bold uppercase tracking-wider text-[#6366F1] dark:text-[#94a3b8]">
+                                Coordenadora
+                            </h5>
+                        </div>
+
+                        <FieldGroup icon={<UserRound className="w-3 h-3" />} label="Nome">
                             <Input
                                 value={form.coordenadoraNome}
                                 onChange={(e) => onFormChange({ coordenadoraNome: e.target.value })}
@@ -569,12 +609,80 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                             />
                         </FieldGroup>
 
-                        <FieldGroup icon={<Phone className="w-3 h-3" />} label="Número da Coordenador(a)">
+                        <FieldGroup icon={<Phone className="w-3 h-3" />} label="Telefone">
                             <Input
                                 value={form.coordenadoraNumero}
                                 onChange={(e) => onFormChange({ coordenadoraNumero: e.target.value })}
                                 onBlur={onSave}
                                 placeholder="(opcional)"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+
+                        <FieldGroup label="E-mail">
+                            <Input
+                                value={form.coordenadoraEmail}
+                                onChange={(e) => onFormChange({ coordenadoraEmail: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="email@exemplo.com"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+
+                        <FieldGroup label="CPF">
+                            <Input
+                                value={form.coordenadoraCpf}
+                                onChange={(e) => onFormChange({ coordenadoraCpf: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="000.000.000-00"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+
+                        {/* ===== Diretora ===== */}
+                        <div className="flex items-center gap-1.5 pt-1">
+                            <UserRound className="w-3 h-3 text-brand-400/70" />
+                            <h5 className="text-[10px] font-bold uppercase tracking-wider text-[#6366F1] dark:text-[#94a3b8]">
+                                Diretora
+                            </h5>
+                        </div>
+
+                        <FieldGroup icon={<UserRound className="w-3 h-3" />} label="Nome">
+                            <Input
+                                value={form.diretoraNome}
+                                onChange={(e) => onFormChange({ diretoraNome: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="Nome da diretor(a)"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+
+                        <FieldGroup icon={<Phone className="w-3 h-3" />} label="Telefone">
+                            <Input
+                                value={form.diretoraNumero}
+                                onChange={(e) => onFormChange({ diretoraNumero: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="(opcional)"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+
+                        <FieldGroup label="E-mail">
+                            <Input
+                                value={form.diretoraEmail}
+                                onChange={(e) => onFormChange({ diretoraEmail: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="email@exemplo.com"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+
+                        <FieldGroup label="CPF">
+                            <Input
+                                value={form.diretoraCpf}
+                                onChange={(e) => onFormChange({ diretoraCpf: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="000.000.000-00"
                                 className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
                             />
                         </FieldGroup>
