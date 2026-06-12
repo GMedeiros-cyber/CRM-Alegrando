@@ -31,17 +31,24 @@ const updateClienteSchema = z.object({
     posPasseioEnviado: z.boolean().optional(),
     endereco: z.string().max(500).nullable().optional(),
     responsavel: z.string().max(200).nullable().optional(),
-    segundoNumero: z.string().max(20).nullable().optional(),
+    segundoNumero: z.string().max(32).nullable().optional(),
     aniversariante: z.string().max(200).nullable().optional(),
     instituicao: z.string().max(255).nullable().optional(),
+    instituicaoEndereco: z.string().max(255).nullable().optional(),
+    instituicaoTelefone: z.string().max(255).nullable().optional(),
+    instituicaoEmail: z.string().max(255).nullable().optional(),
     diretoraNome: z.string().max(255).nullable().optional(),
     diretoraNumero: z.string().max(255).nullable().optional(),
+    diretoraEmail: z.string().max(255).nullable().optional(),
+    diretoraCpf: z.string().max(255).nullable().optional(),
     coordenadoraNome: z.string().max(255).nullable().optional(),
     coordenadoraNumero: z.string().max(255).nullable().optional(),
+    coordenadoraEmail: z.string().max(255).nullable().optional(),
+    coordenadoraCpf: z.string().max(255).nullable().optional(),
 }).strict();
 
 const createClienteSchema = z.object({
-    telefone: z.string().min(8).max(20),
+    telefone: z.string().min(8).max(32),
     nome: z.string().max(200).nullable(),
     fotoUrl: z.string().url().nullable().optional(),
     canal: z.enum(["alegrando", "festas"]).optional(),
@@ -119,10 +126,17 @@ export type ClienteDetail = {
     segundoNumero: string | null;
     aniversariante: string | null;
     instituicao: string | null;
+    instituicaoEndereco: string | null;
+    instituicaoTelefone: string | null;
+    instituicaoEmail: string | null;
     diretoraNome: string | null;
     diretoraNumero: string | null;
+    diretoraEmail: string | null;
+    diretoraCpf: string | null;
     coordenadoraNome: string | null;
     coordenadoraNumero: string | null;
+    coordenadoraEmail: string | null;
+    coordenadoraCpf: string | null;
     labels: LeadLabel[];
 };
 
@@ -148,6 +162,8 @@ export type LeadMessage = {
      */
     audioSeconds?: number;
     _optimistic?: boolean;
+    /** Envio falhou — balão fica marcado com ⚠️ e clique reenvia. */
+    _failed?: boolean;
 };
 
 // =============================================
@@ -356,10 +372,17 @@ export async function getClienteByTelefone(
         segundoNumero: data.segundo_numero || null,
         aniversariante: data.aniversariante || null,
         instituicao: data.instituicao || null,
+        instituicaoEndereco: data.instituicao_endereco || null,
+        instituicaoTelefone: data.instituicao_telefone || null,
+        instituicaoEmail: data.instituicao_email || null,
         diretoraNome: data.diretora_nome || null,
         diretoraNumero: data.diretora_numero || null,
+        diretoraEmail: data.diretora_email || null,
+        diretoraCpf: data.diretora_cpf || null,
         coordenadoraNome: data.coordenadora_nome || null,
         coordenadoraNumero: data.coordenadora_numero || null,
+        coordenadoraEmail: data.coordenadora_email || null,
+        coordenadoraCpf: data.coordenadora_cpf || null,
         labels,
     };
 }
@@ -410,10 +433,17 @@ export async function updateCliente(
         segundoNumero?: string | null;
         aniversariante?: string | null;
         instituicao?: string | null;
+        instituicaoEndereco?: string | null;
+        instituicaoTelefone?: string | null;
+        instituicaoEmail?: string | null;
         diretoraNome?: string | null;
         diretoraNumero?: string | null;
+        diretoraEmail?: string | null;
+        diretoraCpf?: string | null;
         coordenadoraNome?: string | null;
         coordenadoraNumero?: string | null;
+        coordenadoraEmail?: string | null;
+        coordenadoraCpf?: string | null;
     },
     canal: string = "alegrando"
 ) {
@@ -458,10 +488,17 @@ export async function updateCliente(
     if (parsed.segundoNumero !== undefined) updateData.segundo_numero = parsed.segundoNumero;
     if (parsed.aniversariante !== undefined) updateData.aniversariante = parsed.aniversariante;
     if (parsed.instituicao !== undefined) updateData.instituicao = parsed.instituicao;
+    if (parsed.instituicaoEndereco !== undefined) updateData.instituicao_endereco = parsed.instituicaoEndereco;
+    if (parsed.instituicaoTelefone !== undefined) updateData.instituicao_telefone = parsed.instituicaoTelefone;
+    if (parsed.instituicaoEmail !== undefined) updateData.instituicao_email = parsed.instituicaoEmail;
     if (parsed.diretoraNome !== undefined) updateData.diretora_nome = parsed.diretoraNome;
     if (parsed.diretoraNumero !== undefined) updateData.diretora_numero = parsed.diretoraNumero;
+    if (parsed.diretoraEmail !== undefined) updateData.diretora_email = parsed.diretoraEmail;
+    if (parsed.diretoraCpf !== undefined) updateData.diretora_cpf = parsed.diretoraCpf;
     if (parsed.coordenadoraNome !== undefined) updateData.coordenadora_nome = parsed.coordenadoraNome;
     if (parsed.coordenadoraNumero !== undefined) updateData.coordenadora_numero = parsed.coordenadoraNumero;
+    if (parsed.coordenadoraEmail !== undefined) updateData.coordenadora_email = parsed.coordenadoraEmail;
+    if (parsed.coordenadoraCpf !== undefined) updateData.coordenadora_cpf = parsed.coordenadoraCpf;
 
     await supabase
         .from("Clientes _WhatsApp")

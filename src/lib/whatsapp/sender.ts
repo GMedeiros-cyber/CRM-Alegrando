@@ -209,7 +209,11 @@ export async function sendWhatsAppDocument(
     csv: "text/csv",
   };
   const mime = mimeMap[extension] || "application/octet-stream";
-  const dataUri = `data:${mime};base64,${fileContentBase64}`;
+  // Z-API aceita URL pública ou Base64 no campo document — URLs passam direto
+  // (upload direto browser→Storage), base64 vira data URI.
+  const dataUri = fileContentBase64.startsWith("http")
+    ? fileContentBase64
+    : `data:${mime};base64,${fileContentBase64}`;
 
   console.log("[ZAPI-DOC] Enviando para:", phone, "arquivo:", fileName, "ext:", extension, "mime:", mime);
 
