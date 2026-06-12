@@ -570,3 +570,19 @@ main > div {
   border-color: rgba(239, 85, 68, 0.7) !important;
 }
 
+/* =====================================================
+   Wallpaper do chat (Conversas) — padrão geométrico
+   original e sutil (círculos/losangos/pontos), tileável.
+   Não é o doodle do WhatsApp (questão de IP).
+   ===================================================== */
+.chat-wallpaper {
+  background-color: #efeae2;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%231f2937' stroke-opacity='0.05' stroke-width='1.2'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M85 25l7 7-7 7-7-7z'/%3E%3Ccircle cx='100' cy='90' r='4'/%3E%3Cpath d='M30 95h12M36 89v12'/%3E%3C/g%3E%3Cg fill='%231f2937' fill-opacity='0.05'%3E%3Ccircle cx='60' cy='55' r='2'/%3E%3Ccircle cx='15' cy='70' r='1.6'/%3E%3Ccircle cx='75' cy='105' r='1.6'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 120px 120px;
+}
+[data-theme="dark"] .chat-wallpaper {
+  background-color: #0b141a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='none' stroke='%23e9edef' stroke-opacity='0.035' stroke-width='1.2'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Cpath d='M85 25l7 7-7 7-7-7z'/%3E%3Ccircle cx='100' cy='90' r='4'/%3E%3Cpath d='M30 95h12M36 89v12'/%3E%3C/g%3E%3Cg fill='%23e9edef' fill-opacity='0.035'%3E%3Ccircle cx='60' cy='55' r='2'/%3E%3Ccircle cx='15' cy='70' r='1.6'/%3E%3Ccircle cx='75' cy='105' r='1.6'/%3E%3C/g%3E%3C/svg%3E");
+}
+
