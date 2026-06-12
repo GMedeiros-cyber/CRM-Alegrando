@@ -31,7 +31,7 @@ import {
     createCliente,
 } from "@/lib/actions/leads";
 import type { PasseioHistorico } from "@/lib/actions/leads";
-import { sendMessage, sendFileMessage, sendAudioMessage } from "@/lib/actions/messages";
+import { sendMessage, sendFileMessage, sendAudioMessage, createSignedUploadUrl, sendUploadedFileMessage } from "@/lib/actions/messages";
 import {
     getKanbanColumns,
     getLeadTasks,
@@ -57,6 +57,7 @@ import {
     AlertCircle,
     ArrowLeft,
     PanelRightOpen,
+    PanelRightClose,
     Paperclip,
     UserPlus,
     X,
@@ -120,13 +121,17 @@ const IA_OPTIONS = [
 function SortFilterDropdown({
     sortOrder,
     iaFiltro,
+    tipoFiltro,
     onSortChange,
     onIaChange,
+    onTipoChange,
 }: {
     sortOrder: string;
     iaFiltro: "todos" | "ia_ativa" | "manual";
+    tipoFiltro: "todos" | "grupos";
     onSortChange: (v: string) => void;
     onIaChange: (v: "ia_ativa" | "manual") => void;
+    onTipoChange: (v: "todos" | "grupos") => void;
 }) {
     const [open, setOpen] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
@@ -147,11 +152,13 @@ function SortFilterDropdown({
         };
     }, [open]);
 
-    const activeLabel = iaFiltro === "ia_ativa"
-        ? "IA Ativa"
-        : iaFiltro === "manual"
-            ? "Manual"
-            : SORT_OPTIONS.find((o) => o.value === sortOrder)?.label ?? "Mais recente";
+    const activeLabel = tipoFiltro === "grupos"
+        ? "Grupos"
+        : iaFiltro === "ia_ativa"
+            ? "IA Ativa"
+            : iaFiltro === "manual"
+                ? "Manual"
+                : SORT_OPTIONS.find((o) => o.value === sortOrder)?.label ?? "Mais recente";
 
     return (
         <div ref={wrapperRef} className="relative">
@@ -218,6 +225,27 @@ function SortFilterDropdown({
                             </button>
                         );
                     })}
+                    <div className="my-1 mx-3 h-px bg-[#C7D2FE] dark:bg-[#3d4a60]" />
+                    <div className="px-3 pt-1 pb-1 text-[9px] font-bold uppercase tracking-wider text-[#6366F1] dark:text-[#94a3b8]">
+                        Filtrar Tipo
+                    </div>
+                    <button
+                        onClick={() => {
+                            // Toggle: clicar com o filtro ativo volta para "todos"
+                            onTipoChange(tipoFiltro === "grupos" ? "todos" : "grupos");
+                            setOpen(false);
+                        }}
+                        className={cn(
+                            "w-full flex items-center gap-2 px-3 py-1.5 text-[12px] transition-colors",
+                            tipoFiltro === "grupos"
+                                ? "bg-brand-500/15 text-brand-500 dark:text-brand-400 font-semibold"
+                                : "text-[#37352F] dark:text-[#cbd5e1] hover:bg-[#C7D2FE]/40 dark:hover:bg-[#3d4a60]/50"
+                        )}
+                    >
+                        <Users className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="flex-1 text-left">Grupos</span>
+                        {tipoFiltro === "grupos" && <Check className="w-3.5 h-3.5" />}
+                    </button>
                 </div>
             )}
         </div>
@@ -282,6 +310,9 @@ export function ConversasLayout() {
     const [chatMessage, setChatMessage] = useState("");
     const addOptimisticRef = useRef<((content: string, senderName?: string, mediaType?: import("@/lib/actions/leads").LeadMessage["mediaType"]) => string) | null>(null);
     const removeOptimisticRef = useRef<((id: string) => void) | null>(null);
+    const updateOptimisticRef = useRef<((id: string, updates: Partial<import("@/lib/actions/leads").LeadMessage>) => void) | null>(null);
+    // Retry de envios falhos: id do balão falho → função que reenvia o conteúdo
+    const failedRetryRef = useRef<Map<string, () => void>>(new Map());
     const loadClienteVersionRef = useRef(0);
     const loadListVersionRef = useRef(0);
     // Última cache key fetchada com sucesso. Quando muda (canal/labels/search),
@@ -320,6 +351,7 @@ export function ConversasLayout() {
     const [sortOrder, setSortOrder] = useState<string>("recent");
     const [canalFiltro, setCanalFiltro] = useState<"todos" | "alegrando" | "festas">("todos");
     const [iaFiltro, setIaFiltro] = useState<"todos" | "ia_ativa" | "manual">("todos");
+    const [tipoFiltro, setTipoFiltro] = useState<"todos" | "grupos">("todos");
     const [labelFiltro, setLabelFiltro] = useState<string[]>([]);
     const [availableLabels, setAvailableLabels] = useState<Label[]>([]);
     useEffect(() => {
@@ -339,6 +371,11 @@ export function ConversasLayout() {
                 setIaFiltro(storedIa);
             }
         }
+        // Restaura filtro de tipo (grupos) do localStorage
+        const storedTipo = localStorage.getItem("crm_tipo_filtro");
+        if (storedTipo === "todos" || storedTipo === "grupos") {
+            setTipoFiltro(storedTipo);
+        }
         // Restaura filtro de labels do localStorage
         const storedLabels = localStorage.getItem("crm_label_filtro");
         if (storedLabels) {
@@ -354,6 +391,9 @@ export function ConversasLayout() {
     useEffect(() => {
         localStorage.setItem("crm_ia_filtro", iaFiltro);
     }, [iaFiltro]);
+    useEffect(() => {
+        localStorage.setItem("crm_tipo_filtro", tipoFiltro);
+    }, [tipoFiltro]);
     const [totalClientes, setTotalClientes] = useState(0);
     const [loadingMore, setLoadingMore] = useState(false);
     const CLIENTES_LIMIT = 50;
@@ -361,6 +401,15 @@ export function ConversasLayout() {
     // Mobile responsiveness
     const [mobileView, setMobileView] = useState<"list" | "chat">("list");
     const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+
+    // Painel de detalhes recolhível (desktop) — libera espaço para o chat
+    const [detailsCollapsed, setDetailsCollapsed] = useState(false);
+    useEffect(() => {
+        if (localStorage.getItem("crm_details_collapsed") === "1") setDetailsCollapsed(true);
+    }, []);
+    useEffect(() => {
+        localStorage.setItem("crm_details_collapsed", detailsCollapsed ? "1" : "0");
+    }, [detailsCollapsed]);
 
     // Passeios historico
     const [passeiosHistorico, setPaseiosHistorico] = useState<PasseioHistorico[]>([]);
@@ -421,6 +470,8 @@ export function ConversasLayout() {
     // Filtro IA (client-side) + ordenação
     const sortedLeads = [...clientesList]
         .filter((c) => {
+            // Ortogonal ao canal — vale em todos/alegrando/festas.
+            if (tipoFiltro === "grupos" && !isGroupTelefone(c.telefone)) return false;
             if (iaFiltro === "ia_ativa") return c.iaAtiva === true;
             if (iaFiltro === "manual") return c.iaAtiva === false;
             return true;
@@ -738,10 +789,17 @@ export function ConversasLayout() {
                 segundoNumero: clienteData.segundoNumero || "",
                 aniversariante: clienteData.aniversariante || "",
                 instituicao: clienteData.instituicao || "",
+                instituicaoEndereco: clienteData.instituicaoEndereco || "",
+                instituicaoTelefone: clienteData.instituicaoTelefone || "",
+                instituicaoEmail: clienteData.instituicaoEmail || "",
                 diretoraNome: clienteData.diretoraNome || "",
                 diretoraNumero: clienteData.diretoraNumero || "",
+                diretoraEmail: clienteData.diretoraEmail || "",
+                diretoraCpf: clienteData.diretoraCpf || "",
                 coordenadoraNome: clienteData.coordenadoraNome || "",
                 coordenadoraNumero: clienteData.coordenadoraNumero || "",
+                coordenadoraEmail: clienteData.coordenadoraEmail || "",
+                coordenadoraCpf: clienteData.coordenadoraCpf || "",
                 kanbanColumnId: clienteData.kanbanColumnId || "",
                 ultimoPasseio: clienteData.ultimoPasseio || "",
                 followupDias: clienteData.followupDias ?? 45,
@@ -895,10 +953,17 @@ export function ConversasLayout() {
                     segundoNumero: form.segundoNumero || null,
                     aniversariante: form.aniversariante || null,
                     instituicao: form.instituicao || null,
+                    instituicaoEndereco: form.instituicaoEndereco || null,
+                    instituicaoTelefone: form.instituicaoTelefone || null,
+                    instituicaoEmail: form.instituicaoEmail || null,
                     diretoraNome: form.diretoraNome || null,
                     diretoraNumero: form.diretoraNumero || null,
+                    diretoraEmail: form.diretoraEmail || null,
+                    diretoraCpf: form.diretoraCpf || null,
                     coordenadoraNome: form.coordenadoraNome || null,
                     coordenadoraNumero: form.coordenadoraNumero || null,
+                    coordenadoraEmail: form.coordenadoraEmail || null,
+                    coordenadoraCpf: form.coordenadoraCpf || null,
                     kanbanColumnId: form.kanbanColumnId || null,
                     ultimoPasseio: form.ultimoPasseio || null,
                     followupDias: form.followupDias,
@@ -955,22 +1020,35 @@ export function ConversasLayout() {
         });
     }
 
-    function handleSendMessage() {
-        if (!cliente?.telefone || !chatMessage.trim()) return;
-        const text = chatMessage.trim();
-        const currentReply = replyTo;
-        setChatMessage("");
-        setReplyTo(null);
-        addOptimisticRef.current?.(text, cliente.canal === "festas" ? "Festas" : "Alegrando");
+    // Marca o balão optimistic como falho e registra o retry — clique no
+    // balão (ChatWindow → handleRetryFailed) reenvia o mesmo conteúdo.
+    function markSendFailed(optimisticId: string | null, retry: () => void) {
+        if (!optimisticId) return;
+        updateOptimisticRef.current?.(optimisticId, { _failed: true });
+        failedRetryRef.current.set(optimisticId, retry);
+    }
+
+    function handleRetryFailed(msg: import("@/lib/actions/leads").LeadMessage) {
+        const retry = failedRetryRef.current.get(msg.id);
+        failedRetryRef.current.delete(msg.id);
+        removeOptimisticRef.current?.(msg.id);
+        retry?.();
+    }
+
+    function sendTextMessage(text: string, currentReply: import("@/lib/actions/leads").LeadMessage | null) {
+        if (!cliente?.telefone) return;
+        const senderName = cliente.canal === "festas" ? "Festas" : "Alegrando";
+        const optimisticId = addOptimisticRef.current?.(text, senderName) ?? null;
 
         (async () => {
             try {
+                let res: { success: boolean };
                 if (currentReply) {
                     const { replyToMessage } = await import("@/lib/actions/messages");
-                    await replyToMessage({
+                    res = await replyToMessage({
                         telefone: cliente.telefone,
                         text,
-                        senderName: cliente.canal === "festas" ? "Festas" : "Alegrando",
+                        senderName,
                         iaAtiva: cliente.iaAtiva,
                         replyToZapiId: currentReply.zapiMessageId ?? null,
                         replyToContent: currentReply.content,
@@ -978,18 +1056,30 @@ export function ConversasLayout() {
                         canal: cliente.canal,
                     });
                 } else {
-                    await sendMessage({
+                    res = await sendMessage({
                         telefone: cliente.telefone,
                         mensagem: text,
-                        sender_name: cliente.canal === "festas" ? "Festas" : "Alegrando",
+                        sender_name: senderName,
                         iaAtiva: cliente.iaAtiva,
                         canal: cliente.canal,
                     });
                 }
-            } catch (err) {
-                setToast({ type: "error", text: `Erro ao enviar: ${err}` });
+                if (!res.success) {
+                    markSendFailed(optimisticId, () => sendTextMessage(text, currentReply));
+                }
+            } catch {
+                markSendFailed(optimisticId, () => sendTextMessage(text, currentReply));
             }
         })();
+    }
+
+    function handleSendMessage() {
+        if (!cliente?.telefone || !chatMessage.trim()) return;
+        const text = chatMessage.trim();
+        const currentReply = replyTo;
+        setChatMessage("");
+        setReplyTo(null);
+        sendTextMessage(text, currentReply);
     }
 
     // ========= Tasks handlers =========
@@ -1187,6 +1277,94 @@ export function ConversasLayout() {
     }
 
     // ========= Send attachments handler =========
+    // Acima deste tamanho o arquivo sobe direto browser→Storage via signed URL:
+    // a Vercel limita o request body de serverless em 4.5MB (plataforma).
+    const DIRECT_UPLOAD_THRESHOLD = 4 * 1024 * 1024;
+
+    async function sendAttachment(att: { file: File; preview: string | null; caption: string; id: string }) {
+        if (!cliente?.telefone) return;
+        const senderName = cliente.canal === "festas" ? "Festas" : "Alegrando";
+        const isVideo = att.file.type.startsWith("video/");
+        const isImage = att.file.type.startsWith("image/");
+        const mediaType: "image" | "video" | "document" = isImage ? "image" : isVideo ? "video" : "document";
+
+        // Optimistic APENAS para vídeo (upload lento, 2-5s). Imagem/documento
+        // sobem rápido e o Realtime cobre. Guarda o id pra remover
+        // explicitamente na confirmação: o content (blob URL) nunca bate
+        // com a URL real do Storage, então o dedup por content não cobriria.
+        let optimisticId: string | null = null;
+        if (isVideo && att.preview) {
+            const content = att.caption.trim()
+                ? `${att.preview}|||${att.caption.trim()}`
+                : att.preview;
+            optimisticId = addOptimisticRef.current?.(content, senderName, "video") ?? null;
+        }
+
+        // Falha = balão marcado com retry (não banner). Se não havia optimistic
+        // (imagem/documento), cria um agora já em estado de falha.
+        const markFailed = (errText: string) => {
+            let failedId = optimisticId;
+            if (!failedId) {
+                const fallbackContent = isImage && att.preview
+                    ? (att.caption.trim() ? `${att.preview}|||${att.caption.trim()}` : att.preview)
+                    : att.file.name;
+                failedId = addOptimisticRef.current?.(fallbackContent, senderName, mediaType) ?? null;
+            }
+            if (failedId) {
+                markSendFailed(failedId, () => { void sendAttachment(att); });
+            } else {
+                setToast({ type: "error", text: errText });
+            }
+        };
+
+        try {
+            let res: { success: boolean; error?: string };
+
+            if (att.file.size > DIRECT_UPLOAD_THRESHOLD) {
+                const signed = await createSignedUploadUrl(att.file.name, cliente.telefone, cliente.canal ?? "alegrando");
+                if (!signed.success || !signed.path || !signed.token) {
+                    markFailed(signed.error || "Falha ao preparar upload.");
+                    return;
+                }
+                const { error: upErr } = await supabase.storage
+                    .from("documents")
+                    .uploadToSignedUrl(signed.path, signed.token, att.file);
+                if (upErr) {
+                    markFailed(`Falha no upload: ${upErr.message}`);
+                    return;
+                }
+                res = await sendUploadedFileMessage({
+                    path: signed.path,
+                    telefone: cliente.telefone,
+                    canal: cliente.canal ?? "alegrando",
+                    caption: att.caption,
+                    mediaType,
+                    fileName: att.file.name,
+                    mimeType: att.file.type,
+                    senderName,
+                });
+            } else {
+                const formData = new FormData();
+                formData.append("file", att.file);
+                formData.append("telefone", cliente.telefone);
+                formData.append("sender_name", senderName);
+                formData.append("caption", att.caption);
+                formData.append("canal", cliente.canal ?? "alegrando");
+                res = await sendFileMessage(formData);
+            }
+
+            if (res.success) {
+                // Remove o optimistic — a mensagem real chega pelo Realtime;
+                // remover aqui é no-op se já chegou.
+                if (optimisticId) removeOptimisticRef.current?.(optimisticId);
+            } else {
+                markFailed(res.error || "Erro ao enviar arquivo.");
+            }
+        } catch (err) {
+            markFailed(`Erro ao enviar arquivo: ${err}`);
+        }
+    }
+
     function handleSendAttachments() {
         if (!cliente?.telefone || attachments.length === 0) return;
         if (isSendingFile) return; // guard contra duplo-clique
@@ -1194,41 +1372,10 @@ export function ConversasLayout() {
         setIsSendingFile(true);
         setAttachments([]); // limpa preview imediatamente para impedir reenvio
 
-        const senderName = cliente.canal === "festas" ? "Festas" : "Alegrando";
-
         (async () => {
             try {
                 for (const att of toSend) {
-                    // Optimistic APENAS para vídeo (upload lento, 2-5s). Imagem/documento
-                    // sobem rápido e o Realtime cobre. Guarda o id pra remover
-                    // explicitamente na confirmação: o content (blob URL) nunca bate
-                    // com a URL real do Storage, então o dedup por content não cobriria.
-                    let optimisticId: string | null = null;
-                    if (att.file.type.startsWith("video/") && att.preview) {
-                        const content = att.caption.trim()
-                            ? `${att.preview}|||${att.caption.trim()}`
-                            : att.preview;
-                        optimisticId = addOptimisticRef.current?.(content, senderName, "video") ?? null;
-                    }
-
-                    try {
-                        const formData = new FormData();
-                        formData.append("file", att.file);
-                        formData.append("telefone", cliente.telefone);
-                        formData.append("sender_name", senderName);
-                        formData.append("caption", att.caption);
-                        formData.append("canal", cliente.canal ?? "alegrando");
-                        const res = await sendFileMessage(formData);
-                        // Remove o optimistic (sucesso ou falha). A mensagem real
-                        // chega pelo Realtime; remover aqui é no-op se já chegou.
-                        if (optimisticId) removeOptimisticRef.current?.(optimisticId);
-                        if (!res.success) {
-                            setToast({ type: "error", text: res.error || "Erro ao enviar arquivo." });
-                        }
-                    } catch (err) {
-                        if (optimisticId) removeOptimisticRef.current?.(optimisticId);
-                        setToast({ type: "error", text: `Erro ao enviar arquivo: ${err}` });
-                    }
+                    await sendAttachment(att);
                 }
             } finally {
                 setIsSendingFile(false);
@@ -1452,8 +1599,10 @@ export function ConversasLayout() {
                             <SortFilterDropdown
                                 sortOrder={sortOrder}
                                 iaFiltro={iaFiltro}
+                                tipoFiltro={tipoFiltro}
                                 onSortChange={(v) => { setIaFiltro("todos"); setSortOrder(v); }}
                                 onIaChange={(v) => setIaFiltro(v)}
+                                onTipoChange={(v) => setTipoFiltro(v)}
                             />
                             <LabelFilterButton
                                 selectedIds={labelFiltro}
@@ -1690,8 +1839,10 @@ export function ConversasLayout() {
                             onReady={(fns) => {
                                 addOptimisticRef.current = fns.addOptimisticMessage;
                                 removeOptimisticRef.current = fns.removeMessageById;
+                                updateOptimisticRef.current = fns.updateMessageById;
                             }}
                             onReply={(msg) => setReplyTo(msg)}
+                            onRetryFailed={handleRetryFailed}
                         />
 
                         {/* Audio preview */}
@@ -1843,8 +1994,36 @@ export function ConversasLayout() {
             </div>
 
             {/* =================== RIGHT: DETAILS (desktop) =================== */}
-            <div className="hidden md:block w-[300px] min-w-[300px] border-l-2 border-border overflow-y-auto bg-background bento-enter [animation-delay:300ms]">
-                {detailPanelContent}
+            {/* Recolhível: o chat (flex-1) reflowa sozinho; transition na largura
+                dá o ajuste suave. Em mobile o painel continua como Sheet. */}
+            <div className={cn(
+                "hidden md:flex flex-col border-l-2 border-border bg-background bento-enter [animation-delay:300ms] transition-all duration-300 overflow-hidden",
+                detailsCollapsed ? "w-[44px] min-w-[44px]" : "w-[300px] min-w-[300px]"
+            )}>
+                {detailsCollapsed ? (
+                    <button
+                        onClick={() => setDetailsCollapsed(false)}
+                        title="Expandir dados do cliente"
+                        className="mt-3 mx-auto p-2 rounded-lg hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors"
+                    >
+                        <PanelRightOpen className="w-4 h-4" />
+                    </button>
+                ) : (
+                    <>
+                        <div className="flex justify-end px-2 pt-2 shrink-0">
+                            <button
+                                onClick={() => setDetailsCollapsed(true)}
+                                title="Recolher dados do cliente"
+                                className="p-1.5 rounded-lg hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors"
+                            >
+                                <PanelRightClose className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            {detailPanelContent}
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* =================== MOBILE: Details Sheet =================== */}
