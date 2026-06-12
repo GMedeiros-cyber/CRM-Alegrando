@@ -24,7 +24,7 @@ const MAX_VIDEO_SIZE = 16 * 1024 * 1024; // 16MB — limite confiável do WhatsA
 const MAX_AUDIO_SIZE = 16 * 1024 * 1024; // 16MB — limite do WhatsApp para áudio
 
 const sendMessageSchema = z.object({
-    telefone: z.string().min(8).max(20),
+    telefone: z.string().min(8).max(32),
     mensagem: z.string().min(1).max(5000),
     sender_name: z.string().min(1).max(100),
     iaAtiva: z.boolean(),
@@ -272,6 +272,156 @@ export async function sendFileMessage(
 
     if (dbErr) {
         console.error("[sendFileMessage] Falha ao persistir:", dbErr.message);
+    }
+
+    return { success: true };
+}
+
+/**
+ * Gera URL assinada para upload direto browser→Storage. A Vercel limita o
+ * request body de serverless em 4.5MB no nível de plataforma — arquivos
+ * maiores precisam subir direto do browser, sem passar pelo server.
+ */
+export async function createSignedUploadUrl(
+    fileName: string,
+    telefone: string,
+    canal: string = "alegrando"
+): Promise<{ success: boolean; signedUrl?: string; token?: string; path?: string; error?: string }> {
+    await requireAuth();
+
+    const supabase = createServerSupabaseClient();
+    const safeCanal = canal === "festas" ? "festas" : "alegrando";
+    // Mantém dígitos e o sufixo "-group" de grupos; remove o resto
+    const safeTelefone = String(telefone).replace(/[^0-9A-Za-z-]/g, "");
+    const safeFileName = fileName.replace(/[^0-9A-Za-z._-]/g, "_").slice(-100);
+    const path = `chat-${safeCanal}/${safeTelefone}/${Date.now()}-${safeFileName}`;
+
+    const { data, error } = await supabase.storage
+        .from("documents")
+        .createSignedUploadUrl(path);
+
+    if (error || !data) {
+        console.error("[createSignedUploadUrl] Falhou:", error?.message);
+        return { success: false, error: "Falha ao preparar upload." };
+    }
+
+    return { success: true, signedUrl: data.signedUrl, token: data.token, path: data.path };
+}
+
+const sendUploadedFileSchema = z.object({
+    path: z.string().min(1).max(500),
+    telefone: z.string().min(8).max(32),
+    canal: z.string().optional(),
+    caption: z.string().max(5000).optional(),
+    mediaType: z.enum(["image", "video", "document"]),
+    fileName: z.string().min(1).max(255),
+    mimeType: z.string().max(100).optional(),
+    senderName: z.string().max(100).optional(),
+});
+
+/**
+ * Envia um arquivo JÁ presente no Storage (upload direto do browser via
+ * signed URL) e persiste no Supabase. Par do createSignedUploadUrl para
+ * arquivos acima do limite de 4.5MB da Vercel.
+ */
+export async function sendUploadedFileMessage(payload: {
+    path: string;
+    telefone: string;
+    canal?: string;
+    caption?: string;
+    mediaType: "image" | "video" | "document";
+    fileName: string;
+    mimeType?: string;
+    senderName?: string;
+}): Promise<{ success: boolean; error?: string }> {
+    const userId = await requireAuth();
+    const parsed = sendUploadedFileSchema.parse(payload);
+    const canal = parsed.canal === "festas" ? "festas" : "alegrando";
+    const caption = (parsed.caption ?? "").trim();
+
+    // O path precisa apontar para a área de chat deste telefone/canal —
+    // impede reaproveitar a action para enviar arquivos arbitrários do bucket.
+    const safeTelefone = String(parsed.telefone).replace(/[^0-9A-Za-z-]/g, "");
+    if (!parsed.path.startsWith(`chat-${canal}/${safeTelefone}/`)) {
+        return { success: false, error: "Path inválido." };
+    }
+
+    const supabase = createServerSupabaseClient();
+    const { data: urlData } = supabase.storage.from("documents").getPublicUrl(parsed.path);
+    const publicUrl = urlData.publicUrl;
+
+    let sendResult: { success: boolean; zapiMessageId?: string; error?: string };
+
+    if (canal === "festas") {
+        const evoUrl = process.env.EVOLUTION_API_URL;
+        const evoInstance = process.env.EVOLUTION_INSTANCE;
+        const evoKey = process.env.EVOLUTION_API_KEY;
+        if (!evoUrl || !evoInstance || !evoKey) {
+            sendResult = { success: false, error: "Evolution API não configurada" };
+        } else {
+            const phone = String(parsed.telefone).replace(/\D/g, "");
+            const normalizedPhone = (phone.startsWith("55") && phone.length >= 12) ? phone : `55${phone}`;
+            try {
+                // Evolution v2 aceita URL no campo media — sem base64, o arquivo
+                // não passa pelo server.
+                const res = await fetch(`${evoUrl}/message/sendMedia/${evoInstance}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", apikey: evoKey },
+                    body: JSON.stringify({
+                        number: normalizedPhone,
+                        mediatype: parsed.mediaType,
+                        ...(parsed.mimeType ? { mimetype: parsed.mimeType } : {}),
+                        media: publicUrl,
+                        fileName: parsed.fileName,
+                        caption,
+                    }),
+                });
+                if (res.ok) {
+                    let evoMessageId: string | undefined;
+                    try {
+                        const body = (await res.json()) as Record<string, unknown>;
+                        evoMessageId = (body?.key as Record<string, unknown>)?.id as string | undefined
+                            ?? (body?.messageId as string | undefined);
+                    } catch { /* ignore */ }
+                    sendResult = { success: true, zapiMessageId: evoMessageId };
+                } else {
+                    sendResult = { success: false, error: `Evolution sendMedia ${res.status}` };
+                }
+            } catch (err) {
+                sendResult = { success: false, error: String(err) };
+            }
+        }
+    } else if (parsed.mediaType === "video") {
+        sendResult = await sendWhatsAppVideo(String(parsed.telefone), publicUrl, caption);
+    } else if (parsed.mediaType === "image") {
+        sendResult = await sendWhatsAppImage(String(parsed.telefone), publicUrl, caption);
+    } else {
+        // sendWhatsAppDocument aceita URL pública no lugar do base64
+        sendResult = await sendWhatsAppDocument(String(parsed.telefone), publicUrl, parsed.fileName, caption);
+    }
+
+    if (!sendResult.success) {
+        console.error("[sendUploadedFileMessage] Envio falhou:", sendResult.error);
+        return { success: false, error: sendResult.error };
+    }
+
+    const storedContent = caption ? `${publicUrl}|||${caption}` : publicUrl;
+    const { error: dbErr } = await supabase.from("messages").insert({
+        telefone: String(parsed.telefone),
+        canal,
+        sender_type: "equipe",
+        sender_name: parsed.senderName || "Equipe",
+        content: storedContent,
+        media_type: parsed.mediaType,
+        created_by: userId,
+        // Persiste messageId p/ habilitar "apagar para todos" / pin / react depois
+        metadata: sendResult.zapiMessageId
+            ? { messageId: sendResult.zapiMessageId }
+            : null,
+    });
+
+    if (dbErr) {
+        console.error("[sendUploadedFileMessage] Falha ao persistir:", dbErr.message);
     }
 
     return { success: true };

@@ -353,19 +353,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Tratamos grupos como contatos "alegrando" com canal_extra="grupo" — sem IA.
   if (isGroup && rawPhone) {
     const groupId = normalizeGroupId(rawPhone); // ex: "120363403370100000-group"
-    const groupName = payload.chatName || "Grupo WhatsApp";
+    const groupName = payload.chatName || null;
 
     if (eventType === "ReceivedCallback" && !isFromMe && payload.messageId) {
-      // Garantir que o grupo exista como contato
-      await supabase.from("Clientes _WhatsApp").upsert(
-        {
+      // Garantir que o grupo exista como contato — insert-only para não
+      // sobrescrever renomeação manual; só corrige nome genérico/vazio.
+      const { data: existing } = await supabase
+        .from("Clientes _WhatsApp")
+        .select("telefone, nome")
+        .eq("telefone", groupId)
+        .eq("canal", "alegrando")
+        .maybeSingle();
+
+      if (!existing) {
+        await supabase.from("Clientes _WhatsApp").insert({
           telefone: groupId,
-          nome: groupName,
+          nome: groupName || "Grupo WhatsApp",
           canal: "alegrando",
           ia_ativa: false,
-        },
-        { onConflict: "telefone,canal" }
-      );
+        });
+      } else if (groupName && (existing.nome === "Grupo WhatsApp" || !existing.nome)) {
+        await supabase
+          .from("Clientes _WhatsApp")
+          .update({ nome: groupName })
+          .eq("telefone", groupId)
+          .eq("canal", "alegrando");
+      }
 
       // Backfill foto do grupo (apenas se ainda não tiver) — fire-and-forget.
       // senderPhoto no payload de grupo geralmente é a foto do PARTICIPANTE,
