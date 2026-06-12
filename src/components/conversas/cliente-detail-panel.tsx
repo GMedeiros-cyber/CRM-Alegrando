@@ -58,6 +58,7 @@ export type FormState = {
     nome: string;
     email: string;
     cpf: string;
+    cnpj: string;
     status: string;
     linkedin: string;
     facebook: string;
@@ -94,6 +95,7 @@ export const INITIAL_FORM: FormState = {
     nome: "",
     email: "",
     cpf: "",
+    cnpj: "",
     status: "",
     linkedin: "",
     facebook: "",
@@ -478,18 +480,6 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                 </FieldGroup>
 
                 {cliente.canal !== "festas" && (
-                    <FieldGroup icon={<Phone className="w-3 h-3" />} label="Segundo Número">
-                        <Input
-                            value={form.segundoNumero}
-                            onChange={(e) => onFormChange({ segundoNumero: e.target.value })}
-                            onBlur={onSave}
-                            placeholder="(opcional)"
-                            className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
-                        />
-                    </FieldGroup>
-                )}
-
-                {cliente.canal !== "festas" && (
                     <FieldGroup icon={<MapPin className="w-3 h-3" />} label="Endereço">
                         <Input
                             value={form.endereco}
@@ -502,37 +492,16 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                 )}
 
                 {cliente.canal !== "festas" && (
-                    <FieldGroup icon={<UserRound className="w-3 h-3" />} label="Responsável">
+                    <FieldGroup label="CNPJ">
                         <Input
-                            value={form.responsavel}
-                            onChange={(e) => onFormChange({ responsavel: e.target.value })}
+                            value={form.cnpj}
+                            onChange={(e) => onFormChange({ cnpj: e.target.value })}
                             onBlur={onSave}
-                            placeholder="Nome do responsável"
-                            className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            placeholder="00.000.000/0000-00"
+                            className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                         />
                     </FieldGroup>
                 )}
-
-                <div className="grid grid-cols-2 gap-2">
-                    <FieldGroup label="Email">
-                        <Input
-                            value={form.email}
-                            onChange={(e) => onFormChange({ email: e.target.value })}
-                            onBlur={onSave}
-                            placeholder="email@exemplo.com"
-                            className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
-                        />
-                    </FieldGroup>
-                    <FieldGroup label="CPF">
-                        <Input
-                            value={form.cpf}
-                            onChange={(e) => onFormChange({ cpf: e.target.value })}
-                            onBlur={onSave}
-                            placeholder="000.000.000-00"
-                            className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
-                        />
-                    </FieldGroup>
-                </div>
 
                 {cliente.canal === "alegrando" && (
                     <div className="pt-2 border-t border-[#C7D2FE] dark:border-[#3d4a60]/60 space-y-3">

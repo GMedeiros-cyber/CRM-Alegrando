@@ -15,6 +15,7 @@ const updateClienteSchema = z.object({
     nome: z.string().max(255).nullable().optional(),
     status: z.string().max(50).nullable().optional(),
     cpf: z.string().max(14).nullable().optional(),
+    cnpj: z.string().max(20).nullable().optional(),
     email: z.string().max(255).nullable().optional(),
     statusAtendimento: z.string().max(100).nullable().optional(),
     linkedin: z.string().max(500).nullable().optional(),
@@ -100,6 +101,7 @@ export type ClienteDetail = {
     nome: string | null;
     status: string | null;
     cpf: string | null;
+    cnpj: string | null;
     email: string | null;
     statusAtendimento: string | null;
     linkedin: string | null;
@@ -346,6 +348,7 @@ export async function getClienteByTelefone(
         nome: data.nome,
         status: data.status,
         cpf: data.cpf,
+        cnpj: data.cnpj || null,
         email: data.email,
         statusAtendimento: data.status_atendimento,
         linkedin: data.linkedin,
@@ -414,6 +417,7 @@ export async function updateCliente(
         nome?: string | null;
         status?: string | null;
         cpf?: string | null;
+        cnpj?: string | null;
         email?: string | null;
         statusAtendimento?: string | null;
         linkedin?: string | null;
@@ -455,6 +459,7 @@ export async function updateCliente(
     if (parsed.nome !== undefined) updateData.nome = parsed.nome;
     if (parsed.status !== undefined) updateData.status = parsed.status;
     if (parsed.cpf !== undefined) updateData.cpf = parsed.cpf;
+    if (parsed.cnpj !== undefined) updateData.cnpj = parsed.cnpj;
     if (parsed.email !== undefined) updateData.email = parsed.email;
     if (parsed.statusAtendimento !== undefined) updateData.status_atendimento = parsed.statusAtendimento;
     if (parsed.linkedin !== undefined) updateData.linkedin = parsed.linkedin;
