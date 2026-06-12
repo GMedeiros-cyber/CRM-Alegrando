@@ -12,6 +12,7 @@
     "backfill:messages": "tsx scripts/backfill-messages.ts",
     "backfill:festas-media": "tsx scripts/backfill-festas-media.ts",
     "backfill:embeddings": "tsx scripts/backfill-embeddings.ts",
+    "backfill:grupos": "tsx scripts/backfill-grupos.ts",
     "e2e": "playwright test"
   },
   "dependencies": {
