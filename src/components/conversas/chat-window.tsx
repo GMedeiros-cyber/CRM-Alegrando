@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useLeadMessages } from "@/hooks/useLeadMessages";
 import type { LeadMessage } from "@/lib/actions/leads";
-import { MessageSquare, Loader2, Search, X, ChevronUp, ChevronDown, FileText, Image as ImageIcon, Mic, Pin, Video, MapPin, User } from "lucide-react";
+import { MessageSquare, Loader2, Search, X, ChevronUp, ChevronDown, FileText, Image as ImageIcon, Mic, Pin, Video, MapPin, User, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MessageContextMenu } from "./message-context-menu";
 import { PinnedMessageBanner } from "./pinned-message-banner";
@@ -36,6 +36,7 @@ export interface ChatWindowHandles {
         mediaType?: LeadMessage["mediaType"],
     ) => string;
     removeMessageById: (id: string) => void;
+    updateMessageById: (id: string, updates: Partial<LeadMessage>) => void;
 }
 
 interface ChatWindowProps {
@@ -44,6 +45,7 @@ interface ChatWindowProps {
     leadName?: string | null;
     onReady?: (fns: ChatWindowHandles) => void;
     onReply?: (msg: LeadMessage) => void;
+    onRetryFailed?: (msg: LeadMessage) => void;
 }
 
 // =============================================
@@ -178,7 +180,7 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
         if (url.startsWith("http")) {
             return (
                 <div>
-                    <img src={url} alt="imagem" className="max-w-[240px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => {
+                    <img src={url} alt="imagem" className="max-w-[260px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => {
                         try {
                             const parsed = new URL(url);
                             if (parsed.protocol === "https:" || parsed.protocol === "http:") {
@@ -202,7 +204,7 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
         if (url.startsWith("http") || url.startsWith("blob:")) {
             return (
                 <div>
-                    <video controls src={url} width={320} className="rounded-xl max-w-[320px]" />
+                    <video controls src={url} className="rounded-xl w-full max-w-[min(320px,75vw)]" />
                     {caption && <p className="text-xs mt-1.5 text-[#191918] dark:text-white/70 leading-relaxed">{caption}</p>}
                 </div>
             );
@@ -437,7 +439,7 @@ const MY_USER_ID = "crm-user";
 // =============================================
 // CHAT WINDOW
 // =============================================
-export function ChatWindow({ telefone, canal, leadName, onReady, onReply }: ChatWindowProps) {
+export function ChatWindow({ telefone, canal, leadName, onReady, onReply, onRetryFailed }: ChatWindowProps) {
     const { messages, loading, hasMore, loadingMore, loadOlder, addOptimisticMessage, updateMessageById, removeMessageById } = useLeadMessages(telefone, canal);
     const isGroup = isGroupTelefone(telefone);
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -462,8 +464,8 @@ export function ChatWindow({ telefone, canal, leadName, onReady, onReply }: Chat
     }, []);
 
     useEffect(() => {
-        onReady?.({ addOptimisticMessage, removeMessageById });
-    }, [onReady, addOptimisticMessage, removeMessageById]);
+        onReady?.({ addOptimisticMessage, removeMessageById, updateMessageById });
+    }, [onReady, addOptimisticMessage, removeMessageById, updateMessageById]);
 
     const pinnedMessages = useMemo(() => messages.filter((m) => m.pinned), [messages]);
 
@@ -729,7 +731,7 @@ export function ChatWindow({ telefone, canal, leadName, onReady, onReply }: Chat
                 />
             )}
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-1 bg-[#F7F7F5] dark:bg-[#0f1829]">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-1 chat-wallpaper">
                 {hasMore && (
                     <div className="flex justify-center py-3">
                         <button
@@ -750,6 +752,7 @@ export function ChatWindow({ telefone, canal, leadName, onReady, onReply }: Chat
                     const isClient = msg.senderType === "cliente" || msg.senderType === "lead";
                     const isSelf = msg.senderType === "ia" || msg.senderType === "humano" || msg.senderType === "equipe";
                     const isOptimistic = msg.id.startsWith("optimistic-");
+                    const isFailed = msg._failed === true;
 
                     let showDateSep = false;
                     if (msg.createdAt) {
@@ -782,13 +785,16 @@ export function ChatWindow({ telefone, canal, leadName, onReady, onReply }: Chat
                                 <div className="relative max-w-[72%] min-w-0">
                                     {/* Bubble */}
                                     <div
+                                        onClick={isFailed ? () => onRetryFailed?.(msg) : undefined}
+                                        title={isFailed ? "Falha no envio — toque para tentar novamente" : undefined}
                                         className={cn(
                                             "relative px-4 py-2.5 text-sm leading-relaxed",
+                                            isFailed && "cursor-pointer ring-1 ring-rose-500/40",
                                             isClient
-                                                ? "bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#C7D2FE] dark:border-[#3d4a60] text-[#191918] dark:text-white rounded-2xl rounded-bl-sm"
+                                                ? "bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] rounded-2xl rounded-bl-md shadow-sm"
                                                 : msg.senderType === "ia"
-                                                    ? "bg-[rgba(139,92,246,0.10)] border border-[rgba(139,92,246,0.20)] text-[#4c1d95] dark:text-white rounded-2xl rounded-br-sm shadow-sm"
-                                                    : "bg-[rgba(34,197,94,0.10)] border border-[rgba(34,197,94,0.25)] text-[#14532d] dark:text-white rounded-2xl rounded-br-sm shadow-sm",
+                                                    ? "bg-[#ece5fd] dark:bg-[#3e3263] text-[#111b21] dark:text-[#e9edef] rounded-2xl rounded-br-md shadow-sm"
+                                                    : "bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] rounded-2xl rounded-br-md shadow-sm",
                                             isSearchMatch && !isCurrentMatch && "ring-1 ring-yellow-500/30",
                                         )}
                                     >
@@ -819,9 +825,15 @@ export function ChatWindow({ telefone, canal, leadName, onReady, onReply }: Chat
 
                                             <SenderLabel message={msg} isClient={isClient} canal={canal} leadName={leadName} isGroup={isGroup} />
                                             <MessageContent message={msg} isSelf={isSelf} highlight={searchTerm || undefined} />
-                                            <p className={cn("text-[10px] mt-1 text-right", isClient ? "text-[#6366F1] dark:text-[#94a3b8]" : "text-[#191918] dark:text-white/50")}>
+                                            <p className={cn("text-[10px] mt-1 text-right flex items-center justify-end gap-1", isClient ? "text-[#667781] dark:text-[#8696a0]" : "text-[#111b21]/50 dark:text-white/50")}>
+                                                {isFailed && <AlertTriangle className="w-3 h-3 text-rose-500 shrink-0" />}
                                                 {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}
                                             </p>
+                                            {isFailed && (
+                                                <p className="text-[10px] mt-0.5 text-right text-rose-500 font-medium">
+                                                    Falha no envio — toque para tentar novamente
+                                                </p>
+                                            )}
                                         </div>
 
                                         {/* Chevron WhatsApp-style — absolute overlay, fora do fluxo de texto */}
