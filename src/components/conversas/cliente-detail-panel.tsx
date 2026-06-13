@@ -447,14 +447,18 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                 )}
             </div>
 
-            {/* Fields */}
+            {/* Fields — não-festas mostra a instituição completa (Nome do local,
+                CNPJ, Endereço, Telefone, E-mail) ligada às colunas do cliente */}
             <div className="space-y-3">
-                <FieldGroup icon={<User className="w-3 h-3" />} label="Nome">
+                <FieldGroup
+                    icon={cliente.canal === "festas" || isGroup ? <User className="w-3 h-3" /> : <Building2 className="w-3 h-3" />}
+                    label={cliente.canal === "festas" ? "Nome" : isGroup ? "Nome do grupo" : "Nome do local"}
+                >
                     <Input
                         value={form.nome}
                         onChange={(e) => onFormChange({ nome: e.target.value })}
                         onBlur={onSave}
-                        placeholder="Nome do cliente"
+                        placeholder={cliente.canal === "festas" ? "Nome do cliente" : isGroup ? "Nome do grupo" : "Nome do local"}
                         className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                     />
                 </FieldGroup>
@@ -471,13 +475,17 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                     </FieldGroup>
                 )}
 
-                <FieldGroup icon={<Phone className="w-3 h-3" />} label="Telefone">
-                    <Input
-                        value={cliente.telefone}
-                        disabled
-                        className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536]/50 border-[#C7D2FE] dark:border-[#3d4a60] text-[#191918] dark:text-white font-medium cursor-not-allowed"
-                    />
-                </FieldGroup>
+                {cliente.canal !== "festas" && (
+                    <FieldGroup label="CNPJ">
+                        <Input
+                            value={form.cnpj}
+                            onChange={(e) => onFormChange({ cnpj: e.target.value })}
+                            onBlur={onSave}
+                            placeholder="00.000.000/0000-00"
+                            className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
+                        />
+                    </FieldGroup>
+                )}
 
                 {cliente.canal !== "festas" && (
                     <FieldGroup icon={<MapPin className="w-3 h-3" />} label="Endereço">
@@ -491,13 +499,21 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                     </FieldGroup>
                 )}
 
+                <FieldGroup icon={<Phone className="w-3 h-3" />} label="Telefone">
+                    <Input
+                        value={cliente.telefone}
+                        disabled
+                        className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536]/50 border-[#C7D2FE] dark:border-[#3d4a60] text-[#191918] dark:text-white font-medium cursor-not-allowed"
+                    />
+                </FieldGroup>
+
                 {cliente.canal !== "festas" && (
-                    <FieldGroup label="CNPJ">
+                    <FieldGroup label="E-mail">
                         <Input
-                            value={form.cnpj}
-                            onChange={(e) => onFormChange({ cnpj: e.target.value })}
+                            value={form.email}
+                            onChange={(e) => onFormChange({ email: e.target.value })}
                             onBlur={onSave}
-                            placeholder="00.000.000/0000-00"
+                            placeholder="email@instituicao.com"
                             className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                         />
                     </FieldGroup>
@@ -511,54 +527,6 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                                 Dados Institucionais
                             </h4>
                         </div>
-
-                        {/* ===== Instituição ===== */}
-                        <div className="flex items-center gap-1.5">
-                            <Building2 className="w-3 h-3 text-brand-400/70" />
-                            <h5 className="text-[10px] font-bold uppercase tracking-wider text-[#6366F1] dark:text-[#94a3b8]">
-                                Instituição
-                            </h5>
-                        </div>
-
-                        <FieldGroup icon={<Building2 className="w-3 h-3" />} label="Nome do local">
-                            <Input
-                                value={form.instituicao}
-                                onChange={(e) => onFormChange({ instituicao: e.target.value })}
-                                onBlur={onSave}
-                                placeholder="Nome da instituição"
-                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
-                            />
-                        </FieldGroup>
-
-                        <FieldGroup icon={<MapPin className="w-3 h-3" />} label="Endereço">
-                            <Input
-                                value={form.instituicaoEndereco}
-                                onChange={(e) => onFormChange({ instituicaoEndereco: e.target.value })}
-                                onBlur={onSave}
-                                placeholder="Rua, número, bairro, cidade"
-                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
-                            />
-                        </FieldGroup>
-
-                        <FieldGroup icon={<Phone className="w-3 h-3" />} label="Telefone">
-                            <Input
-                                value={form.instituicaoTelefone}
-                                onChange={(e) => onFormChange({ instituicaoTelefone: e.target.value })}
-                                onBlur={onSave}
-                                placeholder="(opcional)"
-                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
-                            />
-                        </FieldGroup>
-
-                        <FieldGroup label="E-mail">
-                            <Input
-                                value={form.instituicaoEmail}
-                                onChange={(e) => onFormChange({ instituicaoEmail: e.target.value })}
-                                onBlur={onSave}
-                                placeholder="email@instituicao.com"
-                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
-                            />
-                        </FieldGroup>
 
                         {/* ===== Coordenadora ===== */}
                         <div className="flex items-center gap-1.5 pt-1">
