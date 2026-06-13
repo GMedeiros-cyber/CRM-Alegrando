@@ -571,6 +571,18 @@ main > div {
 }
 
 /* =====================================================
+   Placeholder no modo escuro — cinza padrão em TODOS os
+   inputs. Fica FORA de @layer de propósito: estilos sem
+   layer vencem as utilities do Tailwind (placeholder:text-*)
+   inline, que de outra forma deixariam o placeholder na cor
+   da marca (roxo) no dark. O modo claro não é afetado.
+   ===================================================== */
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: #64748b;
+}
+
+/* =====================================================
    Wallpaper do chat (Conversas) — padrão geométrico
    original e sutil (círculos/losangos/pontos), tileável.
    Não é o doodle do WhatsApp (questão de IP).
