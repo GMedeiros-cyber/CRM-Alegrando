@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchWithTimeout } from "@/lib/fetch-utils";
+import { sha256, uploadToR2, objectExistsInR2, r2PublicUrl } from "./r2-client";
 
 type MediaType = "audio" | "image" | "video" | "document" | "sticker";
 
-const AUDIO_BUCKET = "audios";
-const DOC_BUCKET = "documents";
-const FESTAS_DOC_PREFIX = "chat-festas";
+// Toda mídia do WhatsApp (áudio incluído) vai pro Cloudflare R2, com dedup por
+// hash. Só o bucket `avatars` (fotos de perfil) continua no Supabase Storage,
+// via photo-storage.ts.
+const R2_BUCKET = "alegrando-media";
 
 // Mapa mime → ext alinhado com o nó ConvertToBinary do Fluxo Marcia (n8n).
 // Mantém paridade com o que o n8n estava gravando antes da migração pro Next.js.
@@ -66,56 +68,35 @@ function extFromContentType(ct: string): string {
   return "ogg";
 }
 
-function sanitizeFileName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
-}
-
-function bucketAndPathForEvolution(
-  mediaType: MediaType,
-  telefone: string,
-  fileName: string | undefined,
-  ext: string,
-): { bucket: string; path: string } {
-  const digits = telefone.replace(/\D/g, "");
-  const ts = Date.now();
-  if (mediaType === "audio") {
-    return { bucket: AUDIO_BUCKET, path: `${digits}/${ts}.${ext}` };
-  }
-  const baseName = fileName && fileName.length > 0
-    ? sanitizeFileName(fileName)
-    : `${ts}.${ext}`;
-  const safeName = baseName.includes(".") ? baseName : `${baseName}.${ext}`;
-  return {
-    bucket: DOC_BUCKET,
-    path: `${FESTAS_DOC_PREFIX}/${digits}/${ts}-${safeName}`,
-  };
-}
-
-function bucketAndPathForZapi(
-  mediaType: MediaType,
-  telefone: string,
-  ext: string,
-  fileName?: string,
-): { bucket: string; path: string } {
-  const digits = telefone.replace(/\D/g, "");
-  const ts = Date.now();
-  if (mediaType === "audio") {
-    return { bucket: AUDIO_BUCKET, path: `${digits}/${ts}.${ext}` };
-  }
-  const safeName = fileName
-    ? sanitizeFileName(fileName.includes(".") ? fileName : `${fileName}.${ext}`)
-    : `${ts}.${ext}`;
-  return {
-    bucket: DOC_BUCKET,
-    path: `chat-alegrando/${digits}/${ts}-${safeName}`,
-  };
-}
-
 export interface ProxyMediaResult {
   publicUrl: string;
   mimeType: string;
   bucket: string;
   path: string;
+}
+
+/**
+ * Upload de mídia do WhatsApp (qualquer tipo — imagem, vídeo, documento, sticker
+ * e áudio) pro Cloudflare R2, com dedup GLOBAL por hash de conteúdo.
+ *
+ * O path é determinístico pelo SHA-256 do arquivo (`shared/<hash>.<ext>`), então
+ * arquivos idênticos — mesmo vindos de telefones diferentes — colidem no mesmo
+ * objeto: só existe 1 cópia no R2. Se o objeto já existe, pula o upload e retorna
+ * a URL existente (é o que teria evitado as 102 duplicatas do vídeo institucional
+ * mandado pra 16 telefones). A rastreabilidade por telefone/canal fica na tabela
+ * `messages`, não no path do arquivo.
+ */
+async function uploadDocMediaToR2(
+  buffer: Buffer,
+  ext: string,
+  contentType: string,
+): Promise<ProxyMediaResult> {
+  const path = `shared/${sha256(buffer)}.${ext}`;
+  if (await objectExistsInR2(path)) {
+    return { publicUrl: r2PublicUrl(path), mimeType: contentType, bucket: R2_BUCKET, path };
+  }
+  const publicUrl = await uploadToR2(path, buffer, contentType);
+  return { publicUrl, mimeType: contentType, bucket: R2_BUCKET, path };
 }
 
 interface EvoKey {
@@ -148,14 +129,14 @@ interface EvoBase64Response {
 
 /**
  * Baixa mídia decifrada via Evolution API (`/chat/getBase64FromMediaMessage`)
- * e faz upload pro Supabase Storage. Usar quando o conteúdo bruto vem como URL
+ * e sobe pro Cloudflare R2. Usar quando o conteúdo bruto vem como URL
  * `mmg.whatsapp.net/...enc` (canal festas) — `fetch` direto não decodifica.
  */
 export async function proxyMediaFromEvolution(
   supabase: SupabaseClient,
   params: ProxyFromEvolutionParams,
 ): Promise<ProxyMediaResult | null> {
-  const { key, message, telefone, mediaType } = params;
+  const { key, message, mediaType } = params;
   const url = process.env.EVOLUTION_API_URL;
   const instance = process.env.EVOLUTION_INSTANCE;
   const apiKey = process.env.EVOLUTION_API_KEY;
@@ -198,21 +179,10 @@ export async function proxyMediaFromEvolution(
 
     const mimetype = body.mimetype || guessMimeForType(mediaType);
     const ext = extFromMime(mimetype, mediaType);
-    const fileName = mediaType === "document" ? body.fileName : undefined;
-    const { bucket, path } = bucketAndPathForEvolution(mediaType, telefone, fileName, ext);
     const buffer = Buffer.from(body.base64, "base64");
 
-    const { error: upErr } = await supabase.storage
-      .from(bucket)
-      .upload(path, buffer, { contentType: mimetype, upsert: true });
-
-    if (upErr) {
-      console.error(`[MEDIA-PROXY-EVO] Upload falhou (${bucket}/${path}):`, upErr.message);
-      return null;
-    }
-
-    const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
-    return { publicUrl: pub.publicUrl, mimeType: mimetype, bucket, path };
+    // Toda mídia (áudio incluído) → Cloudflare R2 com dedup global por hash.
+    return await uploadDocMediaToR2(buffer, ext, mimetype);
   } catch (err) {
     console.error("[MEDIA-PROXY-EVO] Exceção:", err);
     return null;
@@ -230,12 +200,11 @@ function guessMimeForType(mediaType: MediaType): string {
 }
 
 /**
- * Faz download da URL pública (ex: Backblaze da Z-API) e faz upload no Storage.
- * Generalização do antigo `proxyAudioToStorage` para qualquer tipo de mídia.
- * Áudio → bucket `audios`; demais → bucket `documents/chat-alegrando/...`.
+ * Faz download da URL pública (ex: Backblaze da Z-API) e sobe pro Cloudflare R2.
+ * Generalização do antigo `proxyAudioToStorage` para qualquer tipo de mídia —
+ * áudio incluído (dedup global por hash, igual aos demais tipos).
  *
- * Se `sourceUrl` já aponta para o Storage do Supabase, retorna a própria URL
- * (idempotência).
+ * Se `sourceUrl` já aponta para o R2, retorna a própria URL (idempotência).
  */
 export async function proxyMediaFromZapi(
   supabase: SupabaseClient,
@@ -243,15 +212,12 @@ export async function proxyMediaFromZapi(
   telefone: string,
   messageId: string,
   mediaType: MediaType,
-  fileName?: string,
 ): Promise<ProxyMediaResult | null> {
   if (!sourceUrl || !messageId) return null;
 
-  const targetBucket = mediaType === "audio" ? AUDIO_BUCKET : DOC_BUCKET;
-  const { data: prefixData } = supabase.storage.from(targetBucket).getPublicUrl("x");
-  const publicPrefix = prefixData.publicUrl.slice(0, -1);
-  if (sourceUrl.startsWith(publicPrefix)) {
-    return { publicUrl: sourceUrl, mimeType: "", bucket: targetBucket, path: "" };
+  // Idempotência: se a sourceUrl já é do R2 (nosso storage), não re-baixa/re-sobe.
+  if (process.env.R2_PUBLIC_URL && sourceUrl.startsWith(process.env.R2_PUBLIC_URL)) {
+    return { publicUrl: sourceUrl, mimeType: "", bucket: R2_BUCKET, path: "" };
   }
 
   try {
@@ -271,19 +237,8 @@ export async function proxyMediaFromZapi(
       MIME_TO_EXT[contentType.toLowerCase()] ||
       (mediaType === "audio" ? extFromContentType(contentType) : extFromMime(contentType, mediaType));
 
-    const { bucket, path } = bucketAndPathForZapi(mediaType, telefone, ext, fileName);
-
-    const { error } = await supabase.storage
-      .from(bucket)
-      .upload(path, buffer, { contentType, upsert: true });
-
-    if (error) {
-      console.error(`[MEDIA-PROXY-ZAPI] Upload falhou (${bucket}/${path}):`, error.message);
-      return null;
-    }
-
-    const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
-    return { publicUrl: pub.publicUrl, mimeType: contentType, bucket, path };
+    // Toda mídia (áudio incluído) → Cloudflare R2 com dedup global por hash.
+    return await uploadDocMediaToR2(buffer, ext, contentType);
   } catch (err) {
     console.error("[MEDIA-PROXY-ZAPI] Exceção:", err);
     return null;
