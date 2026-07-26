@@ -17,6 +17,12 @@ import {
     sendEvolutionAudio,
     deleteEvolutionMessage,
 } from "@/lib/whatsapp/sender";
+import {
+    putMediaDeduped,
+    deleteFromR2,
+    presignedPutUrl,
+    r2PublicUrl,
+} from "@/lib/whatsapp/r2-client";
 import { z } from "zod";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -163,29 +169,21 @@ export async function sendFileMessage(
 
     const supabase = createServerSupabaseClient();
 
-    // Upload to Supabase Storage
-    const ext = file.name.split(".").pop() || "bin";
-    const storagePath = `chat-files/${String(telefone)}/${Date.now()}.${ext}`;
+    // Sobe pro Cloudflare R2 (mesmo helper/dedup do fluxo de recebimento).
+    const ext = (file.name.split(".").pop() || "bin").toLowerCase();
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    const { error: uploadErr } = await supabase.storage
-        .from("documents")
-        .upload(storagePath, buffer, {
-            contentType: file.type,
-            upsert: false,
-        });
-
-    if (uploadErr) {
-        console.error("[sendFileMessage] Upload falhou:", uploadErr.message);
+    let publicUrl: string;
+    try {
+        ({ publicUrl } = await putMediaDeduped(
+            buffer,
+            ext,
+            file.type || "application/octet-stream",
+        ));
+    } catch (err) {
+        console.error("[sendFileMessage] Upload R2 falhou:", err);
         return { success: false, error: "Falha no upload do arquivo." };
     }
-
-    // Get public URL
-    const { data: urlData } = supabase.storage
-        .from("documents")
-        .getPublicUrl(storagePath);
-
-    const publicUrl = urlData.publicUrl;
 
     const isFestas = canal === "festas";
 
@@ -285,27 +283,26 @@ export async function sendFileMessage(
 export async function createSignedUploadUrl(
     fileName: string,
     telefone: string,
-    canal: string = "alegrando"
-): Promise<{ success: boolean; signedUrl?: string; token?: string; path?: string; error?: string }> {
+    canal: string = "alegrando",
+    mimeType: string = "application/octet-stream"
+): Promise<{ success: boolean; signedUrl?: string; path?: string; publicUrl?: string; error?: string }> {
     await requireAuth();
 
-    const supabase = createServerSupabaseClient();
     const safeCanal = canal === "festas" ? "festas" : "alegrando";
     // Mantém dígitos e o sufixo "-group" de grupos; remove o resto
     const safeTelefone = String(telefone).replace(/[^0-9A-Za-z-]/g, "");
     const safeFileName = fileName.replace(/[^0-9A-Za-z._-]/g, "_").slice(-100);
+    // Arquivo grande sobe direto browser→R2 via presigned PUT. Path por timestamp
+    // (o server não tem os bytes aqui pra calcular o hash-dedup — ok pra grandes).
     const path = `chat-${safeCanal}/${safeTelefone}/${Date.now()}-${safeFileName}`;
 
-    const { data, error } = await supabase.storage
-        .from("documents")
-        .createSignedUploadUrl(path);
-
-    if (error || !data) {
-        console.error("[createSignedUploadUrl] Falhou:", error?.message);
+    try {
+        const signedUrl = await presignedPutUrl(path, mimeType);
+        return { success: true, signedUrl, path, publicUrl: r2PublicUrl(path) };
+    } catch (err) {
+        console.error("[createSignedUploadUrl] Falhou:", err);
         return { success: false, error: "Falha ao preparar upload." };
     }
-
-    return { success: true, signedUrl: data.signedUrl, token: data.token, path: data.path };
 }
 
 const sendUploadedFileSchema = z.object({
@@ -335,7 +332,12 @@ export async function sendUploadedFileMessage(payload: {
     senderName?: string;
 }): Promise<{ success: boolean; error?: string }> {
     const userId = await requireAuth();
-    const parsed = sendUploadedFileSchema.parse(payload);
+    let parsed: z.infer<typeof sendUploadedFileSchema>;
+    try {
+        parsed = sendUploadedFileSchema.parse(payload);
+    } catch {
+        return { success: false, error: "Dados de upload inválidos." };
+    }
     const canal = parsed.canal === "festas" ? "festas" : "alegrando";
     const caption = (parsed.caption ?? "").trim();
 
@@ -347,8 +349,9 @@ export async function sendUploadedFileMessage(payload: {
     }
 
     const supabase = createServerSupabaseClient();
-    const { data: urlData } = supabase.storage.from("documents").getPublicUrl(parsed.path);
-    const publicUrl = urlData.publicUrl;
+    // O arquivo grande já subiu direto browser→R2 (presigned PUT); a URL pública
+    // é determinística a partir do path.
+    const publicUrl = r2PublicUrl(parsed.path);
 
     let sendResult: { success: boolean; zapiMessageId?: string; error?: string };
 
@@ -455,40 +458,37 @@ export async function sendAudioMessage(
 
     const supabase = createServerSupabaseClient();
 
-    const ext = file.name.split(".").pop() || "ogg";
-    const storagePath = `${String(telefone).replace(/\D/g, "")}/${Date.now()}.${ext}`;
+    const ext = (file.name.split(".").pop() || "ogg").toLowerCase();
     const buffer = Buffer.from(await file.arrayBuffer());
     const base64 = buffer.toString("base64");
 
-    // URL pública já é conhecida a partir do path — não precisa esperar o upload
-    const { data: urlData } = supabase.storage.from("audios").getPublicUrl(storagePath);
-    const publicUrl = urlData.publicUrl;
-
     const isFestas = canal === "festas";
 
-    // Paraleliza upload ao Storage e envio ao WhatsApp. Ambos usam o mesmo buffer;
-    // Z-API aceita data URL base64, evitando o round-trip de fetch da URL pública.
-    const uploadPromise = supabase.storage
-        .from("audios")
-        .upload(storagePath, buffer, { contentType: file.type, upsert: false });
-
-    // Força mimetype OGG Opus no data URL enviado ao Z-API. O stream Opus é idêntico
-    // entre WebM e OGG; declarar OGG ajuda a Z-API a tratar como PTT (voice note) em
-    // vez de arquivo de áudio genérico.
+    // Envia com o mime REAL do arquivo. Antes rotulava WebM como OGG (container
+    // errado → WhatsApp lia 00:00); mandar o mime real deixa a Z-API/Evolution
+    // transcodificar o Opus corretamente pra voice note.
     const sendPromise = isFestas
         ? sendEvolutionAudio(String(telefone), base64)
-        : sendWhatsAppAudio(String(telefone), `data:audio/ogg;codecs=opus;base64,${base64}`);
+        : sendWhatsAppAudio(String(telefone), `data:${file.type};base64,${base64}`);
 
-    const [uploadRes, sendRes] = await Promise.all([uploadPromise, sendPromise]);
+    // Paraleliza upload ao R2 (mesmo helper/dedup) e envio. O dedup nunca bloqueia:
+    // se o upload falhar, seguimos sem persistir a URL (fica só o envio ao WhatsApp).
+    const [uploadRes, sendRes] = await Promise.all([
+        putMediaDeduped(buffer, ext, file.type || "audio/ogg").catch((err) => {
+            console.error("[sendAudioMessage] Upload R2 falhou:", err);
+            return null;
+        }),
+        sendPromise,
+    ]);
 
-    if (uploadRes.error) {
-        console.error("[sendAudioMessage] Upload falhou:", uploadRes.error.message);
+    if (!uploadRes) {
         return { success: false, error: "Falha no upload do áudio." };
     }
     if (!sendRes.success) {
         console.error("[sendAudioMessage] Envio falhou:", sendRes.error);
         return { success: false, error: sendRes.error };
     }
+    const publicUrl = uploadRes.publicUrl;
 
     const messageId = isFestas
         ? (sendRes as { evoMessageId?: string }).evoMessageId
@@ -738,15 +738,23 @@ export async function deleteMessage(payload: {
             }
         }
 
-        // Se for áudio armazenado no bucket, apaga o arquivo (fire-and-forget)
+        // Se for áudio armazenado, apaga o arquivo (fire-and-forget). Áudio novo
+        // vive no R2; áudio antigo ainda pode estar no bucket `audios` do Supabase.
         if (payload.mediaType === "audio" && payload.content) {
-            const STORAGE_MARKER = "/storage/v1/object/public/audios/";
-            const markerIdx = payload.content.indexOf(STORAGE_MARKER);
-            if (markerIdx !== -1) {
-                const storagePath = payload.content.slice(markerIdx + STORAGE_MARKER.length);
-                supabase.storage.from("audios").remove([storagePath])
-                    .then(({ error: rmErr }) => { if (rmErr) console.error("[deleteMessage] Storage remove falhou:", rmErr.message); })
-                    .catch(err => console.error("[deleteMessage] Storage remove exceção:", err));
+            const r2Prefix = process.env.R2_PUBLIC_URL;
+            const SUPA_MARKER = "/storage/v1/object/public/audios/";
+            if (r2Prefix && payload.content.startsWith(r2Prefix)) {
+                const r2Path = payload.content.slice(r2Prefix.length).replace(/^\/+/, "").split("?")[0];
+                deleteFromR2(r2Path)
+                    .catch(err => console.error("[deleteMessage] R2 remove falhou:", err));
+            } else {
+                const markerIdx = payload.content.indexOf(SUPA_MARKER);
+                if (markerIdx !== -1) {
+                    const storagePath = payload.content.slice(markerIdx + SUPA_MARKER.length);
+                    supabase.storage.from("audios").remove([storagePath])
+                        .then(({ error: rmErr }) => { if (rmErr) console.error("[deleteMessage] Storage remove falhou:", rmErr.message); })
+                        .catch(err => console.error("[deleteMessage] Storage remove exceção:", err));
+                }
             }
         }
 
@@ -834,11 +842,12 @@ export async function uploadContactPhoto(
     const supabase = createServerSupabaseClient();
 
     const ext = file.name.split(".").pop() || "jpg";
-    const path = `avatars/${telefone.replace(/\D/g, "")}/${Date.now()}.${ext}`;
+    // Foto de perfil/contato fica no bucket `avatars` do Supabase (não vai pro R2).
+    const path = `${telefone.replace(/\D/g, "")}/${Date.now()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const { error: uploadErr } = await supabase.storage
-        .from("documents")
+        .from("avatars")
         .upload(path, buffer, { contentType: file.type, upsert: true });
 
     if (uploadErr) {
@@ -846,6 +855,6 @@ export async function uploadContactPhoto(
         return { success: false, error: uploadErr.message };
     }
 
-    const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
+    const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
     return { success: true, url: urlData.publicUrl };
 }

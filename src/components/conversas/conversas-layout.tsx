@@ -1279,9 +1279,10 @@ export function ConversasLayout() {
     }
 
     // ========= Send attachments handler =========
-    // Acima deste tamanho o arquivo sobe direto browser→Storage via signed URL:
-    // a Vercel limita o request body de serverless em 4.5MB (plataforma).
-    const DIRECT_UPLOAD_THRESHOLD = 4 * 1024 * 1024;
+    // Até este tamanho o arquivo sobe pela server action (server → R2, com dedup);
+    // acima, sobe direto browser→R2 via presigned PUT (next.config libera 10MB de
+    // body na server action). O path >10MB exige CORS de PUT no bucket R2.
+    const DIRECT_UPLOAD_THRESHOLD = 10 * 1024 * 1024;
 
     async function sendAttachment(att: { file: File; preview: string | null; caption: string; id: string }) {
         if (!cliente?.telefone) return;
@@ -1323,16 +1324,25 @@ export function ConversasLayout() {
             let res: { success: boolean; error?: string };
 
             if (att.file.size > DIRECT_UPLOAD_THRESHOLD) {
-                const signed = await createSignedUploadUrl(att.file.name, cliente.telefone, cliente.canal ?? "alegrando");
-                if (!signed.success || !signed.path || !signed.token) {
+                const signed = await createSignedUploadUrl(att.file.name, cliente.telefone, cliente.canal ?? "alegrando", att.file.type);
+                if (!signed.success || !signed.path || !signed.signedUrl) {
                     markFailed(signed.error || "Falha ao preparar upload.");
                     return;
                 }
-                const { error: upErr } = await supabase.storage
-                    .from("documents")
-                    .uploadToSignedUrl(signed.path, signed.token, att.file);
-                if (upErr) {
-                    markFailed(`Falha no upload: ${upErr.message}`);
+                // PUT direto no R2 via presigned URL. O Content-Type precisa bater
+                // com o que foi assinado no server (senão o R2 recusa a assinatura).
+                try {
+                    const putRes = await fetch(signed.signedUrl, {
+                        method: "PUT",
+                        body: att.file,
+                        headers: { "Content-Type": att.file.type || "application/octet-stream" },
+                    });
+                    if (!putRes.ok) {
+                        markFailed(`Falha no upload: ${putRes.status}`);
+                        return;
+                    }
+                } catch (err) {
+                    markFailed(`Falha no upload: ${String(err)}`);
                     return;
                 }
                 res = await sendUploadedFileMessage({
