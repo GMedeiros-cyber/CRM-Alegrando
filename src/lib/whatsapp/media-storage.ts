@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchWithTimeout } from "@/lib/fetch-utils";
-import { sha256, uploadToR2, objectExistsInR2, r2PublicUrl } from "./r2-client";
+import { putMediaDeduped } from "./r2-client";
 
 type MediaType = "audio" | "image" | "video" | "document" | "sticker";
 
@@ -91,11 +91,7 @@ async function uploadDocMediaToR2(
   ext: string,
   contentType: string,
 ): Promise<ProxyMediaResult> {
-  const path = `shared/${sha256(buffer)}.${ext}`;
-  if (await objectExistsInR2(path)) {
-    return { publicUrl: r2PublicUrl(path), mimeType: contentType, bucket: R2_BUCKET, path };
-  }
-  const publicUrl = await uploadToR2(path, buffer, contentType);
+  const { publicUrl, path } = await putMediaDeduped(buffer, ext, contentType);
   return { publicUrl, mimeType: contentType, bucket: R2_BUCKET, path };
 }
 
