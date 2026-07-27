@@ -435,7 +435,6 @@ export function ConversasLayout() {
 
     // Audio attachment (preview before send)
     const [audioAttachment, setAudioAttachment] = useState<{ file: File; previewUrl: string } | null>(null);
-    const [isSendingAudio, setIsSendingAudio] = useState(false);
     const [isSendingFile, setIsSendingFile] = useState(false);
     const [isRecordingAudio, setIsRecordingAudio] = useState(false);
 
@@ -1255,27 +1254,41 @@ export function ConversasLayout() {
         setAudioAttachment(null);
     }
 
-    async function handleSendAudio() {
-        if (!cliente?.telefone || !audioAttachment) return;
-        setIsSendingAudio(true);
-        try {
-            const formData = new FormData();
-            formData.append("file", audioAttachment.file);
-            formData.append("telefone", cliente.telefone);
-            formData.append("sender_name", cliente.canal === "festas" ? "Festas" : "Alegrando");
-            formData.append("canal", cliente.canal ?? "alegrando");
-            const res = await sendAudioMessage(formData);
-            if (!res.success) {
-                setToast({ type: "error", text: res.error || "Erro ao enviar áudio." });
-                return;
+    // Envia o áudio com bolha OTIMISTA: aparece na hora (tocando o blob local) e é
+    // reconciliada com a URL real do R2 quando a action retorna — sem esperar o
+    // ciclo todo (mata o delay percebido).
+    function sendAudioCore(file: File, previewUrl: string, senderName: string, telefone: string, canal: string) {
+        const optimisticId = addOptimisticRef.current?.(previewUrl, senderName, "audio") ?? null;
+        (async () => {
+            try {
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("telefone", telefone);
+                formData.append("sender_name", senderName);
+                formData.append("canal", canal);
+                const res = await sendAudioMessage(formData);
+                if (!res.success) {
+                    markSendFailed(optimisticId, () => sendAudioCore(file, previewUrl, senderName, telefone, canal));
+                    return;
+                }
+                // Troca o content pro URL real do R2: o Realtime dedupa por content
+                // (se ligado); se off, a bolha persiste já com a URL definitiva.
+                if (optimisticId && res.url) {
+                    updateOptimisticRef.current?.(optimisticId, { content: res.url, _optimistic: false });
+                }
+                URL.revokeObjectURL(previewUrl);
+            } catch {
+                markSendFailed(optimisticId, () => sendAudioCore(file, previewUrl, senderName, telefone, canal));
             }
-            URL.revokeObjectURL(audioAttachment.previewUrl);
-            setAudioAttachment(null);
-        } catch (err) {
-            setToast({ type: "error", text: `Erro ao enviar áudio: ${err}` });
-        } finally {
-            setIsSendingAudio(false);
-        }
+        })();
+    }
+
+    function handleSendAudio() {
+        if (!cliente?.telefone || !audioAttachment) return;
+        const { file, previewUrl } = audioAttachment;
+        const senderName = cliente.canal === "festas" ? "Festas" : "Alegrando";
+        setAudioAttachment(null); // fecha o preview; a bolha otimista assume
+        sendAudioCore(file, previewUrl, senderName, cliente.telefone, cliente.canal ?? "alegrando");
     }
 
     // ========= Send attachments handler =========
@@ -1863,25 +1876,17 @@ export function ConversasLayout() {
                                 <AudioPlayer src={audioAttachment.previewUrl} variant="sent" className="flex-1" />
                                 <button
                                     onClick={handleCancelAudio}
-                                    disabled={isSendingAudio}
-                                    className="p-1.5 rounded-lg text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] transition-colors shrink-0 disabled:opacity-50"
+                                    className="p-1.5 rounded-lg text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] transition-colors shrink-0"
                                     title="Cancelar"
                                 >
                                     <X className="w-4 h-4" />
                                 </button>
                                 <button
                                     onClick={handleSendAudio}
-                                    disabled={isSendingAudio}
-                                    className="flex items-center justify-center h-9 px-3 rounded-lg bg-brand-500 text-[#191918] dark:text-white text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors shadow shadow-brand-500/25 shrink-0 gap-1.5"
+                                    className="flex items-center justify-center h-9 px-3 rounded-lg bg-brand-500 text-[#191918] dark:text-white text-sm font-semibold hover:bg-brand-600 transition-colors shadow shadow-brand-500/25 shrink-0 gap-1.5"
                                 >
-                                    {isSendingAudio ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <>
-                                            <Send className="w-3.5 h-3.5" />
-                                            Enviar
-                                        </>
-                                    )}
+                                    <Send className="w-3.5 h-3.5" />
+                                    Enviar
                                 </button>
                             </div>
                         )}

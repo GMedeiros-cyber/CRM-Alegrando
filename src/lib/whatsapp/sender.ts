@@ -599,11 +599,12 @@ export async function sendEvolutionReply(
 /**
  * Envia áudio via Evolution API (canal festas).
  * Endpoint: /message/sendWhatsAppAudio/{instance}
- * Body: { number, audio: base64 (sem prefixo data:) }
+ * Body: { number, audio: URL pública } — a Evolution baixa a URL e gera o voice
+ * note com waveform (base64 fazia o waveform sair reto).
  */
 export async function sendEvolutionAudio(
   telefone: string,
-  audioBase64: string
+  audioUrl: string
 ): Promise<{ success: boolean; evoMessageId?: string; error?: string }> {
   const url = process.env.EVOLUTION_API_URL;
   const instance = process.env.EVOLUTION_INSTANCE;
@@ -621,7 +622,7 @@ export async function sendEvolutionAudio(
       headers: buildEvoHeaders(key),
       body: JSON.stringify({
         number: normalized,
-        audio: audioBase64,
+        audio: audioUrl,
       }),
     });
     const body = await res.json().catch(() => ({}));
