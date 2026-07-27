@@ -23,6 +23,7 @@ import {
     presignedPutUrl,
     r2PublicUrl,
 } from "@/lib/whatsapp/r2-client";
+import { fetchWithTimeout } from "@/lib/fetch-utils";
 import { z } from "zod";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -65,11 +66,11 @@ export async function sendMessage(payload: {
 
         let evoMessageId: string | undefined;
         try {
-            const res = await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+            const res = await fetchWithTimeout(`${evoUrl}/message/sendText/${evoInstance}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", apikey: evoKey },
                 body: JSON.stringify({ number: String(parsed.telefone), text: parsed.mensagem }),
-            });
+            }, 15_000);
             const body = await res.json().catch(() => ({}));
             evoMessageId = (body as Record<string, Record<string, unknown>>)?.key?.id as string | undefined;
         } catch (err) {
@@ -99,7 +100,7 @@ export async function sendMessage(payload: {
             return { success: false, warning: "Webhook não configurado" };
         }
 
-        const response = await fetch(webhookUrl, {
+        const response = await fetchWithTimeout(webhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -107,7 +108,7 @@ export async function sendMessage(payload: {
                 mensagem: parsed.mensagem,
                 sender_name: parsed.sender_name,
             }),
-        });
+        }, 15_000);
 
         if (!response.ok) {
             console.error(`[sendMessage] n8n respondeu ${response.status}`);
@@ -204,7 +205,7 @@ export async function sendFileMessage(
                 : file.type.startsWith("video/") ? "video"
                 : "document";
             try {
-                const res = await fetch(`${evoUrl}/message/sendMedia/${evoInstance}`, {
+                const res = await fetchWithTimeout(`${evoUrl}/message/sendMedia/${evoInstance}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", apikey: evoKey },
                     body: JSON.stringify({
@@ -215,7 +216,7 @@ export async function sendFileMessage(
                         fileName: file.name,
                         caption: caption || "",
                     }),
-                });
+                }, 20_000);
                 if (res.ok) {
                     let evoMessageId: string | undefined;
                     try {
@@ -367,7 +368,7 @@ export async function sendUploadedFileMessage(payload: {
             try {
                 // Evolution v2 aceita URL no campo media — sem base64, o arquivo
                 // não passa pelo server.
-                const res = await fetch(`${evoUrl}/message/sendMedia/${evoInstance}`, {
+                const res = await fetchWithTimeout(`${evoUrl}/message/sendMedia/${evoInstance}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json", apikey: evoKey },
                     body: JSON.stringify({
@@ -378,7 +379,7 @@ export async function sendUploadedFileMessage(payload: {
                         fileName: parsed.fileName,
                         caption,
                     }),
-                });
+                }, 20_000);
                 if (res.ok) {
                     let evoMessageId: string | undefined;
                     try {
@@ -612,11 +613,11 @@ export async function replyToMessage(payload: {
             if (!result.success) return { success: false, error: result.error };
             evoMessageId = result.evoMessageId;
         } else {
-            const res = await fetch(`${evoUrl}/message/sendText/${evoInstance}`, {
+            const res = await fetchWithTimeout(`${evoUrl}/message/sendText/${evoInstance}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", apikey: evoKey },
                 body: JSON.stringify({ number: String(payload.telefone), text: payload.text }),
-            });
+            }, 15_000);
             const body = await res.json().catch(() => ({}));
             evoMessageId = (body as Record<string, Record<string, unknown>>)?.key?.id as string | undefined;
         }
@@ -644,7 +645,7 @@ export async function replyToMessage(payload: {
     if (payload.iaAtiva) {
         const webhookUrl = process.env.N8N_WEBHOOK_URL;
         if (webhookUrl) {
-            await fetch(webhookUrl, {
+            await fetchWithTimeout(webhookUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -652,7 +653,7 @@ export async function replyToMessage(payload: {
                     mensagem: payload.text,
                     sender_name: payload.senderName,
                 }),
-            });
+            }, 15_000);
         }
     } else {
         let sentZapiMessageId: string | undefined;
