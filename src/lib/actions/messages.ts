@@ -438,7 +438,7 @@ export async function sendUploadedFileMessage(payload: {
  */
 export async function sendAudioMessage(
     formData: FormData
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; url?: string; error?: string }> {
     const userId = await requireAuth();
 
     const file = formData.get("file") as File | null;
@@ -460,35 +460,28 @@ export async function sendAudioMessage(
 
     const ext = (file.name.split(".").pop() || "ogg").toLowerCase();
     const buffer = Buffer.from(await file.arrayBuffer());
-    const base64 = buffer.toString("base64");
-
     const isFestas = canal === "festas";
 
-    // Envia com o mime REAL do arquivo. Antes rotulava WebM como OGG (container
-    // errado → WhatsApp lia 00:00); mandar o mime real deixa a Z-API/Evolution
-    // transcodificar o Opus corretamente pra voice note.
-    const sendPromise = isFestas
-        ? sendEvolutionAudio(String(telefone), base64)
-        : sendWhatsAppAudio(String(telefone), `data:${file.type};base64,${base64}`);
-
-    // Paraleliza upload ao R2 (mesmo helper/dedup) e envio. O dedup nunca bloqueia:
-    // se o upload falhar, seguimos sem persistir a URL (fica só o envio ao WhatsApp).
-    const [uploadRes, sendRes] = await Promise.all([
-        putMediaDeduped(buffer, ext, file.type || "audio/ogg").catch((err) => {
-            console.error("[sendAudioMessage] Upload R2 falhou:", err);
-            return null;
-        }),
-        sendPromise,
-    ]);
-
-    if (!uploadRes) {
+    // 1) Sobe pro R2 PRIMEIRO (mesmo helper/dedup). Precisa existir antes de enviar:
+    // a Z-API/Evolution baixam a URL pública pra gerar o waveform de voz.
+    let publicUrl: string;
+    try {
+        ({ publicUrl } = await putMediaDeduped(buffer, ext, file.type || "audio/ogg"));
+    } catch (err) {
+        console.error("[sendAudioMessage] Upload R2 falhou:", err);
         return { success: false, error: "Falha no upload do áudio." };
     }
+
+    // 2) Envia a URL PÚBLICA (não base64). Base64 fazia o WhatsApp desenhar waveform
+    // reto; com URL a API baixa o arquivo e gera o gráfico de voz nativo.
+    const sendRes = isFestas
+        ? await sendEvolutionAudio(String(telefone), publicUrl)
+        : await sendWhatsAppAudio(String(telefone), publicUrl);
+
     if (!sendRes.success) {
         console.error("[sendAudioMessage] Envio falhou:", sendRes.error);
         return { success: false, error: sendRes.error };
     }
-    const publicUrl = uploadRes.publicUrl;
 
     const messageId = isFestas
         ? (sendRes as { evoMessageId?: string }).evoMessageId
@@ -509,7 +502,7 @@ export async function sendAudioMessage(
         console.error("[sendAudioMessage] Falha ao persistir:", dbErr.message);
     }
 
-    return { success: true };
+    return { success: true, url: publicUrl };
 }
 
 /**
