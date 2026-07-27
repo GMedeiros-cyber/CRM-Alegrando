@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Mic, Trash2, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type OpusRecorder from "opus-recorder";
 
 interface AudioRecorderProps {
   disabled?: boolean;
@@ -13,23 +14,12 @@ interface AudioRecorderProps {
 
 type Mode = "idle" | "recording";
 
-function pickMimeType(): { mime: string; ext: string } {
-  // Prefere OGG Opus (formato nativo do WhatsApp para PTT). Cai para WebM em
-  // browsers que não suportam OGG no MediaRecorder (ex.: Chrome desktop).
-  const candidates: Array<{ mime: string; ext: string }> = [
-    { mime: "audio/ogg;codecs=opus", ext: "ogg" },
-    { mime: "audio/webm;codecs=opus", ext: "webm" },
-    { mime: "audio/webm", ext: "webm" },
-    { mime: "audio/mp4", ext: "m4a" },
-  ];
-  if (typeof window === "undefined" || !("MediaRecorder" in window)) {
-    return { mime: "", ext: "ogg" };
-  }
-  for (const c of candidates) {
-    if (MediaRecorder.isTypeSupported(c.mime)) return c;
-  }
-  return { mime: "", ext: "ogg" };
-}
+// Worker WASM do opus-recorder, servido de /public (copiado de
+// node_modules/opus-recorder/dist/). Gera OGG/Opus NATIVO no browser — o
+// MediaRecorder do Chrome só faz WebM/Opus, e a Z-API não transcodifica WebM,
+// resultando em voice note 00:00. Com OGG real o WhatsApp renderiza a duração e
+// o waveform corretamente.
+const ENCODER_PATH = "/opus/encoderWorker.min.js";
 
 function formatElapsed(ms: number): string {
   const total = Math.floor(ms / 1000);
@@ -42,9 +32,8 @@ export function AudioRecorder({ disabled, onRecorded, onRecordingChange, onError
   const [mode, setMode] = useState<Mode>("idle");
   const [elapsed, setElapsed] = useState(0);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const recorderRef = useRef<OpusRecorder | null>(null);
+  const chunksRef = useRef<Uint8Array[]>([]);
   const startedAtRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cancelledRef = useRef(false);
@@ -53,17 +42,17 @@ export function AudioRecorder({ disabled, onRecorded, onRecordingChange, onError
     onRecordingChange?.(mode === "recording");
   }, [mode, onRecordingChange]);
 
-  const cleanupStream = useCallback(() => {
+  const cleanup = useCallback(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
+    const rec = recorderRef.current;
+    if (rec) {
+      try { rec.close(); } catch { /* ignore */ }
     }
-    mediaRecorderRef.current = null;
+    recorderRef.current = null;
     chunksRef.current = [];
   }, []);
 
-  useEffect(() => () => cleanupStream(), [cleanupStream]);
+  useEffect(() => () => cleanup(), [cleanup]);
 
   const startRecording = useCallback(async () => {
     if (disabled || mode !== "idle") return;
@@ -73,89 +62,89 @@ export function AudioRecorder({ disabled, onRecorded, onRecordingChange, onError
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const { mime, ext } = pickMimeType();
-      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
+      // Import dinâmico: opus-recorder é client-only e carrega o worker WASM.
+      const { default: Recorder } = await import("opus-recorder");
+
+      const rec = new Recorder({
+        encoderPath: ENCODER_PATH,
+        numberOfChannels: 1,
+        encoderApplication: 2048, // VOIP — otimizado pra voz
+        encoderSampleRate: 48000,
+        streamPages: false, // recebe o arquivo OGG completo no fim
+      });
+      recorderRef.current = rec;
       chunksRef.current = [];
       cancelledRef.current = false;
 
-      recorder.ondataavailable = (e: BlobEvent) => {
-        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      rec.ondataavailable = (typedArray: Uint8Array) => {
+        if (typedArray && typedArray.length > 0) {
+          // Cópia: o buffer do worker pode ser reaproveitado após o callback.
+          chunksRef.current.push(new Uint8Array(typedArray));
+        }
       };
 
-      recorder.onstop = async () => {
+      rec.onstop = () => {
         const wasCancelled = cancelledRef.current;
         const collected = chunksRef.current.slice();
-        const recorderMime = recorder.mimeType || mime || "audio/webm";
         const durationMs = Date.now() - startedAtRef.current;
-        cleanupStream();
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        recorderRef.current = null;
+        chunksRef.current = [];
         setMode("idle");
         setElapsed(0);
-        if (wasCancelled || collected.length === 0) return;
+        // Descarta cancelamentos e gravações vazias/curtíssimas.
+        if (wasCancelled || collected.length === 0 || durationMs < 300) return;
 
-        let blob: Blob = new Blob(collected, { type: recorderMime });
-
-        // Chrome/MediaRecorder gera WebM sem Duration no header, o que faz o
-        // WhatsApp renderizar como áudio genérico (sem waveform, timer zerado)
-        // e o AudioPlayer do CRM mostrar 0:00. Conserta o header antes de enviar.
-        if (recorderMime.includes("webm") && durationMs > 0) {
-          try {
-            const { default: fixWebmDuration } = await import("fix-webm-duration");
-            blob = await fixWebmDuration(blob, durationMs, { logger: false });
-          } catch (err) {
-            console.warn("[AudioRecorder] fix-webm-duration falhou:", err);
-          }
-        }
-
-        const file = new File([blob], `gravacao-${Date.now()}.${ext}`, { type: recorderMime });
+        const blob = new Blob(collected as BlobPart[], { type: "audio/ogg" });
+        const file = new File([blob], `gravacao-${Date.now()}.ogg`, { type: "audio/ogg" });
         const previewUrl = URL.createObjectURL(blob);
         onRecorded(file, previewUrl);
       };
 
-      recorder.onerror = () => {
-        onError?.("Erro durante a gravação.");
-        cancelledRef.current = true;
-        try { recorder.stop(); } catch { /* ignore */ }
-      };
-
+      await rec.start();
       startedAtRef.current = Date.now();
       setElapsed(0);
       setMode("recording");
-      recorder.start();
-
       timerRef.current = setInterval(() => {
         setElapsed(Date.now() - startedAtRef.current);
       }, 200);
     } catch (err) {
-      const msg = err instanceof Error && err.name === "NotAllowedError"
+      const msg = err instanceof Error && (err.name === "NotAllowedError" || err.name === "SecurityError")
         ? "Permissão de microfone negada."
         : "Não foi possível iniciar a gravação.";
       onError?.(msg);
-      cleanupStream();
+      cleanup();
       setMode("idle");
     }
-  }, [disabled, mode, onRecorded, onError, cleanupStream]);
+  }, [disabled, mode, onRecorded, onError, cleanup]);
 
   const stopRecording = useCallback(() => {
-    const recorder = mediaRecorderRef.current;
-    if (!recorder || recorder.state === "inactive") return;
+    const rec = recorderRef.current;
+    if (!rec) return;
     cancelledRef.current = false;
-    try { recorder.stop(); } catch { /* ignore */ }
-  }, []);
+    // stop() finaliza o OGG → dispara ondataavailable (arquivo completo) → onstop.
+    rec.stop().catch(() => {
+      cleanup();
+      setMode("idle");
+      setElapsed(0);
+    });
+  }, [cleanup]);
 
   const cancelRecording = useCallback(() => {
-    const recorder = mediaRecorderRef.current;
+    const rec = recorderRef.current;
     cancelledRef.current = true;
-    if (recorder && recorder.state !== "inactive") {
-      try { recorder.stop(); } catch { /* ignore */ }
+    if (rec) {
+      rec.stop().catch(() => {
+        cleanup();
+        setMode("idle");
+        setElapsed(0);
+      });
     } else {
-      cleanupStream();
+      cleanup();
       setMode("idle");
       setElapsed(0);
     }
-  }, [cleanupStream]);
+  }, [cleanup]);
 
   if (mode === "recording") {
     return (
