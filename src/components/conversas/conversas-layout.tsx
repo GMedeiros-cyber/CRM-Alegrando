@@ -1303,38 +1303,32 @@ export function ConversasLayout() {
         const isVideo = att.file.type.startsWith("video/");
         const isImage = att.file.type.startsWith("image/");
         const mediaType: "image" | "video" | "document" = isImage ? "image" : isVideo ? "video" : "document";
+        const caption = att.caption.trim();
 
-        // Optimistic APENAS para vídeo (upload lento, 2-5s). Imagem/documento
-        // sobem rápido e o Realtime cobre. Guarda o id pra remover
-        // explicitamente na confirmação: o content (blob URL) nunca bate
-        // com a URL real do Storage, então o dedup por content não cobriria.
-        let optimisticId: string | null = null;
-        if (isVideo && att.preview) {
-            const content = att.caption.trim()
-                ? `${att.preview}|||${att.caption.trim()}`
-                : att.preview;
-            optimisticId = addOptimisticRef.current?.(content, senderName, "video") ?? null;
-        }
+        // Bolha OTIMISTA pra TODO tipo (imagem/vídeo/documento): aparece na hora
+        // usando o arquivo local — mata o delay percebido (upload R2 + envio +
+        // insert). Imagem/vídeo reusam o object URL do preview; documento cria um
+        // agora pra renderizar o card (nome/ícone/preview de PDF). É reconciliada
+        // in-place com a URL real do R2 quando a action retorna (padrão do áudio):
+        // o content passa a bater com o eco do Realtime, que então substitui esta
+        // bolha sem flicker nem duplicata.
+        const localUrl = att.preview ?? URL.createObjectURL(att.file);
+        const optimisticContent = mediaType === "document"
+            ? `${localUrl}|||${att.file.name}` // nome real no card enquanto envia
+            : (caption ? `${localUrl}|||${caption}` : localUrl);
+        const optimisticId = addOptimisticRef.current?.(optimisticContent, senderName, mediaType) ?? null;
 
-        // Falha = balão marcado com retry (não banner). Se não havia optimistic
-        // (imagem/documento), cria um agora já em estado de falha.
+        // Falha = o próprio balão fica marcado com retry (clique reenvia) — sem banner.
         const markFailed = (errText: string) => {
-            let failedId = optimisticId;
-            if (!failedId) {
-                const fallbackContent = isImage && att.preview
-                    ? (att.caption.trim() ? `${att.preview}|||${att.caption.trim()}` : att.preview)
-                    : att.file.name;
-                failedId = addOptimisticRef.current?.(fallbackContent, senderName, mediaType) ?? null;
-            }
-            if (failedId) {
-                markSendFailed(failedId, () => { void sendAttachment(att); });
+            if (optimisticId) {
+                markSendFailed(optimisticId, () => { void sendAttachment(att); });
             } else {
                 setToast({ type: "error", text: errText });
             }
         };
 
         try {
-            let res: { success: boolean; error?: string };
+            let res: { success: boolean; error?: string; content?: string };
 
             if (att.file.size > DIRECT_UPLOAD_THRESHOLD) {
                 const signed = await createSignedUploadUrl(att.file.name, cliente.telefone, cliente.canal ?? "alegrando", att.file.type);
@@ -1379,9 +1373,18 @@ export function ConversasLayout() {
             }
 
             if (res.success) {
-                // Remove o optimistic — a mensagem real chega pelo Realtime;
-                // remover aqui é no-op se já chegou.
-                if (optimisticId) removeOptimisticRef.current?.(optimisticId);
+                // Reconcilia in-place: troca o preview local pela URL/content REAL
+                // do R2. O content bate com o eco do Realtime → a bolha definitiva
+                // substitui esta sem flicker; se o Realtime atrasar/estiver off, a
+                // bolha já mostra a mídia real (não some).
+                if (optimisticId && res.content) {
+                    updateOptimisticRef.current?.(optimisticId, { content: res.content, _optimistic: false });
+                } else if (optimisticId) {
+                    // Defensivo (action não devolveu content): remove e deixa o Realtime trazer.
+                    removeOptimisticRef.current?.(optimisticId);
+                }
+                // Reconciliado: o object URL local não é mais referenciado → revoga.
+                URL.revokeObjectURL(localUrl);
             } else {
                 markFailed(res.error || "Erro ao enviar arquivo.");
             }

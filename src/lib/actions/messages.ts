@@ -149,7 +149,7 @@ export async function sendMessage(payload: {
  */
 export async function sendFileMessage(
     formData: FormData
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; url?: string; content?: string }> {
     const userId = await requireAuth();
 
     const file = formData.get("file") as File | null;
@@ -273,7 +273,10 @@ export async function sendFileMessage(
         console.error("[sendFileMessage] Falha ao persistir:", dbErr.message);
     }
 
-    return { success: true };
+    // Retorna o content EXATO persistido (URL do R2 + caption) pra o cliente
+    // reconciliar a bolha otimista in-place — precisa bater byte-a-byte com o
+    // eco do Realtime pra não duplicar.
+    return { success: true, url: publicUrl, content: storedContent };
 }
 
 /**
@@ -331,7 +334,7 @@ export async function sendUploadedFileMessage(payload: {
     fileName: string;
     mimeType?: string;
     senderName?: string;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; url?: string; content?: string }> {
     const userId = await requireAuth();
     let parsed: z.infer<typeof sendUploadedFileSchema>;
     try {
@@ -428,7 +431,9 @@ export async function sendUploadedFileMessage(payload: {
         console.error("[sendUploadedFileMessage] Falha ao persistir:", dbErr.message);
     }
 
-    return { success: true };
+    // Content EXATO persistido pra reconciliação in-place da bolha otimista
+    // (precisa casar com o eco do Realtime — ver sendFileMessage).
+    return { success: true, url: publicUrl, content: storedContent };
 }
 
 /**
