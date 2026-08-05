@@ -177,7 +177,9 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
     }
     if (message.mediaType === "image") {
         const { url, caption } = parseMediaContent(message.content || "");
-        if (url.startsWith("http")) {
+        // blob: cobre a bolha otimista (imagem local) até o upload pro R2 terminar —
+        // mostra a imagem na hora; reconciliada com a URL http depois.
+        if (url.startsWith("http") || url.startsWith("blob:")) {
             return (
                 <div>
                     <img src={url} alt="imagem" className="max-w-[260px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => {
@@ -248,7 +250,9 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
     }
     if (message.mediaType === "document") {
         const { url, caption } = parseMediaContent(message.content || "");
-        if (url.startsWith("http")) {
+        // blob: cobre a bolha otimista (arquivo local) enquanto o upload pro R2
+        // não terminou — renderiza o card na hora; reconciliada com a URL http depois.
+        if (url.startsWith("http") || url.startsWith("blob:")) {
             // Prioriza a caption (fileName real persistido após `|||`) sobre o
             // último segmento da URL — que vira hash sem extensão pra arquivos
             // do Storage com prefixo de timestamp.
