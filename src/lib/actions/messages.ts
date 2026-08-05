@@ -24,6 +24,7 @@ import {
     r2PublicUrl,
 } from "@/lib/whatsapp/r2-client";
 import { fetchWithTimeout } from "@/lib/fetch-utils";
+import { after } from "next/server";
 import { z } from "zod";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -100,19 +101,32 @@ export async function sendMessage(payload: {
             return { success: false, warning: "Webhook não configurado" };
         }
 
-        const response = await fetchWithTimeout(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                telefone: parsed.telefone,
-                mensagem: parsed.mensagem,
-                sender_name: parsed.sender_name,
-            }),
-        }, 15_000);
-
-        if (!response.ok) {
-            console.error(`[sendMessage] n8n respondeu ${response.status}`);
-        }
+        // Fire-and-forget: o n8n processa a IA (pode levar segundos) e insere a
+        // mensagem do usuário + a resposta da IA no banco por conta própria — a
+        // action NÃO depende da resposta dele pra nada visível (o balão otimista
+        // já apareceu no cliente e reconcilia via Realtime quando o n8n insere).
+        // after() devolve a resposta na hora e roda o POST depois (serverless-safe
+        // na Vercel: a função fica viva até o callback terminar). Se o n8n cair, o
+        // balão não reconcilia via resposta — mas isso já era o comportamento antes
+        // (retornava sucesso mesmo com n8n falho); aqui só fica mais rápido.
+        after(async () => {
+            try {
+                const response = await fetchWithTimeout(webhookUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        telefone: parsed.telefone,
+                        mensagem: parsed.mensagem,
+                        sender_name: parsed.sender_name,
+                    }),
+                }, 15_000);
+                if (!response.ok) {
+                    console.error(`[sendMessage] n8n respondeu ${response.status}`);
+                }
+            } catch (err) {
+                console.error("[sendMessage] n8n falhou (after):", err);
+            }
+        });
     } else {
         const result = await sendWhatsAppMessage(
             String(parsed.telefone),
@@ -650,15 +664,27 @@ export async function replyToMessage(payload: {
     if (payload.iaAtiva) {
         const webhookUrl = process.env.N8N_WEBHOOK_URL;
         if (webhookUrl) {
-            await fetchWithTimeout(webhookUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    telefone: payload.telefone,
-                    mensagem: payload.text,
-                    sender_name: payload.senderName,
-                }),
-            }, 15_000);
+            // Fire-and-forget (mesmo racional do sendMessage): o n8n persiste a
+            // mensagem + resposta da IA por conta própria; a action não depende
+            // do retorno. after() responde na hora e roda o POST depois.
+            after(async () => {
+                try {
+                    const response = await fetchWithTimeout(webhookUrl, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            telefone: payload.telefone,
+                            mensagem: payload.text,
+                            sender_name: payload.senderName,
+                        }),
+                    }, 15_000);
+                    if (!response.ok) {
+                        console.error(`[replyToMessage] n8n respondeu ${response.status}`);
+                    }
+                } catch (err) {
+                    console.error("[replyToMessage] n8n falhou (after):", err);
+                }
+            });
         }
     } else {
         let sentZapiMessageId: string | undefined;
