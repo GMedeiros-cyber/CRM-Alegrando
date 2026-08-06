@@ -44,6 +44,7 @@ type LeadRow = {
     id: string;
     nome: string | null;
     telefone: string | number | null;
+    canal: string | null;
     email: string | null;
     instituicao_email: string | null;
     coordenadora_email: string | null;
@@ -51,7 +52,7 @@ type LeadRow = {
 };
 
 const LEAD_EMAIL_SELECT =
-    "id, nome, telefone, email, instituicao_email, coordenadora_email, diretora_email";
+    "id, nome, telefone, canal, email, instituicao_email, coordenadora_email, diretora_email";
 
 // =============================================================
 // LEITURA
@@ -104,6 +105,7 @@ export async function listLeadsByLabels(labelIds: string[]): Promise<LeadEmailRo
                 leadId: row.id,
                 nome: row.nome,
                 telefone: String(row.telefone ?? ""),
+                canal: row.canal || "alegrando",
                 emails: extractEmails(row),
                 labelIds: labelsByLead.get(row.id) || [],
             });
