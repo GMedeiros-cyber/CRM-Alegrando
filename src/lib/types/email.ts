@@ -39,7 +39,38 @@ export const EMAIL_FIELD_PRIORITY: EmailFieldKey[] = [
     "instituicao_email",
 ];
 
-export type EmailSendStatus = "pending" | "sent" | "failed";
+export type EmailSendStatus = "pending" | "scheduled" | "sent" | "failed";
+
+/**
+ * Anexo de um e-mail.
+ *
+ * Independente da origem, o arquivo sempre acaba com uma URL no R2 — inclusive
+ * o que vem do Drive, que o CRM baixa e reenvia. Assim o n8n só precisa saber
+ * baixar de URL, sem credencial de Drive no caminho do envio.
+ */
+export type EmailAttachment = {
+    url: string;
+    filename: string;
+    size: number;
+    mimeType: string;
+    source: "upload" | "drive";
+    /** Só pra rastrear a origem no histórico. */
+    driveFileId?: string;
+};
+
+/** Teto do Gmail por mensagem (25MB), com folga pro overhead do base64. */
+export const MAX_ATTACHMENTS_BYTES = 23 * 1024 * 1024;
+
+/** Arquivo do Drive, como aparece no seletor. */
+export type DriveFile = {
+    id: string;
+    name: string;
+    mimeType: string;
+    size: number | null;
+    iconLink: string | null;
+    modifiedTime: string | null;
+    isFolder: boolean;
+};
 
 /** Uma linha de `email_sends` (histórico no painel do lead). */
 export type EmailSendRecord = {
@@ -51,6 +82,8 @@ export type EmailSendRecord = {
     origem: string | null;
     createdAt: string;
     sentAt: string | null;
+    scheduledFor: string | null;
+    attachments: EmailAttachment[];
 };
 
 /** Lead alcançável por e-mail, usado na lista do disparo por tag. */
@@ -75,5 +108,7 @@ export type SendEmailResult =
            * n8n atualiza pra `sent`/`failed` quando termina.
            */
           processing: boolean;
+          /** true = ficou agendado; nada foi enviado ainda. */
+          scheduled: boolean;
       }
     | { ok: false; error: string };

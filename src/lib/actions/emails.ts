@@ -1,10 +1,16 @@
 "use server";
 
+import { google } from "googleapis";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth";
 import { fetchWithTimeout } from "@/lib/fetch-utils";
 import { extractEmails, pickEmails, plainTextToHtml } from "@/lib/email/format";
+import { cleanEditorHtml, isEditorEmpty, wrapEmailHtml } from "@/lib/email/editor";
+import { presignedPutUrl, r2PublicUrl } from "@/lib/whatsapp/r2-client";
+import { MAX_ATTACHMENTS_BYTES } from "@/lib/types/email";
 import type {
+    DriveFile,
+    EmailAttachment,
     EmailFieldKey,
     EmailSendRecord,
     EmailSendStatus,
@@ -126,28 +132,63 @@ export async function listLeadEmailSends(
     if (!leadId) return [];
 
     const supabase = createServerSupabaseClient();
-    const { data, error } = await supabase
-        .from("email_sends")
-        .select("id, recipient_email, subject, status, error, origem, created_at, sent_at")
-        .eq("lead_id", leadId)
-        .order("created_at", { ascending: false })
-        .limit(20);
+    const BASE_COLUMNS =
+        "id, recipient_email, subject, status, error, origem, created_at, sent_at";
+
+    async function query(columns: string) {
+        return supabase
+            .from("email_sends")
+            .select(columns)
+            .eq("lead_id", leadId)
+            .order("created_at", { ascending: false })
+            .limit(20);
+    }
+
+    let { data, error } = await query(`${BASE_COLUMNS}, scheduled_for, attachments`);
+
+    // 42703 = coluna inexistente: a migração de anexo/agendamento ainda não
+    // rodou. O histórico segue funcionando sem esses dois campos.
+    if (error?.code === "42703") {
+        ({ data, error } = await query(BASE_COLUMNS));
+    }
 
     if (error) {
         console.error("[listLeadEmailSends]", error.message);
         return [];
     }
 
-    return (data || []).map((r) => ({
-        id: r.id,
-        recipientEmail: r.recipient_email,
-        subject: r.subject,
+    return ((data || []) as unknown as Record<string, unknown>[]).map((r) => ({
+        id: String(r.id),
+        recipientEmail: String(r.recipient_email ?? ""),
+        subject: String(r.subject ?? ""),
         status: (r.status || "pending") as EmailSendStatus,
-        error: r.error,
-        origem: r.origem,
-        createdAt: r.created_at,
-        sentAt: r.sent_at,
+        error: (r.error as string) ?? null,
+        origem: (r.origem as string) ?? null,
+        createdAt: String(r.created_at ?? ""),
+        sentAt: (r.sent_at as string) ?? null,
+        scheduledFor: (r.scheduled_for as string) ?? null,
+        attachments: Array.isArray(r.attachments) ? (r.attachments as EmailAttachment[]) : [],
     }));
+}
+
+/** Cancela um envio que ainda não saiu (só faz sentido pra agendado). */
+export async function cancelScheduledEmail(
+    sendId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+    await requireAuth();
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase
+        .from("email_sends")
+        .delete()
+        .eq("id", sendId)
+        .eq("status", "scheduled")
+        .select("id");
+
+    if (error) return { ok: false, error: error.message };
+    if (!data || data.length === 0) {
+        return { ok: false, error: "Esse envio já saiu — não dá mais pra cancelar." };
+    }
+    return { ok: true };
 }
 
 // =============================================================
@@ -176,6 +217,9 @@ async function dispatchEmails(params: {
     subject: string;
     body: string;
     origem: "individual" | "massa";
+    attachments?: EmailAttachment[];
+    /** ISO. Com valor, grava agendado e NÃO chama o n8n agora. */
+    scheduledFor?: string | null;
 }): Promise<SendEmailResult> {
     const webhookUrl = process.env.N8N_EMAIL_WEBHOOK_URL;
     if (!webhookUrl) {
@@ -186,16 +230,42 @@ async function dispatchEmails(params: {
     const subject = params.subject.trim();
     if (!subject) return { ok: false, error: "Escreva o assunto do e-mail." };
 
+    // O corpo já chega em HTML do editor. Texto puro (sem tag nenhuma) ainda
+    // passa pela conversão, pra manter quebras de linha de quem colar texto.
     const rawBody = params.body.trim();
-    if (!rawBody) return { ok: false, error: "Escreva o corpo do e-mail." };
+    if (!rawBody || isEditorEmpty(rawBody)) {
+        return { ok: false, error: "Escreva o corpo do e-mail." };
+    }
+    const html = /<[a-z][\s\S]*>/i.test(rawBody)
+        ? wrapEmailHtml(cleanEditorHtml(rawBody))
+        : wrapEmailHtml(plainTextToHtml(rawBody));
 
     const recipients = params.recipients.filter((r) => r.emails.length > 0);
     if (recipients.length === 0) {
         return { ok: false, error: "Nenhum destinatário com e-mail válido." };
     }
 
-    const html = plainTextToHtml(rawBody);
-    if (!html) return { ok: false, error: "Escreva o corpo do e-mail." };
+    const attachments = params.attachments || [];
+    const totalBytes = attachments.reduce((sum, a) => sum + (a.size || 0), 0);
+    if (totalBytes > MAX_ATTACHMENTS_BYTES) {
+        return {
+            ok: false,
+            error: `Anexos somam ${(totalBytes / 1024 / 1024).toFixed(1)}MB — o Gmail aceita até 25MB por mensagem.`,
+        };
+    }
+
+    // Agendado: grava e sai. Quem despacha na hora é o worker do n8n, que
+    // varre email_sends de 5 em 5 minutos.
+    const scheduledFor = params.scheduledFor?.trim() || null;
+    if (scheduledFor && new Date(scheduledFor).getTime() <= Date.now()) {
+        return { ok: false, error: "O horário do agendamento já passou." };
+    }
+
+    // scheduled_for/attachments só entram no insert quando são usados: assim um
+    // envio comum continua funcionando mesmo antes da migração das colunas.
+    const extras: Record<string, unknown> = {};
+    if (scheduledFor) extras.scheduled_for = scheduledFor;
+    if (attachments.length > 0) extras.attachments = attachments;
 
     const supabase = createServerSupabaseClient();
     const { data: rows, error: insertError } = await supabase
@@ -207,7 +277,8 @@ async function dispatchEmails(params: {
                 recipient_email: r.emails.join(", "),
                 subject,
                 body: html,
-                status: "pending",
+                status: scheduledFor ? "scheduled" : "pending",
+                ...extras,
             })),
         )
         .select("id, recipient_email");
@@ -217,6 +288,10 @@ async function dispatchEmails(params: {
         return { ok: false, error: "Erro ao registrar o envio no banco. Nada foi enviado." };
     }
 
+    if (scheduledFor) {
+        return { ok: true, count: rows.length, processing: false, scheduled: true };
+    }
+
     // Monta o payload a partir das linhas gravadas (e não do input), pra que
     // sendId e destinatário venham sempre do mesmo registro.
     const items = rows.map((row) => ({
@@ -224,6 +299,7 @@ async function dispatchEmails(params: {
         to: row.recipient_email,
         subject,
         body: html,
+        attachments,
     }));
 
     try {
@@ -243,7 +319,7 @@ async function dispatchEmails(params: {
             return { ok: false, error: `Falha no envio: ${detail}.` };
         }
 
-        return { ok: true, count: items.length, processing: false };
+        return { ok: true, count: items.length, processing: false, scheduled: false };
     } catch (err) {
         const name = (err as { name?: string } | null)?.name;
 
@@ -252,7 +328,7 @@ async function dispatchEmails(params: {
         // `pending` — o próprio n8n as atualiza pra sent/failed no fim.
         if (name === "TimeoutError" || name === "AbortError") {
             console.warn(`[dispatchEmails] n8n não respondeu em ${N8N_TIMEOUT_MS}ms — lote segue processando.`);
-            return { ok: true, count: items.length, processing: true };
+            return { ok: true, count: items.length, processing: true, scheduled: false };
         }
 
         const detail = err instanceof Error ? err.message : String(err);
@@ -274,6 +350,8 @@ export async function sendEmailToLead(params: {
     fields: EmailFieldKey[];
     subject: string;
     body: string;
+    attachments?: EmailAttachment[];
+    scheduledFor?: string | null;
 }): Promise<SendEmailResult> {
     await requireAuth();
 
@@ -301,6 +379,8 @@ export async function sendEmailToLead(params: {
         subject: params.subject,
         body: params.body,
         origem: "individual",
+        attachments: params.attachments,
+        scheduledFor: params.scheduledFor,
     });
 }
 
@@ -315,6 +395,8 @@ export async function sendEmailToLeads(params: {
     fields: EmailFieldKey[];
     subject: string;
     body: string;
+    attachments?: EmailAttachment[];
+    scheduledFor?: string | null;
 }): Promise<SendEmailResult> {
     await requireAuth();
 
@@ -355,5 +437,185 @@ export async function sendEmailToLeads(params: {
         subject: params.subject,
         body: params.body,
         origem: "massa",
+        attachments: params.attachments,
+        scheduledFor: params.scheduledFor,
     });
+}
+
+// =============================================================
+// ANEXOS
+// =============================================================
+
+/**
+ * URL assinada pro browser subir o anexo direto no R2, sem passar os bytes
+ * pela server action (que tem teto de 4.5MB na Vercel).
+ */
+export async function createEmailAttachmentUploadUrl(
+    fileName: string,
+    mimeType: string = "application/octet-stream",
+): Promise<
+    { ok: true; signedUrl: string; publicUrl: string } | { ok: false; error: string }
+> {
+    await requireAuth();
+    const safeName = fileName.replace(/[^0-9A-Za-z._-]/g, "_").slice(-120);
+    const path = `email-anexos/${Date.now()}-${safeName}`;
+    try {
+        const signedUrl = await presignedPutUrl(path, mimeType);
+        return { ok: true, signedUrl, publicUrl: r2PublicUrl(path) };
+    } catch (err) {
+        console.error("[createEmailAttachmentUploadUrl]", err);
+        return { ok: false, error: "Falha ao preparar o upload do anexo." };
+    }
+}
+
+// =============================================================
+// GOOGLE DRIVE
+// =============================================================
+
+/** true quando o token de leitura do Drive está configurado. */
+export async function isDriveEnabled(): Promise<boolean> {
+    await requireAuth();
+    return Boolean(process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
+}
+
+function getDriveClient() {
+    const auth = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+    );
+    auth.setCredentials({ refresh_token: process.env.GOOGLE_DRIVE_REFRESH_TOKEN });
+    return google.drive({ version: "v3", auth });
+}
+
+/**
+ * Lista o Drive da Alegrando — pasta a pasta ou por busca.
+ *
+ * É sempre a conta da empresa (a credencial é de servidor), não o Drive
+ * pessoal de quem está usando o CRM. Leitura apenas.
+ */
+export async function listDriveFiles(params: {
+    folderId?: string | null;
+    search?: string;
+}): Promise<{ ok: true; files: DriveFile[] } | { ok: false; error: string }> {
+    await requireAuth();
+    if (!process.env.GOOGLE_DRIVE_REFRESH_TOKEN) {
+        return { ok: false, error: "Integração com o Drive não configurada." };
+    }
+
+    const search = params.search?.trim();
+    const clauses = ["trashed = false"];
+    if (search) {
+        clauses.push(`name contains '${search.replace(/'/g, "\\'")}'`);
+    } else {
+        clauses.push(`'${params.folderId || "root"}' in parents`);
+    }
+
+    try {
+        const drive = getDriveClient();
+        const res = await drive.files.list({
+            q: clauses.join(" and "),
+            pageSize: 100,
+            fields: "files(id, name, mimeType, size, iconLink, modifiedTime)",
+            orderBy: "folder,name",
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+        });
+
+        const files: DriveFile[] = (res.data.files || []).map((f) => ({
+            id: f.id!,
+            name: f.name || "(sem nome)",
+            mimeType: f.mimeType || "",
+            size: f.size ? Number(f.size) : null,
+            iconLink: f.iconLink || null,
+            modifiedTime: f.modifiedTime || null,
+            isFolder: f.mimeType === "application/vnd.google-apps.folder",
+        }));
+        return { ok: true, files };
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[listDriveFiles]", message);
+        return { ok: false, error: `Erro ao ler o Drive: ${message.slice(0, 160)}` };
+    }
+}
+
+/**
+ * Traz um arquivo do Drive pro R2, devolvendo-o como anexo comum.
+ *
+ * Assim o workflow do n8n só precisa saber baixar de URL — não carrega
+ * credencial de Drive no caminho do envio, e o arquivo não precisa ser
+ * tornado público em momento nenhum.
+ */
+export async function attachDriveFile(
+    fileId: string,
+): Promise<{ ok: true; attachment: EmailAttachment } | { ok: false; error: string }> {
+    await requireAuth();
+    if (!process.env.GOOGLE_DRIVE_REFRESH_TOKEN) {
+        return { ok: false, error: "Integração com o Drive não configurada." };
+    }
+
+    try {
+        const drive = getDriveClient();
+        const meta = await drive.files.get({
+            fileId,
+            fields: "id, name, mimeType, size",
+            supportsAllDrives: true,
+        });
+
+        const isGoogleDoc = (meta.data.mimeType || "").startsWith(
+            "application/vnd.google-apps",
+        );
+        if (isGoogleDoc) {
+            return {
+                ok: false,
+                error: "Documento nativo do Google não pode ser anexado direto. Exporte como PDF no Drive e anexe o PDF.",
+            };
+        }
+
+        const declaredSize = meta.data.size ? Number(meta.data.size) : 0;
+        if (declaredSize > MAX_ATTACHMENTS_BYTES) {
+            return {
+                ok: false,
+                error: `"${meta.data.name}" tem ${(declaredSize / 1024 / 1024).toFixed(1)}MB — acima do limite de 25MB do Gmail.`,
+            };
+        }
+
+        const download = await drive.files.get(
+            { fileId, alt: "media", supportsAllDrives: true },
+            { responseType: "arraybuffer" },
+        );
+        const buffer = Buffer.from(download.data as ArrayBuffer);
+
+        const name = meta.data.name || "arquivo";
+        const mimeType = meta.data.mimeType || "application/octet-stream";
+        const safeName = name.replace(/[^0-9A-Za-z._-]/g, "_").slice(-120);
+        const path = `email-anexos/drive-${Date.now()}-${safeName}`;
+
+        const signedUrl = await presignedPutUrl(path, mimeType);
+        const put = await fetchWithTimeout(
+            signedUrl,
+            {
+                method: "PUT",
+                headers: { "Content-Type": mimeType },
+                body: new Uint8Array(buffer),
+            },
+            60_000,
+        );
+        if (!put.ok) throw new Error(`upload R2 respondeu ${put.status}`);
+
+        return {
+            ok: true,
+            attachment: {
+                url: r2PublicUrl(path),
+                filename: name,
+                size: buffer.byteLength,
+                mimeType,
+                source: "drive",
+                driveFileId: fileId,
+            },
+        };
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[attachDriveFile]", message);
+        return { ok: false, error: `Erro ao anexar do Drive: ${message.slice(0, 160)}` };
+    }
 }
