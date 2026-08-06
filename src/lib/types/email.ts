@@ -58,6 +58,7 @@ export type LeadEmailRow = {
     leadId: string;
     nome: string | null;
     telefone: string;
+    canal: string;
     /** Só os campos preenchidos e com formato válido. */
     emails: Partial<Record<EmailFieldKey, string>>;
     labelIds: string[];

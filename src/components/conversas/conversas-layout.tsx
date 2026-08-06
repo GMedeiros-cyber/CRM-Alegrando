@@ -65,6 +65,7 @@ import {
     Check,
     ChevronDown,
     Users,
+    Mail,
 } from "lucide-react";
 import {
     Sheet,
@@ -75,6 +76,7 @@ import { supabase } from "@/lib/supabase/client";
 import { listLabels } from "@/lib/actions/labels";
 import type { Label, LabelColor } from "@/lib/types/labels";
 import { LabelFilterButton } from "@/components/labels/label-filter-button";
+import { EmailBlastModal } from "@/components/emails/email-blast-modal";
 
 function mapRowToLabel(row: Record<string, unknown>): Label {
     return {
@@ -354,6 +356,7 @@ export function ConversasLayout() {
     const [tipoFiltro, setTipoFiltro] = useState<"todos" | "grupos">("todos");
     const [labelFiltro, setLabelFiltro] = useState<string[]>([]);
     const [availableLabels, setAvailableLabels] = useState<Label[]>([]);
+    const [emailBlastOpen, setEmailBlastOpen] = useState(false);
     useEffect(() => {
         const stored = localStorage.getItem("crm_canal_filtro");
         if (stored === "todos" || stored === "alegrando" || stored === "festas") {
@@ -1677,6 +1680,26 @@ export function ConversasLayout() {
                     )}
                 </div>
 
+                {/* Barra de disparo — só aparece com tag filtrada. O público sai
+                    das tags ativas (o modal mostra e deixa desmarcar quem for). */}
+                {labelFiltro.length > 0 && (
+                    <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b-2 border-border bg-brand-500/10">
+                        <Mail className="w-3.5 h-3.5 text-brand-500 dark:text-brand-400 shrink-0" />
+                        <span className="text-[11px] font-medium text-[#37352F] dark:text-[#cbd5e1] truncate">
+                            {availableLabels
+                                .filter((l) => labelFiltro.includes(l.id))
+                                .map((l) => l.name)
+                                .join(", ") || `${labelFiltro.length} tags`}
+                        </span>
+                        <button
+                            onClick={() => setEmailBlastOpen(true)}
+                            className="ml-auto shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-brand-500 text-white hover:bg-brand-600 transition-colors"
+                        >
+                            Enviar e-mail
+                        </button>
+                    </div>
+                )}
+
                 {/* List */}
                 <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-2">
                     {loading ? (
@@ -2061,6 +2084,16 @@ export function ConversasLayout() {
                     onToast={setToast}
                 />
             )}
+
+            {/* =================== DISPARO DE E-MAIL (POR TAG) =================== */}
+            <EmailBlastModal
+                open={emailBlastOpen}
+                onOpenChange={setEmailBlastOpen}
+                labelIds={labelFiltro}
+                availableLabels={availableLabels}
+                canal={canalFiltro}
+                onToast={setToast}
+            />
         </div>
     );
 }
