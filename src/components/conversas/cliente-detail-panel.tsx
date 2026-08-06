@@ -183,6 +183,9 @@ export interface ClienteDetailPanelProps {
     onLabelUpdatedLocal: (labelId: string, updates: Partial<LabelType>) => void;
     /** Optimistic: label excluída. */
     onLabelDeletedLocal: (labelId: string) => void;
+
+    /** Campo a destacar ao abrir (vem de ?focus= nos chips de e-mail). */
+    focusField?: string | null;
 }
 
 const ClienteDetailPanelInner = function ClienteDetailPanel({
@@ -232,6 +235,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
     onLabelCreatedLocal,
     onLabelUpdatedLocal,
     onLabelDeletedLocal,
+    focusField,
 }: ClienteDetailPanelProps) {
     const pendingTasks = tasks.filter((t) => !t.done);
     const doneTasks = tasks.filter((t) => t.done);
@@ -271,6 +275,22 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
             onToast({ type: "error", text: res.error });
         }
     }
+
+    // Chegou de um chip de e-mail (/conversas?...&focus=coordenadora_email):
+    // rola até o campo e destaca, pra ela ver na hora qual endereço é aquele.
+    useEffect(() => {
+        if (!focusField) return;
+        const el = document.getElementById(`lead-field-${focusField}`);
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        (el as HTMLInputElement).focus({ preventScroll: true });
+        el.classList.add("ring-2", "ring-brand-400");
+        const timer = setTimeout(
+            () => el.classList.remove("ring-2", "ring-brand-400"),
+            2200,
+        );
+        return () => clearTimeout(timer);
+    }, [focusField, cliente.telefone]);
 
     const [participants, setParticipants] = useState<{
         name: string | null;
@@ -511,7 +531,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                 {cliente.canal !== "festas" && (
                     <FieldGroup label="E-mail">
                         <Input
-                            id="lead-email-input"
+                            id="lead-field-email"
                             value={form.email}
                             onChange={(e) => onFormChange({ email: e.target.value })}
                             onBlur={onSave}
@@ -529,6 +549,19 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                                 Dados Institucionais
                             </h4>
                         </div>
+
+                        {/* E-mail geral da instituição (secretaria/contato), separado
+                            do e-mail principal do lead. É um dos destinos do envio. */}
+                        <FieldGroup icon={<Building2 className="w-3 h-3" />} label="E-mail da instituição">
+                            <Input
+                                id="lead-field-instituicao_email"
+                                value={form.instituicaoEmail}
+                                onChange={(e) => onFormChange({ instituicaoEmail: e.target.value })}
+                                onBlur={onSave}
+                                placeholder="secretaria@instituicao.com"
+                                className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
 
                         {/* ===== Coordenadora ===== */}
                         <div className="flex items-center gap-1.5 pt-1">
@@ -560,6 +593,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
 
                         <FieldGroup label="E-mail">
                             <Input
+                                id="lead-field-coordenadora_email"
                                 value={form.coordenadoraEmail}
                                 onChange={(e) => onFormChange({ coordenadoraEmail: e.target.value })}
                                 onBlur={onSave}
@@ -608,6 +642,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
 
                         <FieldGroup label="E-mail">
                             <Input
+                                id="lead-field-diretora_email"
                                 value={form.diretoraEmail}
                                 onChange={(e) => onFormChange({ diretoraEmail: e.target.value })}
                                 onBlur={onSave}
@@ -1004,6 +1039,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                 key={`${cliente.telefone}|${cliente.canal}`}
                 telefone={cliente.telefone}
                 canal={cliente.canal}
+                nome={form.nome || cliente.nome}
                 emails={{
                     email: form.email,
                     instituicao_email: form.instituicaoEmail,

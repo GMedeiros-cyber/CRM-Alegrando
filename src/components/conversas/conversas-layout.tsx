@@ -76,7 +76,7 @@ import { supabase } from "@/lib/supabase/client";
 import { listLabels } from "@/lib/actions/labels";
 import type { Label, LabelColor } from "@/lib/types/labels";
 import { LabelFilterButton } from "@/components/labels/label-filter-button";
-import { EmailBlastModal } from "@/components/emails/email-blast-modal";
+import { EmailComposeModal } from "@/components/emails/email-compose-modal";
 
 function mapRowToLabel(row: Record<string, unknown>): Label {
     return {
@@ -1460,6 +1460,7 @@ export function ConversasLayout() {
             startSavingCliente={(fn) => startSavingCliente(fn)}
             startRunningAction={(fn) => startRunningAction(fn)}
             onToast={setToast}
+            focusField={searchParams.get("focus")}
             leadLabels={cliente.labels}
             availableLabels={availableLabels}
             onLabelToggleLocal={(labelId, action) => {
@@ -2086,12 +2087,15 @@ export function ConversasLayout() {
             )}
 
             {/* =================== DISPARO DE E-MAIL (POR TAG) =================== */}
-            <EmailBlastModal
+            <EmailComposeModal
                 open={emailBlastOpen}
                 onOpenChange={setEmailBlastOpen}
-                labelIds={labelFiltro}
-                availableLabels={availableLabels}
-                canal={canalFiltro}
+                target={{
+                    mode: "tags",
+                    labelIds: labelFiltro,
+                    availableLabels,
+                    canal: canalFiltro,
+                }}
                 onToast={setToast}
             />
         </div>
