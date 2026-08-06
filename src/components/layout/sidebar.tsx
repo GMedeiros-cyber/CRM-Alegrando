@@ -11,6 +11,7 @@ import {
     MessageSquare,
     CalendarDays,
     ClipboardCheck,
+    Mail,
     Settings,
     Menu,
     X,
@@ -24,6 +25,7 @@ const navigation = [
     { name: "Conversas", href: "/conversas", icon: MessageSquare },
     { name: "Agenda", href: "/agenda", icon: CalendarDays },
     { name: "Tarefas", href: "/tarefas", icon: ClipboardCheck },
+    { name: "E-mails", href: "/emails", icon: Mail },
     { name: "Configurações", href: "/configuracoes", icon: Settings },
 ];
 

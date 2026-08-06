@@ -51,6 +51,7 @@ import { LabelBadge } from "@/components/labels/label-badge";
 import { LabelPicker } from "@/components/labels/label-picker";
 import { assignLabel, removeLabel } from "@/lib/actions/labels";
 import type { Label as LabelType, LeadLabel } from "@/lib/types/labels";
+import { LeadEmailSection } from "./lead-email-section";
 
 export type TaskItem = { id: string; text: string; done: boolean };
 
@@ -510,6 +511,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                 {cliente.canal !== "festas" && (
                     <FieldGroup label="E-mail">
                         <Input
+                            id="lead-email-input"
                             value={form.email}
                             onChange={(e) => onFormChange({ email: e.target.value })}
                             onBlur={onSave}
@@ -994,6 +996,22 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                     </div>
                 </div>
             </div>
+
+            {/* E-mail — composição + histórico.
+                key: trocar de lead recomeça o box do zero (rascunho, seleção,
+                histórico), sem effect de reset. */}
+            <LeadEmailSection
+                key={`${cliente.telefone}|${cliente.canal}`}
+                telefone={cliente.telefone}
+                canal={cliente.canal}
+                emails={{
+                    email: form.email,
+                    instituicao_email: form.instituicaoEmail,
+                    coordenadora_email: form.coordenadoraEmail,
+                    diretora_email: form.diretoraEmail,
+                }}
+                onToast={onToast}
+            />
 
             {/* Agendamentos */}
             {cliente.canal !== "festas" && <div className="pt-4 border-t border-[#C7D2FE] dark:border-[#3d4a60]/60">
