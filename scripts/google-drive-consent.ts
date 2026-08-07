@@ -74,17 +74,6 @@ const authUrl =
         prompt: "consent",
     });
 
-// O prefixo numérico do client_id é o número do projeto GCP. Mostrar ajuda a
-// pegar na hora o caso de estar autorizando no projeto errado.
-console.log(`\nModo: ${arg} — ${modo.descricao}`);
-console.log(`Escopo: ${modo.scope}`);
-console.log(`Client: ${clientId} (projeto ${clientId.split("-")[0]})`);
-console.log("\n1. Confirme no Google Cloud Console que este redirect está autorizado:");
-console.log(`   ${REDIRECT_URI}`);
-console.log("\n2. Abra este link e autorize COM A CONTA DA ALEGRANDO:\n");
-console.log(authUrl);
-console.log("\nAguardando o consentimento...\n");
-
 const server = createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://localhost:${PORT}`);
     if (url.pathname !== "/callback") {
@@ -135,12 +124,61 @@ const server = createServer(async (req, res) => {
         console.log(`${modo.envVar}=${data.refresh_token}\n`);
         console.log(`escopos concedidos: ${data.scope}`);
     } catch (err) {
-        res.writeHead(500).end("erro");
-        console.error(`\n❌ ${(err as Error).message}`);
+        const detalhe = (err as Error).message;
+        // Mostra o motivo NA PÁGINA também: quem autoriza está olhando pro
+        // navegador, não pro terminal — e um "erro" pelado não diz nada.
+        res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" }).end(
+            `<h1>Falhou na troca do código</h1><pre style="white-space:pre-wrap">${detalhe.replace(/</g, "&lt;")}</pre>` +
+                `<p>O código de autorização já foi consumido — rode o script de novo e autorize outra vez.</p>`,
+        );
+        console.error(`\n❌ ${detalhe}`);
+        console.error(
+            "\nO código já foi consumido. Rode o script de novo e autorize novamente.",
+        );
         process.exitCode = 1;
     } finally {
         server.close();
     }
 });
 
-server.listen(PORT);
+// Porta ocupada normalmente é uma execução anterior deste mesmo script que
+// ficou pendurada. Sem isto o Node cospe um stack trace de 'error' não
+// tratado, que não diz o que fazer — e pior: a execução velha continua
+// atendendo o callback, possivelmente com credenciais antigas em memória.
+server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+        console.error(`\n❌ A porta ${PORT} já está em uso.`);
+        console.error(
+            "Provavelmente há uma execução anterior deste script pendurada — ela vai\n" +
+                "interceptar o consentimento com as credenciais que tinha ao subir.\n\n" +
+                "Encerre antes de tentar de novo (PowerShell):\n" +
+                `  Get-NetTCPConnection -LocalPort ${PORT} -State Listen | ` +
+                "ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }",
+        );
+        process.exit(1);
+    }
+    console.error(`\n❌ Erro no servidor local: ${err.message}`);
+    process.exit(1);
+});
+
+// Ctrl+C sem deixar a porta presa pra próxima execução.
+process.on("SIGINT", () => {
+    server.close();
+    process.exit(130);
+});
+
+// As instruções só saem DEPOIS de a porta estar de fato nossa. Imprimir antes
+// deixaria um link válido na tela num cenário em que o callback iria parar em
+// outro processo.
+server.listen(PORT, () => {
+    // O prefixo numérico do client_id é o número do projeto GCP. Mostrar ajuda
+    // a pegar na hora o caso de estar autorizando no projeto errado.
+    console.log(`\nModo: ${arg} — ${modo.descricao}`);
+    console.log(`Escopo: ${modo.scope}`);
+    console.log(`Client: ${clientId} (projeto ${clientId.split("-")[0]})`);
+    console.log("\n1. Confirme no Google Cloud Console que este redirect está autorizado:");
+    console.log(`   ${REDIRECT_URI}`);
+    console.log("\n2. Abra este link e autorize COM A CONTA DA ALEGRANDO:\n");
+    console.log(authUrl);
+    console.log("\nAguardando o consentimento...\n");
+});
