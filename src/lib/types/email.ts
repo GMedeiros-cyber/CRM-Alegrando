@@ -58,9 +58,6 @@ export type EmailAttachment = {
     driveFileId?: string;
 };
 
-/** Teto do Gmail por mensagem (25MB), com folga pro overhead do base64. */
-export const MAX_ATTACHMENTS_BYTES = 23 * 1024 * 1024;
-
 /** Uma linha de `email_sends` (histórico no painel do lead). */
 export type EmailSendRecord = {
     id: string;

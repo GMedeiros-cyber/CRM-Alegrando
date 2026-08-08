@@ -106,9 +106,16 @@ export function ToolbarPopover({
     return createPortal(
         <div
             ref={panelRef}
+            // data-toolbar-popover: o modal de composição usa isto pra saber
+            // que o clique aqui não é "clique fora" e não deve fechá-lo.
+            data-toolbar-popover=""
+            // pointer-events-auto é OBRIGATÓRIO, não enfeite: o Dialog do Radix
+            // zera os pointer-events do body enquanto está aberto, e este painel
+            // é portalizado justamente no body. Sem isto ele aparece na tela mas
+            // não recebe clique nenhum — nem nos botões, nem nos inputs.
             // z-[70]: acima do Dialog (z-50) e do Picker (z-61).
             className={cn(
-                "fixed z-[70] rounded-lg border border-border bg-popover shadow-xl overflow-y-auto",
+                "fixed z-[70] pointer-events-auto rounded-lg border border-border bg-popover shadow-xl overflow-y-auto",
                 className,
             )}
             style={{

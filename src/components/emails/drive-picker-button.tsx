@@ -36,6 +36,7 @@ type PickerDocument = {
 };
 
 type PickerBuilder = {
+    enableFeature: (feature: unknown) => PickerBuilder;
     setDeveloperKey: (key: string) => PickerBuilder;
     setOAuthToken: (token: string) => PickerBuilder;
     setAppId: (appId: string) => PickerBuilder;
@@ -59,6 +60,7 @@ type GooglePickerNamespace = {
         setOwnedByMe?: (v: boolean) => unknown;
     };
     ViewId: { DOCS: unknown };
+    Feature: { MULTISELECT_ENABLED: unknown };
     Action: { PICKED: string; CANCEL: string };
 };
 
@@ -167,6 +169,9 @@ export function DrivePickerButton({ onAttach, onError }: DrivePickerButtonProps)
             view.setSelectFolderEnabled(false);
 
             const instancia = new picker.PickerBuilder()
+                // Vários arquivos de uma vez: o normal é anexar a proposta e o
+                // catálogo juntos, não abrir o Picker duas vezes.
+                .enableFeature(picker.Feature.MULTISELECT_ENABLED)
                 .setDeveloperKey(apiKey)
                 .setOAuthToken(accessToken)
                 .setAppId(appId)
@@ -175,8 +180,8 @@ export function DrivePickerButton({ onAttach, onError }: DrivePickerButtonProps)
                 .addView(view)
                 .setCallback((data) => {
                     if (data.action !== picker.Action.PICKED) return;
-                    const doc = data.docs?.[0];
-                    if (doc) void anexar(doc);
+                    const docs = data.docs ?? [];
+                    if (docs.length > 0) void anexar(docs);
                 })
                 .build();
 
@@ -188,16 +193,27 @@ export function DrivePickerButton({ onAttach, onError }: DrivePickerButtonProps)
         }
     }
 
-    async function anexar(doc: PickerDocument) {
+    async function anexar(docs: PickerDocument[]) {
         setBusy(true);
+        const falhas: string[] = [];
         try {
-            // Toda a validação (Docs nativo, tamanho) continua no servidor: o
-            // Picker lista tudo e não dá pra excluir tipo por lá, só incluir.
-            const res = await attachDriveFile(doc.id);
-            if (!res.ok) onError(res.error);
-            else onAttach(res.attachment);
-        } catch (err) {
-            onError(err instanceof Error ? err.message : "Erro ao anexar do Drive.");
+            for (const doc of docs) {
+                try {
+                    // Toda a validação (Docs nativo, tamanho) continua no
+                    // servidor: o Picker lista tudo e não dá pra excluir tipo
+                    // por lá, só incluir.
+                    const res = await attachDriveFile(doc.id);
+                    if (res.ok) onAttach(res.attachment);
+                    else falhas.push(res.error);
+                } catch (err) {
+                    const alvo = doc.name || doc.id;
+                    falhas.push(
+                        err instanceof Error ? err.message : `Erro em "${alvo}".`,
+                    );
+                }
+            }
+            // Um arquivo recusado não pode impedir os outros de anexar.
+            if (falhas.length > 0) onError(falhas.join(" "));
         } finally {
             setBusy(false);
         }
