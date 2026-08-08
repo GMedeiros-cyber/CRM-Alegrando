@@ -25,7 +25,11 @@ import {
 import { EmojiPickerInput } from "@/components/conversas/emoji-picker-input";
 import { RichTextEditor, type RichTextEditorHandle } from "./rich-text-editor";
 import { EmailChips } from "./email-chips";
-import { DrivePickerButton } from "./drive-picker-button";
+import {
+    DrivePickerButton,
+    isGooglePickerNode,
+    isGooglePickerOpen,
+} from "./drive-picker-button";
 import {
     createEmailAttachmentUploadUrl,
     listLeadsByLabels,
@@ -76,9 +80,29 @@ export interface EmailComposeModalProps {
 }
 
 export function EmailComposeModal(props: EmailComposeModalProps) {
+    /**
+     * O Google Picker vive fora da árvore do Dialog (ele se monta no body), e
+     * o Radix trata clique/Esc nele como interação "fora" — fechando a
+     * composição e jogando o rascunho fora. Aqui o modal aprende a distinguir
+     * o que é do Picker e simplesmente não reage.
+     */
+    function ignorarSeForDoPicker(e: { target?: EventTarget | null; preventDefault: () => void }) {
+        if (isGooglePickerNode(e.target ?? null)) e.preventDefault();
+    }
+
     return (
         <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-            <DialogContent className="sm:max-w-2xl max-h-[92vh] flex flex-col gap-3 overflow-hidden">
+            <DialogContent
+                className="sm:max-w-2xl max-h-[92vh] flex flex-col gap-3 overflow-hidden"
+                onPointerDownOutside={ignorarSeForDoPicker}
+                onInteractOutside={ignorarSeForDoPicker}
+                onFocusOutside={ignorarSeForDoPicker}
+                onEscapeKeyDown={(e) => {
+                    // Esc com o Picker aberto é pra fechar o Picker, não a
+                    // composição inteira.
+                    if (isGooglePickerOpen()) e.preventDefault();
+                }}
+            >
                 {/* Desmonta ao fechar: cada composição começa do zero. */}
                 <ComposeForm {...props} />
             </DialogContent>
@@ -114,6 +138,8 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
     const [body, setBody] = useState("");
     const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
     const [uploading, setUploading] = useState(false);
+    /** Nomes em trânsito, pra aparecerem como chip "enviando". */
+    const [uploadingNames, setUploadingNames] = useState<string[]>([]);
 
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [scheduleDate, setScheduleDate] = useState("");
@@ -245,42 +271,67 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
     // ------------------------------------------------------------------ anexos
     const totalBytes = attachments.reduce((sum, a) => sum + a.size, 0);
 
-    async function handleFiles(files: FileList | null) {
-        if (!files || files.length === 0) return;
+    /**
+     * Sobe arquivos pro R2 e adiciona à lista de anexos.
+     *
+     * Serve tanto ao clipe quanto ao Ctrl+V de arquivo no corpo — é o mesmo
+     * caminho, não há pipeline paralelo.
+     */
+    async function handleFiles(files: FileList | File[] | null) {
+        const lista = files ? Array.from(files) : [];
+        if (lista.length === 0) return;
+
         setError("");
         setUploading(true);
+        // Acumulador próprio: `totalBytes` é do render e não enxerga o que
+        // acabou de entrar neste mesmo lote.
+        let acumulado = totalBytes;
+
         try {
-            for (const file of Array.from(files)) {
-                if (totalBytes + file.size > MAX_ATTACHMENTS_BYTES) {
+            for (const file of lista) {
+                if (acumulado + file.size > MAX_ATTACHMENTS_BYTES) {
                     setError(
                         `"${file.name}" estoura o limite de 25MB do Gmail para a mensagem inteira.`,
                     );
                     break;
                 }
-                const prepared = await createEmailAttachmentUploadUrl(file.name, file.type);
-                if (!prepared.ok) {
-                    setError(prepared.error);
-                    break;
+
+                // Print colado vem sem nome ("image.png" genérico ou vazio).
+                const nome =
+                    file.name && file.name !== "image.png"
+                        ? file.name
+                        : `colado-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}.${(file.type.split("/")[1] || "png")}`;
+
+                setUploadingNames((prev) => [...prev, nome]);
+                try {
+                    const prepared = await createEmailAttachmentUploadUrl(nome, file.type);
+                    if (!prepared.ok) {
+                        setError(prepared.error);
+                        break;
+                    }
+                    const put = await fetch(prepared.signedUrl, {
+                        method: "PUT",
+                        headers: { "Content-Type": file.type || "application/octet-stream" },
+                        body: file,
+                    });
+                    if (!put.ok) {
+                        setError(`Falha ao subir "${nome}".`);
+                        break;
+                    }
+                    acumulado += file.size;
+                    setAttachments((prev) => [
+                        ...prev,
+                        {
+                            url: prepared.publicUrl,
+                            filename: nome,
+                            size: file.size,
+                            mimeType: file.type || "application/octet-stream",
+                            source: "upload",
+                        },
+                    ]);
+                } finally {
+                    setUploadingNames((prev) => prev.filter((n) => n !== nome));
                 }
-                const put = await fetch(prepared.signedUrl, {
-                    method: "PUT",
-                    headers: { "Content-Type": file.type || "application/octet-stream" },
-                    body: file,
-                });
-                if (!put.ok) {
-                    setError(`Falha ao subir "${file.name}".`);
-                    break;
-                }
-                setAttachments((prev) => [
-                    ...prev,
-                    {
-                        url: prepared.publicUrl,
-                        filename: file.name,
-                        size: file.size,
-                        mimeType: file.type || "application/octet-stream",
-                        source: "upload",
-                    },
-                ]);
             }
         } finally {
             setUploading(false);
@@ -541,6 +592,7 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                     ref={editorRef}
                     onChange={setBody}
                     placeholder="Escreva a mensagem..."
+                    onPasteFiles={(files) => void handleFiles(files)}
                     toolbarExtras={
                         <>
                             <button
@@ -582,8 +634,18 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                 />
 
                 {/* ---- anexos ---- */}
-                {attachments.length > 0 && (
+                {(attachments.length > 0 || uploadingNames.length > 0) && (
                     <div className="flex flex-wrap gap-2">
+                        {uploadingNames.map((nome) => (
+                            <span
+                                key={`subindo-${nome}`}
+                                className="flex items-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/30 px-2 py-1 text-xs text-muted-foreground"
+                            >
+                                <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                                <span className="max-w-[180px] truncate">{nome}</span>
+                                <span>enviando...</span>
+                            </span>
+                        ))}
                         {attachments.map((a) => (
                             <span
                                 key={a.url}
