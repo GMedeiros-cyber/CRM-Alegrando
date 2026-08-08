@@ -8,6 +8,24 @@ import { GoogleDriveIcon } from "./google-drive-icon";
 
 const GAPI_SRC = "https://apis.google.com/js/api.js";
 
+/**
+ * O Picker se monta em document.body, FORA da árvore do Dialog do Radix.
+ * Para o Radix, qualquer clique nele é "clique fora" e fecha o modal de
+ * composição — levando junto o rascunho. Estes dois helpers deixam o modal
+ * reconhecer o que é do Picker e ignorar.
+ */
+const PICKER_SELECTOR = ".picker-dialog, .picker-dialog-bg, .picker, .goog-modalpopup";
+
+export function isGooglePickerNode(node: EventTarget | Node | null): boolean {
+    if (!node || !(node instanceof Node)) return false;
+    const el = node instanceof Element ? node : node.parentElement;
+    return Boolean(el?.closest(PICKER_SELECTOR));
+}
+
+export function isGooglePickerOpen(): boolean {
+    return document.querySelector(PICKER_SELECTOR) !== null;
+}
+
 // Tipagem mínima do Picker: o Google não publica @types e só usamos um punhado
 // de símbolos. Declarar o que se usa evita `any` espalhado pelo arquivo.
 type PickerDocument = {

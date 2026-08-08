@@ -35,6 +35,7 @@ import {
     EMAIL_FONTS,
     EMAIL_SIZES,
 } from "@/lib/email/editor";
+import { ToolbarPopover } from "./toolbar-popover";
 
 export interface RichTextEditorHandle {
     /** Insere texto no ponto do cursor (emoji, por exemplo). */
@@ -47,7 +48,25 @@ interface RichTextEditorProps {
     placeholder?: string;
     /** Slot à direita da barra: anexo, Drive, emoji — quem monta é o modal. */
     toolbarExtras?: React.ReactNode;
+    /** Arquivo colado no corpo vira anexo, pelo mesmo caminho do clipe. */
+    onPasteFiles?: (files: File[]) => void;
 }
+
+/** Comandos com liga/desliga que a barra reflete conforme o cursor anda. */
+const ESTADOS = [
+    "bold",
+    "italic",
+    "underline",
+    "strikeThrough",
+    "insertOrderedList",
+    "insertUnorderedList",
+    "justifyLeft",
+    "justifyCenter",
+    "justifyRight",
+    "justifyFull",
+] as const;
+
+type EstadoComando = (typeof ESTADOS)[number] | "blockquote";
 
 /**
  * Editor de corpo de e-mail com barra no rodapé, no espírito do Gmail.
@@ -59,10 +78,14 @@ interface RichTextEditorProps {
  * e emitem HTML com classes, exigindo um serializador só pra reinlinar tudo.
  */
 export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(
-    function RichTextEditor({ onChange, placeholder, toolbarExtras }, ref) {
+    function RichTextEditor(
+        { onChange, placeholder, toolbarExtras, onPasteFiles },
+        ref,
+    ) {
         const editorRef = useRef<HTMLDivElement>(null);
         const [showToolbar, setShowToolbar] = useState(true);
         const [empty, setEmpty] = useState(true);
+        const [ativos, setAtivos] = useState<Set<EstadoComando>>(new Set());
 
         const emit = useCallback(() => {
             const html = editorRef.current?.innerHTML ?? "";
@@ -93,34 +116,61 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             }
         }, []);
 
+        /**
+         * Lê do documento quais formatos valem na posição atual do cursor.
+         * É isso que faz o botão acender sozinho ao clicar num trecho que já
+         * está em negrito — em vez de só reagir ao último clique na barra.
+         */
+        const sincronizarEstado = useCallback(() => {
+            const editor = editorRef.current;
+            if (!editor) return;
+
+            const sel = document.getSelection();
+            const dentro =
+                sel && sel.anchorNode ? editor.contains(sel.anchorNode) : false;
+            if (!dentro) return;
+
+            const novos = new Set<EstadoComando>();
+            for (const cmd of ESTADOS) {
+                try {
+                    if (document.queryCommandState(cmd)) novos.add(cmd);
+                } catch {
+                    /* comando não suportado: ignora */
+                }
+            }
+            try {
+                // queryCommandState não cobre citação; o bloco atual cobre.
+                const bloco = document.queryCommandValue("formatBlock").toLowerCase();
+                if (bloco === "blockquote") novos.add("blockquote");
+            } catch {
+                /* idem */
+            }
+            setAtivos(novos);
+        }, []);
+
+        useEffect(() => {
+            document.addEventListener("selectionchange", sincronizarEstado);
+            return () =>
+                document.removeEventListener("selectionchange", sincronizarEstado);
+        }, [sincronizarEstado]);
+
         function exec(command: string, value?: string) {
             editorRef.current?.focus();
             document.execCommand(command, false, value);
             emit();
+            sincronizarEstado();
         }
 
-        function handleLink() {
-            const selection = window.getSelection();
-            const selected = selection?.toString() || "";
-            const url = window.prompt("Endereço do link:", "https://");
-            if (!url || url === "https://") return;
-            const safe = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-            editorRef.current?.focus();
-            if (selected) {
-                document.execCommand("createLink", false, safe);
-            } else {
-                document.execCommand(
-                    "insertHTML",
-                    false,
-                    `<a href="${safe}" style="color:#1a73e8">${safe}</a>`,
-                );
-            }
-            emit();
-        }
-
-        // Colar como texto puro: HTML de fora (Word, site) entra com lixo de
-        // markup que quebra a renderização no cliente de e-mail.
+        // Colar: arquivo vira anexo; texto entra puro. HTML de fora (Word,
+        // site) traz markup que quebra a renderização no cliente de e-mail.
         function handlePaste(e: React.ClipboardEvent) {
+            const arquivos = Array.from(e.clipboardData.files || []);
+            if (arquivos.length > 0 && onPasteFiles) {
+                e.preventDefault();
+                onPasteFiles(arquivos);
+                return;
+            }
+
             e.preventDefault();
             const text = e.clipboardData.getData("text/plain");
             document.execCommand("insertText", false, text);
@@ -142,6 +192,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                         onInput={emit}
                         onBlur={emit}
                         onPaste={handlePaste}
+                        onKeyUp={sincronizarEstado}
+                        onMouseUp={sincronizarEstado}
                         role="textbox"
                         aria-multiline="true"
                         aria-label="Corpo do e-mail"
@@ -154,21 +206,21 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-0.5 border-t border-border bg-muted/40 px-2 py-1.5">
-                    <ToolbarToggle
+                <div className="flex flex-wrap items-center gap-0.5 border-t border-border bg-muted/60 px-2 py-1.5">
+                    <ToolbarButton
                         active={showToolbar}
                         onClick={() => setShowToolbar((v) => !v)}
                         title="Opções de formatação"
                     >
                         <Type className="w-4 h-4" />
-                    </ToolbarToggle>
+                    </ToolbarButton>
 
                     {showToolbar && (
                         <>
                             <Divider />
                             <SelectMenu
                                 label={EMAIL_FONTS[0].label}
-                                width="w-36"
+                                width="w-40"
                                 items={EMAIL_FONTS.map((f) => ({
                                     key: f.stack,
                                     label: f.label,
@@ -178,57 +230,57 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                             />
                             <SelectMenu
                                 label="Tamanho"
-                                icon={<Type className="w-3.5 h-3.5" />}
-                                width="w-32"
+                                width="w-36"
                                 items={EMAIL_SIZES.map((s) => ({
                                     key: s.px,
                                     label: s.label,
                                     style: { fontSize: s.px },
                                 }))}
                                 onPick={(px) => {
-                                    // execCommand("fontSize") só aceita 1-7; aplicamos px
-                                    // no elemento gerado pra bater com o Gmail.
+                                    // execCommand("fontSize") só aceita 1-7;
+                                    // aplicamos px no elemento gerado.
                                     exec("fontSize", "7");
-                                    const editor = editorRef.current;
-                                    editor?.querySelectorAll('font[size="7"]').forEach((el) => {
-                                        el.removeAttribute("size");
-                                        (el as HTMLElement).style.fontSize = px;
-                                    });
+                                    editorRef.current
+                                        ?.querySelectorAll('font[size="7"]')
+                                        .forEach((el) => {
+                                            el.removeAttribute("size");
+                                            (el as HTMLElement).style.fontSize = px;
+                                        });
                                     emit();
                                 }}
                             />
                             <Divider />
-                            <ToolbarButton onClick={() => exec("bold")} title="Negrito (Ctrl+B)">
+                            <ToolbarButton active={ativos.has("bold")} onClick={() => exec("bold")} title="Negrito (Ctrl+B)">
                                 <Bold className="w-4 h-4" />
                             </ToolbarButton>
-                            <ToolbarButton onClick={() => exec("italic")} title="Itálico (Ctrl+I)">
+                            <ToolbarButton active={ativos.has("italic")} onClick={() => exec("italic")} title="Itálico (Ctrl+I)">
                                 <Italic className="w-4 h-4" />
                             </ToolbarButton>
-                            <ToolbarButton onClick={() => exec("underline")} title="Sublinhado (Ctrl+U)">
+                            <ToolbarButton active={ativos.has("underline")} onClick={() => exec("underline")} title="Sublinhado (Ctrl+U)">
                                 <Underline className="w-4 h-4" />
                             </ToolbarButton>
-                            <ToolbarButton onClick={() => exec("strikeThrough")} title="Tachado">
+                            <ToolbarButton active={ativos.has("strikeThrough")} onClick={() => exec("strikeThrough")} title="Tachado">
                                 <Strikethrough className="w-4 h-4" />
                             </ToolbarButton>
                             <ColorMenu onPick={(color) => exec("foreColor", color)} />
                             <Divider />
-                            <ToolbarButton onClick={() => exec("justifyLeft")} title="Alinhar à esquerda">
+                            <ToolbarButton active={ativos.has("justifyLeft")} onClick={() => exec("justifyLeft")} title="Alinhar à esquerda">
                                 <AlignLeft className="w-4 h-4" />
                             </ToolbarButton>
-                            <ToolbarButton onClick={() => exec("justifyCenter")} title="Centralizar">
+                            <ToolbarButton active={ativos.has("justifyCenter")} onClick={() => exec("justifyCenter")} title="Centralizar">
                                 <AlignCenter className="w-4 h-4" />
                             </ToolbarButton>
-                            <ToolbarButton onClick={() => exec("justifyRight")} title="Alinhar à direita">
+                            <ToolbarButton active={ativos.has("justifyRight")} onClick={() => exec("justifyRight")} title="Alinhar à direita">
                                 <AlignRight className="w-4 h-4" />
                             </ToolbarButton>
-                            <ToolbarButton onClick={() => exec("justifyFull")} title="Justificar">
+                            <ToolbarButton active={ativos.has("justifyFull")} onClick={() => exec("justifyFull")} title="Justificar">
                                 <AlignJustify className="w-4 h-4" />
                             </ToolbarButton>
                             <Divider />
-                            <ToolbarButton onClick={() => exec("insertUnorderedList")} title="Lista com marcadores">
+                            <ToolbarButton active={ativos.has("insertUnorderedList")} onClick={() => exec("insertUnorderedList")} title="Lista com marcadores">
                                 <List className="w-4 h-4" />
                             </ToolbarButton>
-                            <ToolbarButton onClick={() => exec("insertOrderedList")} title="Lista numerada">
+                            <ToolbarButton active={ativos.has("insertOrderedList")} onClick={() => exec("insertOrderedList")} title="Lista numerada">
                                 <ListOrdered className="w-4 h-4" />
                             </ToolbarButton>
                             <ToolbarButton onClick={() => exec("outdent")} title="Diminuir recuo">
@@ -238,7 +290,13 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                                 <Indent className="w-4 h-4" />
                             </ToolbarButton>
                             <ToolbarButton
-                                onClick={() => exec("formatBlock", "blockquote")}
+                                active={ativos.has("blockquote")}
+                                onClick={() =>
+                                    exec(
+                                        "formatBlock",
+                                        ativos.has("blockquote") ? "div" : "blockquote",
+                                    )
+                                }
                                 title="Citação"
                             >
                                 <Quote className="w-4 h-4" />
@@ -250,9 +308,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     )}
 
                     <Divider />
-                    <ToolbarButton onClick={handleLink} title="Inserir link (Ctrl+K)">
-                        <Link2 className="w-4 h-4" />
-                    </ToolbarButton>
+                    <LinkMenu editorRef={editorRef} onDone={emit} />
                     {toolbarExtras}
                 </div>
             </div>
@@ -268,41 +324,18 @@ function ToolbarButton({
     children,
     onClick,
     title,
+    active = false,
 }: {
     children: React.ReactNode;
     onClick: () => void;
     title: string;
+    active?: boolean;
 }) {
     return (
         <button
             type="button"
-            // onMouseDown preventDefault mantém a seleção do texto viva: sem
-            // isso o clique tira o foco do editor e o comando não acha o alvo.
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={onClick}
-            title={title}
-            aria-label={title}
-            className="p-1.5 rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-            {children}
-        </button>
-    );
-}
-
-function ToolbarToggle({
-    children,
-    onClick,
-    title,
-    active,
-}: {
-    children: React.ReactNode;
-    onClick: () => void;
-    title: string;
-    active: boolean;
-}) {
-    return (
-        <button
-            type="button"
+            // preventDefault mantém a seleção do texto viva: sem isso o clique
+            // tira o foco do editor e o comando não acha o alvo.
             onMouseDown={(e) => e.preventDefault()}
             onClick={onClick}
             title={title}
@@ -311,8 +344,8 @@ function ToolbarToggle({
             className={cn(
                 "p-1.5 rounded transition-colors",
                 active
-                    ? "bg-brand-500/20 text-brand-600 dark:text-brand-400"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    ? "bg-brand-500/25 text-brand-700 dark:text-brand-300 ring-1 ring-brand-500/40"
+                    : "text-foreground/75 hover:bg-muted-foreground/15 hover:text-foreground",
             )}
         >
             {children}
@@ -322,47 +355,43 @@ function ToolbarToggle({
 
 function SelectMenu({
     label,
-    icon,
     items,
     onPick,
     width,
 }: {
     label: string;
-    icon?: React.ReactNode;
     items: { key: string; label: string; style?: React.CSSProperties }[];
     onPick: (key: string) => void;
     width: string;
 }) {
     const [open, setOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!open) return;
-        function onDoc(e: MouseEvent) {
-            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-        }
-        document.addEventListener("mousedown", onDoc);
-        return () => document.removeEventListener("mousedown", onDoc);
-    }, [open]);
+    // Âncora em state (e não ref): o popover precisa dela no render, e ref
+    // lido durante o render não dispara re-render quando o nó aparece.
+    const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
 
     return (
-        <div ref={ref} className="relative">
+        <>
             <button
+                ref={setBtn}
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setOpen((v) => !v)}
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                aria-expanded={open}
+                className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
+                    open
+                        ? "bg-brand-500/25 text-brand-700 dark:text-brand-300"
+                        : "text-foreground/75 hover:bg-muted-foreground/15 hover:text-foreground",
+                )}
             >
-                {icon}
                 <span className="max-w-[86px] truncate">{label}</span>
                 <ChevronDown className="w-3 h-3" />
             </button>
             {open && (
-                <div
-                    className={cn(
-                        "absolute bottom-full left-0 z-50 mb-1 rounded-lg border border-border bg-popover shadow-lg py-1 max-h-64 overflow-y-auto",
-                        width,
-                    )}
+                <ToolbarPopover
+                    anchor={btn}
+                    onClose={() => setOpen(false)}
+                    className={cn("py-1", width)}
                 >
                     {items.map((item) => (
                         <button
@@ -371,59 +400,224 @@ function SelectMenu({
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => { onPick(item.key); setOpen(false); }}
                             style={item.style}
-                            className="w-full px-3 py-1.5 text-left text-sm hover:bg-muted transition-colors"
+                            className="w-full px-3 py-1.5 text-left text-sm text-foreground hover:bg-muted transition-colors"
                         >
                             {item.label}
                         </button>
                     ))}
-                </div>
+                </ToolbarPopover>
             )}
-        </div>
+        </>
     );
 }
 
 function ColorMenu({ onPick }: { onPick: (color: string) => void }) {
     const [open, setOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!open) return;
-        function onDoc(e: MouseEvent) {
-            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-        }
-        document.addEventListener("mousedown", onDoc);
-        return () => document.removeEventListener("mousedown", onDoc);
-    }, [open]);
+    const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
 
     return (
-        <div ref={ref} className="relative">
+        <>
             <button
+                ref={setBtn}
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setOpen((v) => !v)}
                 title="Cor do texto"
                 aria-label="Cor do texto"
-                className="flex items-center gap-0.5 p-1.5 rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                aria-expanded={open}
+                className={cn(
+                    "flex items-center gap-0.5 p-1.5 rounded transition-colors",
+                    open
+                        ? "bg-brand-500/25 text-brand-700 dark:text-brand-300"
+                        : "text-foreground/75 hover:bg-muted-foreground/15 hover:text-foreground",
+                )}
             >
                 <span className="font-bold text-sm leading-none">A</span>
                 <ChevronDown className="w-3 h-3" />
             </button>
             {open && (
-                <div className="absolute bottom-full left-0 z-50 mb-1 grid grid-cols-6 gap-1 rounded-lg border border-border bg-popover p-2 shadow-lg">
-                    {EMAIL_COLORS.map((color) => (
-                        <button
-                            key={color}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => { onPick(color); setOpen(false); }}
-                            title={color}
-                            aria-label={`Cor ${color}`}
-                            style={{ backgroundColor: color }}
-                            className="w-5 h-5 rounded border border-border hover:scale-110 transition-transform"
-                        />
-                    ))}
-                </div>
+                <ToolbarPopover anchor={btn} onClose={() => setOpen(false)} className="p-2">
+                    <div className="grid grid-cols-6 gap-1">
+                        {EMAIL_COLORS.map((color) => (
+                            <button
+                                key={color}
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => { onPick(color); setOpen(false); }}
+                                title={color}
+                                aria-label={`Cor ${color}`}
+                                style={{ backgroundColor: color }}
+                                className="w-5 h-5 rounded border border-border hover:scale-110 transition-transform"
+                            />
+                        ))}
+                    </div>
+                </ToolbarPopover>
             )}
-        </div>
+        </>
+    );
+}
+
+/**
+ * Inserção de link com UI do CRM.
+ *
+ * O `prompt()` nativo, além de feio, rouba o foco e derruba a seleção. Aqui a
+ * Range é guardada na abertura e devolvida na hora de aplicar — sem isso o
+ * link cairia no lugar errado depois de digitar na caixinha.
+ */
+function LinkMenu({
+    editorRef,
+    onDone,
+}: {
+    editorRef: React.RefObject<HTMLDivElement | null>;
+    onDone: () => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const [url, setUrl] = useState("");
+    const [texto, setTexto] = useState("");
+    const [erro, setErro] = useState("");
+    const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
+    // Muda o que é renderizado (mostrar ou não o campo "Texto exibido"),
+    // então é state — ref não re-renderiza.
+    const [tinhaSelecao, setTinhaSelecao] = useState(false);
+    const rangeRef = useRef<Range | null>(null);
+
+    function abrir() {
+        const sel = document.getSelection();
+        const dentro =
+            sel && sel.rangeCount > 0 && sel.anchorNode
+                ? editorRef.current?.contains(sel.anchorNode)
+                : false;
+
+        rangeRef.current = dentro && sel ? sel.getRangeAt(0).cloneRange() : null;
+        const selecionado = dentro && sel ? sel.toString() : "";
+        setTinhaSelecao(selecionado.length > 0);
+
+        setTexto(selecionado);
+        setUrl("");
+        setErro("");
+        setOpen(true);
+    }
+
+    function aplicar() {
+        const bruto = url.trim();
+        if (!bruto) {
+            setErro("Informe o endereço.");
+            return;
+        }
+        // Sem protocolo o navegador trataria como link relativo.
+        const destino = /^https?:\/\//i.test(bruto) ? bruto : `https://${bruto}`;
+        try {
+            new URL(destino);
+        } catch {
+            setErro("Endereço inválido.");
+            return;
+        }
+
+        const editor = editorRef.current;
+        editor?.focus();
+
+        const sel = document.getSelection();
+        if (rangeRef.current && sel) {
+            sel.removeAllRanges();
+            sel.addRange(rangeRef.current);
+        }
+
+        if (tinhaSelecao) {
+            document.execCommand("createLink", false, destino);
+        } else {
+            const rotulo = (texto.trim() || destino).replace(/[<>&"]/g, (c) =>
+                ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c] as string,
+            );
+            document.execCommand(
+                "insertHTML",
+                false,
+                `<a href="${destino}" style="color:#1a73e8">${rotulo}</a>`,
+            );
+        }
+
+        onDone();
+        setOpen(false);
+    }
+
+    return (
+        <>
+            <button
+                ref={setBtn}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={abrir}
+                title="Inserir link (Ctrl+K)"
+                aria-label="Inserir link"
+                className={cn(
+                    "p-1.5 rounded transition-colors",
+                    open
+                        ? "bg-brand-500/25 text-brand-700 dark:text-brand-300"
+                        : "text-foreground/75 hover:bg-muted-foreground/15 hover:text-foreground",
+                )}
+            >
+                <Link2 className="w-4 h-4" />
+            </button>
+            {open && (
+                <ToolbarPopover
+                    anchor={btn}
+                    onClose={() => setOpen(false)}
+                    className="w-72 p-3"
+                >
+                    <div className="space-y-2" onMouseDown={(e) => e.stopPropagation()}>
+                        <label className="block">
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Endereço
+                            </span>
+                            <input
+                                autoFocus
+                                value={url}
+                                onChange={(e) => { setUrl(e.target.value); setErro(""); }}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") { e.preventDefault(); aplicar(); }
+                                }}
+                                placeholder="exemplo.com.br"
+                                className="mt-1 w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+                            />
+                        </label>
+
+                        {!tinhaSelecao && (
+                            <label className="block">
+                                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    Texto exibido
+                                </span>
+                                <input
+                                    value={texto}
+                                    onChange={(e) => setTexto(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") { e.preventDefault(); aplicar(); }
+                                    }}
+                                    placeholder="(usa o próprio endereço)"
+                                    className="mt-1 w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+                                />
+                            </label>
+                        )}
+
+                        {erro && <p className="text-xs text-red-500">{erro}</p>}
+
+                        <div className="flex justify-end gap-2 pt-1">
+                            <button
+                                type="button"
+                                onClick={() => setOpen(false)}
+                                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={aplicar}
+                                className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600 transition-colors"
+                            >
+                                Inserir
+                            </button>
+                        </div>
+                    </div>
+                </ToolbarPopover>
+            )}
+        </>
     );
 }
