@@ -6,7 +6,6 @@ import {
     ArrowLeft,
     CalendarClock,
     ChevronDown,
-    HardDrive,
     Loader2,
     Paperclip,
     Search,
@@ -26,7 +25,7 @@ import {
 import { EmojiPickerInput } from "@/components/conversas/emoji-picker-input";
 import { RichTextEditor, type RichTextEditorHandle } from "./rich-text-editor";
 import { EmailChips } from "./email-chips";
-import { DrivePickerModal } from "./drive-picker-modal";
+import { DrivePickerButton } from "./drive-picker-button";
 import {
     createEmailAttachmentUploadUrl,
     listLeadsByLabels,
@@ -115,7 +114,6 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
     const [body, setBody] = useState("");
     const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
     const [uploading, setUploading] = useState(false);
-    const [drivePickerOpen, setDrivePickerOpen] = useState(false);
 
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [scheduleDate, setScheduleDate] = useState("");
@@ -559,16 +557,16 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                                     <Paperclip className="w-4 h-4" />
                                 )}
                             </button>
-                            <button
-                                type="button"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => setDrivePickerOpen(true)}
-                                title="Inserir arquivo do Drive"
-                                aria-label="Inserir arquivo do Drive"
-                                className="p-1.5 rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                            >
-                                <HardDrive className="w-4 h-4" />
-                            </button>
+                            <DrivePickerButton
+                                onAttach={(attachment) =>
+                                    setAttachments((prev) =>
+                                        prev.some((a) => a.url === attachment.url)
+                                            ? prev
+                                            : [...prev, attachment],
+                                    )
+                                }
+                                onError={setError}
+                            />
                             <EmojiPickerInput
                                 onEmojiSelect={(emoji) => editorRef.current?.insertText(emoji)}
                             />
@@ -669,16 +667,6 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                 </div>
             </div>
 
-            <DrivePickerModal
-                open={drivePickerOpen}
-                onOpenChange={setDrivePickerOpen}
-                onAttach={(attachment) =>
-                    setAttachments((prev) =>
-                        prev.some((a) => a.url === attachment.url) ? prev : [...prev, attachment],
-                    )
-                }
-                onError={setError}
-            />
         </>
     );
 }

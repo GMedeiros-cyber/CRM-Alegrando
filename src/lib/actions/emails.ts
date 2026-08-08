@@ -9,7 +9,6 @@ import { cleanEditorHtml, isEditorEmpty, wrapEmailHtml } from "@/lib/email/edito
 import { presignedPutUrl, r2PublicUrl } from "@/lib/whatsapp/r2-client";
 import { MAX_ATTACHMENTS_BYTES } from "@/lib/types/email";
 import type {
-    DriveFile,
     EmailAttachment,
     EmailFieldKey,
     EmailSendRecord,
@@ -472,10 +471,75 @@ export async function createEmailAttachmentUploadUrl(
 // GOOGLE DRIVE
 // =============================================================
 
-/** true quando o token de leitura do Drive está configurado. */
-export async function isDriveEnabled(): Promise<boolean> {
+/**
+ * Access token de curta duração pro Google Picker rodar no navegador.
+ *
+ * O Picker exige um token OAuth no client, mas NÃO exige que o usuário faça
+ * login: trocamos o refresh token da conta da Alegrando por um access token
+ * aqui no servidor e entregamos só ele. A equipe vê o Drive da empresa sem
+ * autenticar nada — e o refresh token nunca sai daqui.
+ *
+ * O token dá leitura ao Drive da Alegrando por ~1h. Só é emitido pra quem já
+ * está autenticado no CRM.
+ */
+export async function getDrivePickerToken(): Promise<
+    | { ok: true; accessToken: string; expiresAt: number; appId: string }
+    | { ok: false; error: string }
+> {
     await requireAuth();
-    return Boolean(process.env.GOOGLE_DRIVE_REFRESH_TOKEN);
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
+
+    if (!clientId || !clientSecret || !refreshToken) {
+        return { ok: false, error: "Integração com o Drive não configurada." };
+    }
+
+    try {
+        const res = await fetchWithTimeout(
+            "https://oauth2.googleapis.com/token",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                    client_id: clientId,
+                    client_secret: clientSecret,
+                    refresh_token: refreshToken,
+                    grant_type: "refresh_token",
+                }),
+            },
+            15_000,
+        );
+
+        const data = (await res.json()) as {
+            access_token?: string;
+            expires_in?: number;
+            error?: string;
+            error_description?: string;
+        };
+
+        if (!res.ok || !data.access_token) {
+            // Nunca ecoar a resposta crua: ela pode conter detalhe de credencial.
+            console.error(
+                `[getDrivePickerToken] ${res.status} ${data.error || ""} ${data.error_description || ""}`,
+            );
+            return { ok: false, error: "Não foi possível liberar o acesso ao Drive." };
+        }
+
+        return {
+            ok: true,
+            accessToken: data.access_token,
+            // Margem de 60s pro client renovar antes de o Google recusar.
+            expiresAt: Date.now() + ((data.expires_in ?? 3600) - 60) * 1000,
+            // O prefixo numérico do client_id é o número do projeto, que é o
+            // que o Picker chama de appId. Evita mais uma env var.
+            appId: clientId.split("-")[0],
+        };
+    } catch (err) {
+        console.error("[getDrivePickerToken]", err);
+        return { ok: false, error: "Não foi possível liberar o acesso ao Drive." };
+    }
 }
 
 function getDriveClient() {
@@ -485,57 +549,6 @@ function getDriveClient() {
     );
     auth.setCredentials({ refresh_token: process.env.GOOGLE_DRIVE_REFRESH_TOKEN });
     return google.drive({ version: "v3", auth });
-}
-
-/**
- * Lista o Drive da Alegrando — pasta a pasta ou por busca.
- *
- * É sempre a conta da empresa (a credencial é de servidor), não o Drive
- * pessoal de quem está usando o CRM. Leitura apenas.
- */
-export async function listDriveFiles(params: {
-    folderId?: string | null;
-    search?: string;
-}): Promise<{ ok: true; files: DriveFile[] } | { ok: false; error: string }> {
-    await requireAuth();
-    if (!process.env.GOOGLE_DRIVE_REFRESH_TOKEN) {
-        return { ok: false, error: "Integração com o Drive não configurada." };
-    }
-
-    const search = params.search?.trim();
-    const clauses = ["trashed = false"];
-    if (search) {
-        clauses.push(`name contains '${search.replace(/'/g, "\\'")}'`);
-    } else {
-        clauses.push(`'${params.folderId || "root"}' in parents`);
-    }
-
-    try {
-        const drive = getDriveClient();
-        const res = await drive.files.list({
-            q: clauses.join(" and "),
-            pageSize: 100,
-            fields: "files(id, name, mimeType, size, iconLink, modifiedTime)",
-            orderBy: "folder,name",
-            supportsAllDrives: true,
-            includeItemsFromAllDrives: true,
-        });
-
-        const files: DriveFile[] = (res.data.files || []).map((f) => ({
-            id: f.id!,
-            name: f.name || "(sem nome)",
-            mimeType: f.mimeType || "",
-            size: f.size ? Number(f.size) : null,
-            iconLink: f.iconLink || null,
-            modifiedTime: f.modifiedTime || null,
-            isFolder: f.mimeType === "application/vnd.google-apps.folder",
-        }));
-        return { ok: true, files };
-    } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error("[listDriveFiles]", message);
-        return { ok: false, error: `Erro ao ler o Drive: ${message.slice(0, 160)}` };
-    }
 }
 
 /**
