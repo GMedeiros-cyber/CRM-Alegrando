@@ -7,7 +7,7 @@ import { fetchWithTimeout } from "@/lib/fetch-utils";
 import { extractEmails, pickEmails, plainTextToHtml } from "@/lib/email/format";
 import { cleanEditorHtml, isEditorEmpty, wrapEmailHtml } from "@/lib/email/editor";
 import { presignedPutUrl, r2PublicUrl } from "@/lib/whatsapp/r2-client";
-import { MAX_ATTACHMENTS_BYTES } from "@/lib/types/email";
+import { MAX_TOTAL_BYTES } from "@/lib/email/attachments";
 import type {
     EmailAttachment,
     EmailFieldKey,
@@ -246,7 +246,7 @@ async function dispatchEmails(params: {
 
     const attachments = params.attachments || [];
     const totalBytes = attachments.reduce((sum, a) => sum + (a.size || 0), 0);
-    if (totalBytes > MAX_ATTACHMENTS_BYTES) {
+    if (totalBytes > MAX_TOTAL_BYTES) {
         return {
             ok: false,
             error: `Anexos somam ${(totalBytes / 1024 / 1024).toFixed(1)}MB — o Gmail aceita até 25MB por mensagem.`,
@@ -585,7 +585,7 @@ export async function attachDriveFile(
         }
 
         const declaredSize = meta.data.size ? Number(meta.data.size) : 0;
-        if (declaredSize > MAX_ATTACHMENTS_BYTES) {
+        if (declaredSize > MAX_TOTAL_BYTES) {
             return {
                 ok: false,
                 error: `"${meta.data.name}" tem ${(declaredSize / 1024 / 1024).toFixed(1)}MB — acima do limite de 25MB do Gmail.`,

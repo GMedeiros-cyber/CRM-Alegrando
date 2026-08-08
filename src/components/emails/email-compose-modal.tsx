@@ -40,11 +40,17 @@ import {
     EMAIL_FIELD_LABELS,
     EMAIL_FIELD_ORDER,
     EMAIL_FIELD_PRIORITY,
-    MAX_ATTACHMENTS_BYTES,
     type EmailAttachment,
     type EmailFieldKey,
     type LeadEmailRow,
 } from "@/lib/types/email";
+import {
+    ACCEPT_ATTR,
+    MAX_TOTAL_BYTES,
+    formatarBytes,
+    motivoRecusa,
+} from "@/lib/email/attachments";
+import { AttachmentTray } from "./attachment-tray";
 import { isEditorEmpty } from "@/lib/email/editor";
 import { isValidEmail } from "@/lib/email/format";
 import type { Label } from "@/lib/types/labels";
@@ -81,22 +87,29 @@ export interface EmailComposeModalProps {
 
 export function EmailComposeModal(props: EmailComposeModalProps) {
     /**
-     * O Google Picker vive fora da árvore do Dialog (ele se monta no body), e
-     * o Radix trata clique/Esc nele como interação "fora" — fechando a
-     * composição e jogando o rascunho fora. Aqui o modal aprende a distinguir
-     * o que é do Picker e simplesmente não reage.
+     * O Google Picker e os popovers da barra de formatação vivem fora da
+     * árvore do Dialog (ambos são portalizados no body), e o Radix trata
+     * clique/Esc neles como interação "fora" — fechando a composição e jogando
+     * o rascunho fora. Aqui o modal aprende a distinguir os dois e não reagir.
      */
-    function ignorarSeForDoPicker(e: { target?: EventTarget | null; preventDefault: () => void }) {
-        if (isGooglePickerNode(e.target ?? null)) e.preventDefault();
+    function ehExterno(alvo: EventTarget | null): boolean {
+        if (isGooglePickerNode(alvo)) return true;
+        const node = alvo instanceof Node ? alvo : null;
+        const el = node instanceof Element ? node : node?.parentElement;
+        return Boolean(el?.closest("[data-toolbar-popover]"));
+    }
+
+    function ignorarSeForExterno(e: { target?: EventTarget | null; preventDefault: () => void }) {
+        if (ehExterno(e.target ?? null)) e.preventDefault();
     }
 
     return (
         <Dialog open={props.open} onOpenChange={props.onOpenChange}>
             <DialogContent
                 className="sm:max-w-2xl max-h-[92vh] flex flex-col gap-3 overflow-hidden"
-                onPointerDownOutside={ignorarSeForDoPicker}
-                onInteractOutside={ignorarSeForDoPicker}
-                onFocusOutside={ignorarSeForDoPicker}
+                onPointerDownOutside={ignorarSeForExterno}
+                onInteractOutside={ignorarSeForExterno}
+                onFocusOutside={ignorarSeForExterno}
                 onEscapeKeyDown={(e) => {
                     // Esc com o Picker aberto é pra fechar o Picker, não a
                     // composição inteira.
@@ -138,8 +151,10 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
     const [body, setBody] = useState("");
     const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
     const [uploading, setUploading] = useState(false);
-    /** Nomes em trânsito, pra aparecerem como chip "enviando". */
-    const [uploadingNames, setUploadingNames] = useState<string[]>([]);
+    /** Arquivos em trânsito, pra aparecerem na bandeja antes de ter URL. */
+    const [uploadingItems, setUploadingItems] = useState<
+        { id: string; name: string; size: number }[]
+    >([]);
 
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [scheduleDate, setScheduleDate] = useState("");
@@ -289,35 +304,52 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
 
         try {
             for (const file of lista) {
-                if (acumulado + file.size > MAX_ATTACHMENTS_BYTES) {
-                    setError(
-                        `"${file.name}" estoura o limite de 25MB do Gmail para a mensagem inteira.`,
-                    );
-                    break;
+                const recusa = motivoRecusa(file);
+                if (recusa) {
+                    setError(recusa);
+                    continue;
                 }
 
-                // Print colado vem sem nome ("image.png" genérico ou vazio).
+                if (acumulado + file.size > MAX_TOTAL_BYTES) {
+                    const excesso = acumulado + file.size - MAX_TOTAL_BYTES;
+                    setError(
+                        `"${file.name}" passa ${formatarBytes(excesso)} do limite de ${formatarBytes(MAX_TOTAL_BYTES)} do Gmail (a soma vale pra mensagem inteira). Remova algum anexo ou mande este arquivo por link.`,
+                    );
+                    continue;
+                }
+
+                // Print colado vem com nome genérico ("image.png") ou sem nome:
+                // vários prints virariam anexos indistinguíveis.
                 const nome =
                     file.name && file.name !== "image.png"
                         ? file.name
-                        : `colado-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}.${(file.type.split("/")[1] || "png")}`;
+                        : `colado-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}.${file.type.split("/")[1] || "png"}`;
 
-                setUploadingNames((prev) => [...prev, nome]);
+                const id = `${nome}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+                setUploadingItems((prev) => [...prev, { id, name: nome, size: file.size }]);
+
                 try {
-                    const prepared = await createEmailAttachmentUploadUrl(nome, file.type);
+                    const mimeType = file.type || "application/octet-stream";
+                    const prepared = await createEmailAttachmentUploadUrl(nome, mimeType);
                     if (!prepared.ok) {
-                        setError(prepared.error);
-                        break;
+                        setError(`${nome}: ${prepared.error}`);
+                        continue;
                     }
+
                     const put = await fetch(prepared.signedUrl, {
                         method: "PUT",
-                        headers: { "Content-Type": file.type || "application/octet-stream" },
+                        headers: { "Content-Type": mimeType },
                         body: file,
                     });
                     if (!put.ok) {
-                        setError(`Falha ao subir "${nome}".`);
-                        break;
+                        // Sem o status, uma falha de upload some sem deixar
+                        // rastro — foi o que aconteceu com o print colado.
+                        setError(
+                            `Falha ao subir "${nome}" (HTTP ${put.status}). Tente de novo.`,
+                        );
+                        continue;
                     }
+
                     acumulado += file.size;
                     setAttachments((prev) => [
                         ...prev,
@@ -325,12 +357,16 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                             url: prepared.publicUrl,
                             filename: nome,
                             size: file.size,
-                            mimeType: file.type || "application/octet-stream",
+                            mimeType,
                             source: "upload",
                         },
                     ]);
+                } catch (err) {
+                    setError(
+                        `Falha ao subir "${nome}": ${err instanceof Error ? err.message : "erro de rede"}`,
+                    );
                 } finally {
-                    setUploadingNames((prev) => prev.filter((n) => n !== nome));
+                    setUploadingItems((prev) => prev.filter((i) => i.id !== id));
                 }
             }
         } finally {
@@ -593,6 +629,13 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                     onChange={setBody}
                     placeholder="Escreva a mensagem..."
                     onPasteFiles={(files) => void handleFiles(files)}
+                    attachmentSlot={
+                        <AttachmentTray
+                            attachments={attachments}
+                            uploading={uploadingItems}
+                            onRemove={removeAttachment}
+                        />
+                    }
                     toolbarExtras={
                         <>
                             <button
@@ -629,46 +672,10 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                     ref={fileInputRef}
                     type="file"
                     multiple
+                    accept={ACCEPT_ATTR}
                     hidden
                     onChange={(e) => void handleFiles(e.target.files)}
                 />
-
-                {/* ---- anexos ---- */}
-                {(attachments.length > 0 || uploadingNames.length > 0) && (
-                    <div className="flex flex-wrap gap-2">
-                        {uploadingNames.map((nome) => (
-                            <span
-                                key={`subindo-${nome}`}
-                                className="flex items-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/30 px-2 py-1 text-xs text-muted-foreground"
-                            >
-                                <Loader2 className="w-3 h-3 animate-spin shrink-0" />
-                                <span className="max-w-[180px] truncate">{nome}</span>
-                                <span>enviando...</span>
-                            </span>
-                        ))}
-                        {attachments.map((a) => (
-                            <span
-                                key={a.url}
-                                className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/50 px-2 py-1 text-xs"
-                            >
-                                <Paperclip className="w-3 h-3 text-muted-foreground shrink-0" />
-                                <span className="max-w-[180px] truncate">{a.filename}</span>
-                                <span className="text-muted-foreground">{humanSize(a.size)}</span>
-                                <button
-                                    type="button"
-                                    onClick={() => removeAttachment(a.url)}
-                                    aria-label={`Remover ${a.filename}`}
-                                    className="text-muted-foreground hover:text-red-500 transition-colors"
-                                >
-                                    <X className="w-3 h-3" />
-                                </button>
-                            </span>
-                        ))}
-                        <span className="self-center text-[11px] text-muted-foreground">
-                            {humanSize(totalBytes)} de 25 MB
-                        </span>
-                    </div>
-                )}
 
                 {/* ---- agendamento ---- */}
                 {scheduleOpen && (
@@ -693,8 +700,12 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                     </div>
                 )}
 
-                {error && <ErrorBox message={error} />}
             </div>
+
+            {/* Erro FORA da área rolável: dentro dela, uma falha de upload
+                ficava abaixo da dobra e o arquivo simplesmente "sumia" sem
+                explicação nenhuma. */}
+            {error && <ErrorBox message={error} onDismiss={() => setError("")} />}
 
             {/* ---- rodapé ---- */}
             <div className="flex items-center gap-2 pt-3 border-t border-border">
@@ -972,11 +983,21 @@ function TagRecipients({
     );
 }
 
-function ErrorBox({ message }: { message: string }) {
+function ErrorBox({ message, onDismiss }: { message: string; onDismiss?: () => void }) {
     return (
         <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-2.5">
             <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-red-700 dark:text-red-300">{message}</p>
+            <p className="flex-1 text-xs text-red-700 dark:text-red-300">{message}</p>
+            {onDismiss && (
+                <button
+                    type="button"
+                    onClick={onDismiss}
+                    aria-label="Fechar aviso"
+                    className="shrink-0 text-red-500/70 hover:text-red-500 transition-colors"
+                >
+                    <X className="w-3.5 h-3.5" />
+                </button>
+            )}
         </div>
     );
 }

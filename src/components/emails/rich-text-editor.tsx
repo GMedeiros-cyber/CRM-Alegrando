@@ -46,6 +46,8 @@ export interface RichTextEditorHandle {
 interface RichTextEditorProps {
     onChange: (html: string) => void;
     placeholder?: string;
+    /** Área de anexos, entre o corpo e a barra — como no Gmail. */
+    attachmentSlot?: React.ReactNode;
     /** Slot à direita da barra: anexo, Drive, emoji — quem monta é o modal. */
     toolbarExtras?: React.ReactNode;
     /** Arquivo colado no corpo vira anexo, pelo mesmo caminho do clipe. */
@@ -69,6 +71,41 @@ const ESTADOS = [
 type EstadoComando = (typeof ESTADOS)[number] | "blockquote";
 
 /**
+ * Guarda e devolve a seleção do editor em volta de um popover.
+ *
+ * Os botões usam `onMouseDown preventDefault` pra não roubar o foco, mas isso
+ * não cobre tudo: qualquer campo focável dentro do painel (o input do link) e
+ * o gerenciamento de foco do Dialog do Radix derrubam a Range. Sem ela,
+ * execCommand não tem onde aplicar e o clique parece não fazer nada.
+ */
+function useSelecaoSalva(editorRef: React.RefObject<HTMLDivElement | null>) {
+    const rangeRef = useRef<Range | null>(null);
+
+    function salvar() {
+        const sel = document.getSelection();
+        const dentro =
+            sel && sel.rangeCount > 0 && sel.anchorNode
+                ? editorRef.current?.contains(sel.anchorNode)
+                : false;
+        rangeRef.current = dentro && sel ? sel.getRangeAt(0).cloneRange() : null;
+        return sel && dentro ? sel.toString() : "";
+    }
+
+    function restaurar() {
+        editorRef.current?.focus();
+        const sel = document.getSelection();
+        if (rangeRef.current && sel) {
+            sel.removeAllRanges();
+            sel.addRange(rangeRef.current);
+        }
+    }
+
+    return { salvar, restaurar };
+}
+
+type Selecao = ReturnType<typeof useSelecaoSalva>;
+
+/**
  * Editor de corpo de e-mail com barra no rodapé, no espírito do Gmail.
  *
  * Usa contentEditable + document.execCommand. A API está formalmente
@@ -79,13 +116,14 @@ type EstadoComando = (typeof ESTADOS)[number] | "blockquote";
  */
 export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(
     function RichTextEditor(
-        { onChange, placeholder, toolbarExtras, onPasteFiles },
+        { onChange, placeholder, toolbarExtras, onPasteFiles, attachmentSlot },
         ref,
     ) {
         const editorRef = useRef<HTMLDivElement>(null);
         const [showToolbar, setShowToolbar] = useState(true);
         const [empty, setEmpty] = useState(true);
         const [ativos, setAtivos] = useState<Set<EstadoComando>>(new Set());
+        const selecao = useSelecaoSalva(editorRef);
 
         const emit = useCallback(() => {
             const html = editorRef.current?.innerHTML ?? "";
@@ -206,6 +244,8 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     />
                 </div>
 
+                {attachmentSlot}
+
                 <div className="flex flex-wrap items-center gap-0.5 border-t border-border bg-muted/60 px-2 py-1.5">
                     <ToolbarButton
                         active={showToolbar}
@@ -227,6 +267,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                                     style: { fontFamily: f.stack },
                                 }))}
                                 onPick={(stack) => exec("fontName", stack)}
+                                selecao={selecao}
                             />
                             <SelectMenu
                                 label="Tamanho"
@@ -248,6 +289,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                                         });
                                     emit();
                                 }}
+                                selecao={selecao}
                             />
                             <Divider />
                             <ToolbarButton active={ativos.has("bold")} onClick={() => exec("bold")} title="Negrito (Ctrl+B)">
@@ -262,7 +304,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                             <ToolbarButton active={ativos.has("strikeThrough")} onClick={() => exec("strikeThrough")} title="Tachado">
                                 <Strikethrough className="w-4 h-4" />
                             </ToolbarButton>
-                            <ColorMenu onPick={(color) => exec("foreColor", color)} />
+                            <ColorMenu onPick={(color) => exec("foreColor", color)} selecao={selecao} />
                             <Divider />
                             <ToolbarButton active={ativos.has("justifyLeft")} onClick={() => exec("justifyLeft")} title="Alinhar à esquerda">
                                 <AlignLeft className="w-4 h-4" />
@@ -308,7 +350,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     )}
 
                     <Divider />
-                    <LinkMenu editorRef={editorRef} onDone={emit} />
+                    <LinkMenu selecao={selecao} onDone={emit} />
                     {toolbarExtras}
                 </div>
             </div>
@@ -358,11 +400,13 @@ function SelectMenu({
     items,
     onPick,
     width,
+    selecao,
 }: {
     label: string;
     items: { key: string; label: string; style?: React.CSSProperties }[];
     onPick: (key: string) => void;
     width: string;
+    selecao: Selecao;
 }) {
     const [open, setOpen] = useState(false);
     // Âncora em state (e não ref): o popover precisa dela no render, e ref
@@ -375,7 +419,7 @@ function SelectMenu({
                 ref={setBtn}
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setOpen((v) => !v)}
+                onClick={() => { selecao.salvar(); setOpen((v) => !v); }}
                 aria-expanded={open}
                 className={cn(
                     "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
@@ -398,7 +442,7 @@ function SelectMenu({
                             key={item.key}
                             type="button"
                             onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => { onPick(item.key); setOpen(false); }}
+                            onClick={() => { selecao.restaurar(); onPick(item.key); setOpen(false); }}
                             style={item.style}
                             className="w-full px-3 py-1.5 text-left text-sm text-foreground hover:bg-muted transition-colors"
                         >
@@ -411,7 +455,7 @@ function SelectMenu({
     );
 }
 
-function ColorMenu({ onPick }: { onPick: (color: string) => void }) {
+function ColorMenu({ onPick, selecao }: { onPick: (color: string) => void; selecao: Selecao }) {
     const [open, setOpen] = useState(false);
     const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
 
@@ -421,7 +465,7 @@ function ColorMenu({ onPick }: { onPick: (color: string) => void }) {
                 ref={setBtn}
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setOpen((v) => !v)}
+                onClick={() => { selecao.salvar(); setOpen((v) => !v); }}
                 title="Cor do texto"
                 aria-label="Cor do texto"
                 aria-expanded={open}
@@ -443,7 +487,7 @@ function ColorMenu({ onPick }: { onPick: (color: string) => void }) {
                                 key={color}
                                 type="button"
                                 onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => { onPick(color); setOpen(false); }}
+                                onClick={() => { selecao.restaurar(); onPick(color); setOpen(false); }}
                                 title={color}
                                 aria-label={`Cor ${color}`}
                                 style={{ backgroundColor: color }}
@@ -465,10 +509,10 @@ function ColorMenu({ onPick }: { onPick: (color: string) => void }) {
  * link cairia no lugar errado depois de digitar na caixinha.
  */
 function LinkMenu({
-    editorRef,
+    selecao,
     onDone,
 }: {
-    editorRef: React.RefObject<HTMLDivElement | null>;
+    selecao: Selecao;
     onDone: () => void;
 }) {
     const [open, setOpen] = useState(false);
@@ -479,17 +523,9 @@ function LinkMenu({
     // Muda o que é renderizado (mostrar ou não o campo "Texto exibido"),
     // então é state — ref não re-renderiza.
     const [tinhaSelecao, setTinhaSelecao] = useState(false);
-    const rangeRef = useRef<Range | null>(null);
 
     function abrir() {
-        const sel = document.getSelection();
-        const dentro =
-            sel && sel.rangeCount > 0 && sel.anchorNode
-                ? editorRef.current?.contains(sel.anchorNode)
-                : false;
-
-        rangeRef.current = dentro && sel ? sel.getRangeAt(0).cloneRange() : null;
-        const selecionado = dentro && sel ? sel.toString() : "";
+        const selecionado = selecao.salvar();
         setTinhaSelecao(selecionado.length > 0);
 
         setTexto(selecionado);
@@ -513,14 +549,7 @@ function LinkMenu({
             return;
         }
 
-        const editor = editorRef.current;
-        editor?.focus();
-
-        const sel = document.getSelection();
-        if (rangeRef.current && sel) {
-            sel.removeAllRanges();
-            sel.addRange(rangeRef.current);
-        }
+        selecao.restaurar();
 
         if (tinhaSelecao) {
             document.execCommand("createLink", false, destino);
