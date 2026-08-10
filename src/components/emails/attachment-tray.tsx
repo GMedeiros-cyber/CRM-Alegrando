@@ -62,7 +62,9 @@ export function AttachmentTray({ attachments, uploading, onRemove }: AttachmentT
 
     return (
         <div className="border-t border-border bg-muted/25 px-3 py-2.5">
-            <div className="flex flex-wrap gap-2">
+            {/* Teto com rolagem: sem isto, muito anexo empurra a barra de
+                formatação pra fora da área visível do modal. */}
+            <div className="flex flex-wrap gap-2 max-h-[132px] overflow-y-auto">
                 {attachments.map((anexo) => (
                     <Cartao
                         key={anexo.url}
