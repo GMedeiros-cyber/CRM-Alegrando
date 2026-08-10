@@ -8,11 +8,11 @@ import {
     Clock,
     Loader2,
     Mail,
-    Paperclip,
+    Trash2,
     X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { cancelScheduledEmail, listLeadEmailSends } from "@/lib/actions/emails";
+import { deleteEmailSend, listLeadEmailSends } from "@/lib/actions/emails";
 import {
     EMAIL_FIELD_ORDER,
     type EmailFieldKey,
@@ -66,11 +66,19 @@ export function LeadEmailSection({
 
     useEffect(() => { void fetchHistory(); }, [fetchHistory]);
 
-    async function handleCancel(sendId: string) {
-        const res = await cancelScheduledEmail(sendId);
+    const [confirmando, setConfirmando] = useState<string | null>(null);
+
+    async function handleDelete(sendId: string) {
+        setConfirmando(null);
+        const res = await deleteEmailSend(sendId);
         onToast(
             res.ok
-                ? { type: "success", text: "Agendamento cancelado" }
+                ? {
+                      type: "success",
+                      text: res.eraAgendado
+                          ? "Agendamento cancelado"
+                          : "Removido do histórico",
+                  }
                 : { type: "error", text: res.error },
         );
         void fetchHistory();
@@ -144,12 +152,15 @@ export function LeadEmailSection({
                         Nenhum e-mail enviado ainda.
                     </p>
                 ) : (
-                    <div className="space-y-1.5 max-h-[180px] overflow-y-auto">
+                    <div className="space-y-1 max-h-[340px] overflow-y-auto pr-0.5">
                         {history.map((row) => (
                             <EmailHistoryRow
                                 key={row.id}
                                 row={row}
-                                onCancel={() => void handleCancel(row.id)}
+                                confirmando={confirmando === row.id}
+                                onPedirConfirmacao={() => setConfirmando(row.id)}
+                                onCancelarConfirmacao={() => setConfirmando(null)}
+                                onDelete={() => void handleDelete(row.id)}
                             />
                         ))}
                     </div>
@@ -192,10 +203,16 @@ const STATUS_UI = {
 
 function EmailHistoryRow({
     row,
-    onCancel,
+    confirmando,
+    onPedirConfirmacao,
+    onCancelarConfirmacao,
+    onDelete,
 }: {
     row: EmailSendRecord;
-    onCancel: () => void;
+    confirmando: boolean;
+    onPedirConfirmacao: () => void;
+    onCancelarConfirmacao: () => void;
+    onDelete: () => void;
 }) {
     const reference =
         row.status === "scheduled" ? row.scheduledFor : row.sentAt || row.createdAt;
@@ -212,25 +229,67 @@ function EmailHistoryRow({
 
     const status = STATUS_UI[row.status] ?? STATUS_UI.pending;
 
-    return (
-        <div className="px-2 py-1.5 rounded-lg bg-[#EEF2FF] dark:bg-[#1e2536]/60 border border-[#C7D2FE] dark:border-[#3d4a60]/60">
-            <div className="flex items-start gap-2">
-                <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-medium text-[#191918] dark:text-white truncate">
-                        {row.subject}
+    const agendado = row.status === "scheduled";
+
+    if (confirmando) {
+        return (
+            <div className="px-2 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30">
+                <p className="text-[10px] font-medium text-red-500 dark:text-red-400 leading-snug">
+                    {agendado
+                        ? "Cancelar este envio agendado? Ele não será mais disparado."
+                        : "Remover do histórico?"}
+                </p>
+                {!agendado && (
+                    // Sem isto é fácil achar que o botão "desenvia" a mensagem.
+                    <p className="mt-0.5 text-[9px] text-[#6366F1] dark:text-[#94a3b8] leading-snug">
+                        Apaga só o registro aqui no CRM — o e-mail já entregue continua
+                        na caixa de quem recebeu.
                     </p>
-                    <p className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] truncate">
-                        {row.recipientEmail}
-                    </p>
-                    {row.attachments.length > 0 && (
-                        <p className="flex items-center gap-1 text-[10px] text-[#6366F1] dark:text-[#94a3b8]">
-                            <Paperclip className="w-2.5 h-2.5" />
-                            {row.attachments.length}{" "}
-                            {row.attachments.length === 1 ? "anexo" : "anexos"}
-                        </p>
-                    )}
+                )}
+                <div className="flex gap-1.5 mt-1.5">
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        className="flex-1 px-2 py-1 rounded-md bg-red-500 text-white text-[10px] font-semibold hover:bg-red-600 transition-colors"
+                    >
+                        {agendado ? "Cancelar envio" : "Remover"}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onCancelarConfirmacao}
+                        className="flex-1 px-2 py-1 rounded-md bg-[#E0E7FF] dark:bg-[#2d3347] text-[10px] font-semibold text-[#191918] dark:text-white hover:bg-[#C7D2FE] dark:hover:bg-[#3d4a60] transition-colors"
+                    >
+                        Voltar
+                    </button>
                 </div>
-                <div className="shrink-0 text-right">
+            </div>
+        );
+    }
+
+    return (
+        <div className="group/email flex items-start gap-2 px-2 py-1 rounded-lg bg-[#EEF2FF] dark:bg-[#1e2536]/60 border border-[#C7D2FE] dark:border-[#3d4a60]/60">
+            <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-medium text-[#191918] dark:text-white truncate">
+                    {row.subject}
+                </p>
+                <p className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] truncate">
+                    {row.recipientEmail}
+                    {row.attachments.length > 0 && (
+                        <span className="ml-1 whitespace-nowrap">
+                            · {row.attachments.length}{" "}
+                            {row.attachments.length === 1 ? "anexo" : "anexos"}
+                        </span>
+                    )}
+                </p>
+                {row.status === "failed" && row.error && (
+                    <p className="text-[9px] text-red-400/90 leading-snug break-words">
+                        {row.error}
+                    </p>
+                )}
+            </div>
+
+            <div className="shrink-0 flex items-center gap-1">
+                <div className="text-right">
                     <span
                         className={cn(
                             "flex items-center gap-1 text-[10px] font-semibold justify-end",
@@ -246,21 +305,16 @@ function EmailHistoryRow({
                         </span>
                     )}
                 </div>
-            </div>
-            {row.status === "failed" && row.error && (
-                <p className="mt-1 text-[9px] text-red-400/90 leading-snug break-words">
-                    {row.error}
-                </p>
-            )}
-            {row.status === "scheduled" && (
                 <button
                     type="button"
-                    onClick={onCancel}
-                    className="mt-1 text-[10px] font-semibold text-red-400 hover:text-red-300 transition-colors"
+                    onClick={onPedirConfirmacao}
+                    title={agendado ? "Cancelar agendamento" : "Remover do histórico"}
+                    aria-label={agendado ? "Cancelar agendamento" : "Remover do histórico"}
+                    className="p-1 rounded text-[#9B9A97] dark:text-[#64748b] opacity-0 transition-opacity hover:text-red-500 group-hover/email:opacity-100 focus:opacity-100"
                 >
-                    Cancelar agendamento
+                    <Trash2 className="w-3 h-3" />
                 </button>
-            )}
+            </div>
         </div>
     );
 }

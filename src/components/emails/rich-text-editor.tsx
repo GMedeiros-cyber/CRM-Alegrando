@@ -27,6 +27,7 @@ import {
     Type,
     Underline,
 } from "lucide-react";
+import { Popover } from "radix-ui";
 import { cn } from "@/lib/utils";
 import {
     EMAIL_COLORS,
@@ -123,6 +124,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         const [showToolbar, setShowToolbar] = useState(true);
         const [empty, setEmpty] = useState(true);
         const [ativos, setAtivos] = useState<Set<EstadoComando>>(new Set());
+        const [corAtual, setCorAtual] = useState(EMAIL_COLORS[0]);
         const selecao = useSelecaoSalva(editorRef);
 
         const emit = useCallback(() => {
@@ -304,7 +306,11 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                             <ToolbarButton active={ativos.has("strikeThrough")} onClick={() => exec("strikeThrough")} title="Tachado">
                                 <Strikethrough className="w-4 h-4" />
                             </ToolbarButton>
-                            <ColorMenu onPick={(color) => exec("foreColor", color)} selecao={selecao} />
+                            <ColorMenu
+                                cor={corAtual}
+                                onPick={(color) => { setCorAtual(color); exec("foreColor", color); }}
+                                selecao={selecao}
+                            />
                             <Divider />
                             <ToolbarButton active={ativos.has("justifyLeft")} onClick={() => exec("justifyLeft")} title="Alinhar à esquerda">
                                 <AlignLeft className="w-4 h-4" />
@@ -455,7 +461,15 @@ function SelectMenu({
     );
 }
 
-function ColorMenu({ onPick, selecao }: { onPick: (color: string) => void; selecao: Selecao }) {
+function ColorMenu({
+    cor,
+    onPick,
+    selecao,
+}: {
+    cor: string;
+    onPick: (color: string) => void;
+    selecao: Selecao;
+}) {
     const [open, setOpen] = useState(false);
     const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
 
@@ -470,13 +484,20 @@ function ColorMenu({ onPick, selecao }: { onPick: (color: string) => void; selec
                 aria-label="Cor do texto"
                 aria-expanded={open}
                 className={cn(
-                    "flex items-center gap-0.5 p-1.5 rounded transition-colors",
+                    "flex items-center gap-0.5 px-1.5 py-1 rounded transition-colors",
                     open
                         ? "bg-brand-500/25 text-brand-700 dark:text-brand-300"
                         : "text-foreground/75 hover:bg-muted-foreground/15 hover:text-foreground",
                 )}
             >
-                <span className="font-bold text-sm leading-none">A</span>
+                {/* A cor escolhida vira uma barra sob o A, como no Gmail. */}
+                <span className="flex flex-col items-center gap-[2px]">
+                    <span className="font-bold text-sm leading-none">A</span>
+                    <span
+                        className="h-[3px] w-3.5 rounded-sm border border-black/10 dark:border-white/20"
+                        style={{ backgroundColor: cor }}
+                    />
+                </span>
                 <ChevronDown className="w-3 h-3" />
             </button>
             {open && (
@@ -491,7 +512,12 @@ function ColorMenu({ onPick, selecao }: { onPick: (color: string) => void; selec
                                 title={color}
                                 aria-label={`Cor ${color}`}
                                 style={{ backgroundColor: color }}
-                                className="w-5 h-5 rounded border border-border hover:scale-110 transition-transform"
+                                className={cn(
+                                    "w-5 h-5 rounded border transition-transform hover:scale-110",
+                                    color === cor
+                                        ? "border-brand-500 ring-2 ring-brand-500/40"
+                                        : "border-border",
+                                )}
                             />
                         ))}
                     </div>
@@ -519,12 +545,14 @@ function LinkMenu({
     const [url, setUrl] = useState("");
     const [texto, setTexto] = useState("");
     const [erro, setErro] = useState("");
-    const [btn, setBtn] = useState<HTMLButtonElement | null>(null);
+    const campoUrlRef = useRef<HTMLInputElement>(null);
     // Muda o que é renderizado (mostrar ou não o campo "Texto exibido"),
     // então é state — ref não re-renderiza.
     const [tinhaSelecao, setTinhaSelecao] = useState(false);
 
     function abrir() {
+        // Salva ANTES de o popover montar: depois disso o foco já saiu do
+        // editor e a Range não existe mais.
         const selecionado = selecao.salvar();
         setTinhaSelecao(selecionado.length > 0);
 
@@ -569,36 +597,55 @@ function LinkMenu({
     }
 
     return (
-        <>
-            <button
-                ref={setBtn}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={abrir}
-                title="Inserir link (Ctrl+K)"
-                aria-label="Inserir link"
-                className={cn(
-                    "p-1.5 rounded transition-colors",
-                    open
-                        ? "bg-brand-500/25 text-brand-700 dark:text-brand-300"
-                        : "text-foreground/75 hover:bg-muted-foreground/15 hover:text-foreground",
-                )}
-            >
-                <Link2 className="w-4 h-4" />
-            </button>
-            {open && (
-                <ToolbarPopover
-                    anchor={btn}
-                    onClose={() => setOpen(false)}
-                    className="w-72 p-3"
+        <Popover.Root
+            open={open}
+            onOpenChange={(v) => {
+                if (v) abrir();
+                else setOpen(false);
+            }}
+        >
+            <Popover.Trigger asChild>
+                <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    title="Inserir link (Ctrl+K)"
+                    aria-label="Inserir link"
+                    className={cn(
+                        "p-1.5 rounded transition-colors",
+                        open
+                            ? "bg-brand-500/25 text-brand-700 dark:text-brand-300"
+                            : "text-foreground/75 hover:bg-muted-foreground/15 hover:text-foreground",
+                    )}
                 >
-                    <div className="space-y-2" onMouseDown={(e) => e.stopPropagation()}>
+                    <Link2 className="w-4 h-4" />
+                </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+                <Popover.Content
+                    side="top"
+                    align="start"
+                    sideOffset={6}
+                    collisionPadding={8}
+                    data-toolbar-popover=""
+                    // Só o Popover do Radix resolve o link: ele entra na pilha
+                    // de camadas e PAUSA o FocusScope do Dialog. Com o popover
+                    // caseiro, o Dialog puxava o foco de volta assim que ele
+                    // caía no input, e não dava pra digitar.
+                    onOpenAutoFocus={(e) => {
+                        // O autoFocus do input cuida disso; deixar o Radix
+                        // focar o container primeiro causa um pisca-pisca.
+                        e.preventDefault();
+                        campoUrlRef.current?.focus();
+                    }}
+                    className="z-[70] w-72 rounded-lg border border-border bg-popover p-3 shadow-xl"
+                >
+                    <div className="space-y-2">
                         <label className="block">
                             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                                 Endereço
                             </span>
                             <input
-                                autoFocus
+                                ref={campoUrlRef}
                                 value={url}
                                 onChange={(e) => { setUrl(e.target.value); setErro(""); }}
                                 onKeyDown={(e) => {
@@ -645,8 +692,8 @@ function LinkMenu({
                             </button>
                         </div>
                     </div>
-                </ToolbarPopover>
-            )}
-        </>
+                </Popover.Content>
+            </Popover.Portal>
+        </Popover.Root>
     );
 }
