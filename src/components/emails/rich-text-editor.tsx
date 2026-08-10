@@ -218,8 +218,11 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         }
 
         return (
-            <div className="rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-brand-500/40 overflow-hidden">
-                <div className="relative">
+            // Coluna flex com teto: o CORPO é quem estica e encolhe, bandeja
+            // e barra ficam com altura natural. Sem isto as três áreas somam
+            // livremente e, com muitos anexos, a barra era empurrada pra fora.
+            <div className="flex flex-col max-h-[52vh] rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-brand-500/40 overflow-hidden">
+                <div className="relative flex flex-1 min-h-0 flex-col">
                     {empty && placeholder && (
                         <span className="pointer-events-none absolute left-3 top-2 text-sm text-muted-foreground">
                             {placeholder}
@@ -237,7 +240,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                         role="textbox"
                         aria-multiline="true"
                         aria-label="Corpo do e-mail"
-                        className="min-h-[160px] max-h-[320px] overflow-y-auto px-3 py-2 text-sm outline-none [&_a]:text-[#1a73e8] [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6"
+                        className="flex-1 min-h-[96px] overflow-y-auto px-3 py-2 text-sm outline-none [&_a]:text-[#1a73e8] [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6"
                         style={{
                             fontFamily: EMAIL_DEFAULT_FONT,
                             fontSize: EMAIL_DEFAULT_SIZE,
@@ -246,9 +249,9 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                     />
                 </div>
 
-                {attachmentSlot}
+                <div className="shrink-0">{attachmentSlot}</div>
 
-                <div className="flex flex-wrap items-center gap-0.5 border-t border-border bg-muted/60 px-2 py-2">
+                <div className="shrink-0 flex flex-wrap items-center gap-0.5 border-t border-border bg-muted/60 px-2 py-2">
                     <ToolbarButton
                         active={showToolbar}
                         onClick={() => setShowToolbar((v) => !v)}

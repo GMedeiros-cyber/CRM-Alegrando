@@ -10,6 +10,8 @@ import {
     Presentation,
     X,
 } from "lucide-react";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
     MAX_TOTAL_BYTES,
@@ -48,11 +50,49 @@ export interface AttachmentTrayProps {
 }
 
 /**
+ * Imagem ampliada pra conferir se foi a foto certa que entrou.
+ *
+ * Dialog do Radix ANINHADO no da composição, de propósito: ele entra na pilha
+ * de camadas, então fechar aqui fecha só o lightbox — e não a composição
+ * junto, que é o que aconteceria com um portal solto no body.
+ */
+function Lightbox({
+    preview,
+    onClose,
+}: {
+    preview: { url: string; name: string } | null;
+    onClose: () => void;
+}) {
+    return (
+        <Dialog open={preview !== null} onOpenChange={(aberto) => { if (!aberto) onClose(); }}>
+            <DialogContent className="sm:max-w-3xl bg-transparent border-0 shadow-none p-0">
+                <DialogTitle className="sr-only">{preview?.name ?? "Anexo"}</DialogTitle>
+                {preview && (
+                    <div className="flex flex-col items-center gap-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            src={preview.url}
+                            alt={preview.name}
+                            className="max-h-[75vh] w-auto max-w-full rounded-lg object-contain shadow-2xl"
+                        />
+                        <span className="rounded-md bg-black/60 px-2 py-1 text-xs text-white">
+                            {preview.name}
+                        </span>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/**
  * Área de anexos no rodapé da composição, no espírito do Gmail: imagem
  * aparece como miniatura de verdade, o resto ganha ícone por tipo. Só é
  * renderizada quando há algo — não ocupa espaço à toa.
  */
 export function AttachmentTray({ attachments, uploading, onRemove }: AttachmentTrayProps) {
+    const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+
     if (attachments.length === 0 && uploading.length === 0) return null;
 
     const total =
@@ -73,6 +113,7 @@ export function AttachmentTray({ attachments, uploading, onRemove }: AttachmentT
                         mimeType={anexo.mimeType}
                         url={anexo.url}
                         onRemove={() => onRemove(anexo.url)}
+                        onPreview={() => setPreview({ url: anexo.url, name: anexo.filename })}
                     />
                 ))}
                 {uploading.map((item) => (
@@ -98,6 +139,8 @@ export function AttachmentTray({ attachments, uploading, onRemove }: AttachmentT
                     </span>
                 )}
             </div>
+
+            <Lightbox preview={preview} onClose={() => setPreview(null)} />
         </div>
     );
 }
@@ -109,6 +152,7 @@ function Cartao({
     url,
     subindo = false,
     onRemove,
+    onPreview,
 }: {
     nome: string;
     tamanho: number;
@@ -116,6 +160,7 @@ function Cartao({
     url?: string;
     subindo?: boolean;
     onRemove?: () => void;
+    onPreview?: () => void;
 }) {
     const tipo = classificar(mimeType, nome);
     const ehImagem = tipo === "imagem" && Boolean(url);
@@ -133,13 +178,21 @@ function Cartao({
                 <Loader2 className="w-4 h-4 shrink-0 animate-spin text-muted-foreground" />
             ) : ehImagem ? (
                 // Miniatura real do arquivo — o bucket é público, então a
-                // própria URL do anexo serve de preview.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                    src={url}
-                    alt={nome}
-                    className="h-9 w-9 shrink-0 rounded object-cover border border-border"
-                />
+                // própria URL do anexo serve de preview. Clicar amplia.
+                <button
+                    type="button"
+                    onClick={onPreview}
+                    title="Ver imagem ampliada"
+                    aria-label={`Ver ${nome} ampliada`}
+                    className="shrink-0 rounded focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+                >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src={url}
+                        alt={nome}
+                        className="h-9 w-9 rounded object-cover border border-border transition-transform hover:scale-105"
+                    />
+                </button>
             ) : (
                 <Icone className={cn("w-5 h-5 shrink-0", cor)} />
             )}
