@@ -18,9 +18,13 @@ import type {
 } from "@/lib/types/email";
 
 /**
- * O workflow do n8n só responde no FIM do lote (Respond to Webhook depois do
- * loop, com 2s de espera por e-mail). Lote grande, portanto, estoura este
- * timeout — e isso não é falha: ver o catch de dispatchEmails.
+ * O webhook do n8n responde ASSIM QUE RECEBE o lote (responseMode
+ * onReceived) — o envio em si continua em segundo plano, atualizando o status
+ * de cada linha no Supabase. Então este timeout cobre só a entrega do payload,
+ * e um estouro aqui é rede ruim, não lote grande.
+ *
+ * Antes o n8n respondia no fim do loop, com 2s de espera por e-mail: um envio
+ * único levava ~2,8s. Medido depois da mudança: ~80ms.
  */
 const N8N_TIMEOUT_MS = 30_000;
 
@@ -170,24 +174,32 @@ export async function listLeadEmailSends(
     }));
 }
 
-/** Cancela um envio que ainda não saiu (só faz sentido pra agendado). */
-export async function cancelScheduledEmail(
+/**
+ * Apaga uma linha de `email_sends`.
+ *
+ * Serve pros dois casos, porque no banco são a mesma operação:
+ * - agendado que ainda não saiu → sumindo a linha, o worker não a encontra
+ *   mais e o envio é cancelado;
+ * - já enviado → some só o REGISTRO no CRM. A mensagem já entregue na caixa
+ *   do destinatário não é afetada — nada aqui "desenvia" e-mail.
+ */
+export async function deleteEmailSend(
     sendId: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; eraAgendado: boolean } | { ok: false; error: string }> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
+
     const { data, error } = await supabase
         .from("email_sends")
         .delete()
         .eq("id", sendId)
-        .eq("status", "scheduled")
-        .select("id");
+        .select("id, status");
 
     if (error) return { ok: false, error: error.message };
     if (!data || data.length === 0) {
-        return { ok: false, error: "Esse envio já saiu — não dá mais pra cancelar." };
+        return { ok: false, error: "Registro não encontrado — talvez já tenha sido removido." };
     }
-    return { ok: true };
+    return { ok: true, eraAgendado: data[0].status === "scheduled" };
 }
 
 // =============================================================
@@ -322,9 +334,10 @@ async function dispatchEmails(params: {
     } catch (err) {
         const name = (err as { name?: string } | null)?.name;
 
-        // Timeout NÃO é falha: o n8n recebeu o lote e só responde depois de
-        // enviar tudo (2s de espaçamento por e-mail). Deixar as linhas em
-        // `pending` — o próprio n8n as atualiza pra sent/failed no fim.
+        // Timeout não é motivo pra marcar failed: o n8n pode ter recebido o
+        // lote e a resposta é que se perdeu. Deixar as linhas em `pending` —
+        // se ele recebeu, atualiza cada uma pra sent/failed; se não recebeu,
+        // ficam pendentes e visíveis no histórico, sem alarme falso.
         if (name === "TimeoutError" || name === "AbortError") {
             console.warn(`[dispatchEmails] n8n não respondeu em ${N8N_TIMEOUT_MS}ms — lote segue processando.`);
             return { ok: true, count: items.length, processing: true, scheduled: false };

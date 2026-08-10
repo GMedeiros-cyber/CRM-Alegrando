@@ -125,7 +125,15 @@ export function ToolbarPopover({
                 maxHeight: pos?.maxHeight,
                 visibility: pos ? "visible" : "hidden",
             }}
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+                // preventDefault preserva a seleção do contentEditable quando
+                // se clica num botão — mas também impede o foco de ir pro
+                // elemento clicado. Em campo editável isso trava a digitação,
+                // então ali o evento segue normalmente.
+                const alvo = e.target as HTMLElement | null;
+                if (alvo?.closest("input, textarea, select, [contenteditable]")) return;
+                e.preventDefault();
+            }}
         >
             {children}
         </div>,
