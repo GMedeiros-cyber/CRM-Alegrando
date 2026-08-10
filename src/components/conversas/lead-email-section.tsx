@@ -8,10 +8,12 @@ import {
     Clock,
     Loader2,
     Mail,
+    Send,
     Trash2,
     X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase/client";
 import { deleteEmailSend, listLeadEmailSends } from "@/lib/actions/emails";
 import {
     EMAIL_FIELD_ORDER,
@@ -66,6 +68,48 @@ export function LeadEmailSection({
 
     useEffect(() => { void fetchHistory(); }, [fetchHistory]);
 
+    /**
+     * O n8n grava sent/failed depois que a resposta do webhook já voltou.
+     * Sem escutar isso, a linha ficaria em "Na fila" até alguém recarregar —
+     * era o que dava a impressão de que o envio tinha travado.
+     *
+     * Só faz patch de linha que JÁ está no histórico: assim não é preciso
+     * saber o lead_id aqui, e evento de outro lead é ignorado de graça.
+     */
+    useEffect(() => {
+        const channel = supabase
+            .channel(`email-sends-${telefone}-${canal}`)
+            .on(
+                "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "email_sends" },
+                (payload) => {
+                    const row = payload.new as {
+                        id: string;
+                        status?: string;
+                        sent_at?: string | null;
+                        error?: string | null;
+                    };
+                    setHistory((prev) =>
+                        prev.some((r) => r.id === row.id)
+                            ? prev.map((r) =>
+                                  r.id === row.id
+                                      ? {
+                                            ...r,
+                                            status: (row.status || r.status) as EmailSendRecord["status"],
+                                            sentAt: row.sent_at ?? r.sentAt,
+                                            error: row.error ?? null,
+                                        }
+                                      : r,
+                              )
+                            : prev,
+                    );
+                },
+            )
+            .subscribe();
+
+        return () => { void supabase.removeChannel(channel); };
+    }, [telefone, canal]);
+
     const [confirmando, setConfirmando] = useState<string | null>(null);
 
     async function handleDelete(sendId: string) {
@@ -102,9 +146,11 @@ export function LeadEmailSection({
                     <button
                         type="button"
                         onClick={() => setComposeOpen(true)}
-                        className="text-[10px] font-semibold text-brand-400 hover:text-brand-300 transition-colors"
+                        title="Enviar e-mail"
+                        aria-label="Enviar e-mail"
+                        className="p-1.5 rounded-lg text-orange-500 hover:text-orange-400 hover:bg-orange-500/10 transition-colors"
                     >
-                        + Enviar e-mail
+                        <Send className="w-4 h-4" />
                     </button>
                 )}
             </div>

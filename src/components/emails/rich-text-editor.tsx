@@ -248,7 +248,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
                 {attachmentSlot}
 
-                <div className="flex flex-wrap items-center gap-0.5 border-t border-border bg-muted/60 px-2 py-1.5">
+                <div className="flex flex-wrap items-center gap-0.5 border-t border-border bg-muted/60 px-2 py-2">
                     <ToolbarButton
                         active={showToolbar}
                         onClick={() => setShowToolbar((v) => !v)}
