@@ -4,7 +4,12 @@ import { google } from "googleapis";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth";
 import { fetchWithTimeout } from "@/lib/fetch-utils";
-import { extractEmails, pickEmails, plainTextToHtml } from "@/lib/email/format";
+import {
+    extractEmails,
+    htmlParaTexto,
+    pickEmails,
+    plainTextToHtml,
+} from "@/lib/email/format";
 import { cleanEditorHtml, isEditorEmpty, wrapEmailHtml } from "@/lib/email/editor";
 import { presignedPutUrl, r2PublicUrl } from "@/lib/whatsapp/r2-client";
 import { MAX_TOTAL_BYTES } from "@/lib/email/attachments";
@@ -184,7 +189,7 @@ export async function listLeadEmailConversations(
 
     const supabase = createServerSupabaseClient();
     const BASE_COLUMNS =
-        "id, recipient_email, subject, status, error, origem, created_at, sent_at, gmail_thread_id";
+        "id, recipient_email, subject, body, status, error, origem, created_at, sent_at, gmail_thread_id";
     const COM_EXTRAS = `${BASE_COLUMNS}, scheduled_for, attachments`;
 
     async function query(columns: string, comRespostas: boolean) {
@@ -224,6 +229,10 @@ export async function listLeadEmailConversations(
         id: String(r.id),
         recipientEmail: String(r.recipient_email ?? ""),
         subject: String(r.subject ?? ""),
+        // Reduzido a texto já aqui: o painel do lead mostra as duas pontas da
+        // conversa do mesmo jeito, e mandar o HTML inteiro pro cliente só pra
+        // descartá-lo na renderização seria peso à toa.
+        body: r.body ? htmlParaTexto(String(r.body)) : null,
         status: (r.status || "pending") as EmailSendStatus,
         error: (r.error as string) ?? null,
         origem: (r.origem as string) ?? null,
@@ -264,7 +273,7 @@ export async function listLeadEmailConversations(
                 autor: "Alegrando",
                 at: envio.sentAt || envio.scheduledFor || envio.createdAt,
                 bodyHtml: null,
-                bodyText: null,
+                bodyText: envio.body,
                 bodyTextFull: null,
                 attachments: envio.attachments,
                 status: envio.status,

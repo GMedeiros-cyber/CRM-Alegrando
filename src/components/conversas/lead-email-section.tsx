@@ -38,6 +38,15 @@ export interface LeadEmailSectionProps {
     /** Os quatro e-mails do lead, como estão no formulário do painel. */
     emails: Partial<Record<EmailFieldKey, string | null>>;
     onToast: (toast: { type: "success" | "error"; text: string }) => void;
+    /**
+     * Quantas respostas acabaram de ser lidas.
+     *
+     * Serve pro card do lead na lista lateral baixar o badge verde na hora.
+     * Sem isso ele só sumiria no próximo carregamento da lista — e como o
+     * Realtime dessas tabelas não chega ao navegador (a chave anon não
+     * enxerga `email_replies`), esse "próximo carregamento" pode demorar.
+     */
+    onLidoLocal?: (quantidade: number) => void;
 }
 
 /**
@@ -54,6 +63,7 @@ export function LeadEmailSection({
     nome,
     emails,
     onToast,
+    onLidoLocal,
 }: LeadEmailSectionProps) {
     const hasEmail = EMAIL_FIELD_ORDER.some((key) => {
         const value = (emails[key] || "").trim();
@@ -123,6 +133,8 @@ export function LeadEmailSection({
 
     /** Tira o destaque de não lida na hora do clique, sem esperar o refetch. */
     function marcarLidas(replyIds: string[]) {
+        if (replyIds.length === 0) return;
+        onLidoLocal?.(replyIds.length);
         const alvo = new Set(replyIds);
         setConversas((prev) =>
             prev.map((c) => {

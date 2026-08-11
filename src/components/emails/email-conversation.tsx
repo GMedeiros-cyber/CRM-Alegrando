@@ -17,7 +17,10 @@ import {
 import { cn } from "@/lib/utils";
 import { markEmailRepliesRead, replyToEmailReply } from "@/lib/actions/emails";
 import { separarCitacao } from "@/lib/email/format";
+import { isEditorEmpty } from "@/lib/email/editor";
 import { AttachmentTray } from "./attachment-tray";
+import { EmailBodyEditor } from "./email-body-editor";
+import { useEmailAttachments } from "./use-email-attachments";
 import type { EmailConversation, EmailThreadMessage } from "@/lib/types/email";
 
 const STATUS_UI = {
@@ -278,19 +281,20 @@ function MensagemDaThread({ msg }: { msg: EmailThreadMessage }) {
                 </span>
             </div>
 
-            {enviada ? (
-                <p className="mt-0.5 text-[10px] italic text-[#6366F1] dark:text-[#94a3b8]">
-                    {msg.status === "sent"
-                        ? "Mensagem enviada pelo CRM"
-                        : msg.status === "failed"
-                          ? msg.error || "Falha no envio"
-                          : msg.status === "scheduled"
-                            ? "Programado"
-                            : "Na fila de envio"}
-                </p>
-            ) : (
-                <p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-snug text-[#191918] dark:text-[#cbd5e1]">
-                    {principal || "(sem conteúdo)"}
+            <p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-snug text-[#191918] dark:text-[#cbd5e1]">
+                {(enviada ? msg.bodyText : principal) || "(sem conteúdo)"}
+            </p>
+
+            {/* Estado do envio como nota de rodapé, e não no lugar do texto:
+                antes o corpo do que a equipe mandou nem aparecia, e a conversa
+                ficava com metade das falas em branco. */}
+            {enviada && msg.status !== "sent" && (
+                <p className="mt-0.5 text-[9px] italic text-[#6366F1] dark:text-[#94a3b8]">
+                    {msg.status === "failed"
+                        ? msg.error || "Falha no envio"
+                        : msg.status === "scheduled"
+                          ? "Programado"
+                          : "Na fila de envio"}
                 </p>
             )}
 
@@ -326,6 +330,13 @@ function MensagemDaThread({ msg }: { msg: EmailThreadMessage }) {
     );
 }
 
+/**
+ * O campo de responder, com a mesma caixa de escrita do e-mail novo.
+ *
+ * Usa o `EmailBodyEditor` — o mesmo do modal — em vez de um campo próprio:
+ * anexo, Drive, colar arquivo, lightbox e os acertos de foco/portal do Radix
+ * já foram pagos uma vez ali, e um segundo editor os reintroduziria.
+ */
 function RespostaInline({
     replyId,
     onReplied,
@@ -335,56 +346,71 @@ function RespostaInline({
     onReplied: () => void;
     onToast: (toast: { type: "success" | "error"; text: string }) => void;
 }) {
-    const [texto, setTexto] = useState("");
+    const [corpo, setCorpo] = useState("");
+    const [erro, setErro] = useState("");
     const [enviando, startEnviando] = useTransition();
+    const anexos = useEmailAttachments(setErro);
+    // Remonta o editor a cada envio: o conteúdo dele é contentEditable, então
+    // sem trocar a chave o texto anterior continuaria na tela.
+    const [rodada, setRodada] = useState(0);
+
+    const podeEnviar = !isEditorEmpty(corpo) && !anexos.uploading && !enviando;
 
     function enviar() {
-        const corpo = texto.trim();
-        if (!corpo) return;
+        if (!podeEnviar) return;
+        setErro("");
 
         startEnviando(async () => {
-            const res = await replyToEmailReply({ replyId, body: corpo });
+            const res = await replyToEmailReply({
+                replyId,
+                body: corpo,
+                attachments: anexos.attachments,
+            });
             if (!res.ok) {
-                onToast({ type: "error", text: res.error });
+                setErro(res.error);
                 return;
             }
-            setTexto("");
+            setCorpo("");
+            anexos.limpar();
+            setRodada((n) => n + 1);
             onToast({ type: "success", text: "Resposta enviada" });
             onReplied();
         });
     }
 
     return (
-        <div className="flex items-end gap-1.5 pt-1">
-            <textarea
-                value={texto}
-                onChange={(e) => setTexto(e.target.value)}
-                onKeyDown={(e) => {
-                    // Enter envia, Shift+Enter quebra linha — mesmo gesto do chat.
-                    if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        enviar();
-                    }
-                }}
-                rows={2}
+        <div className="space-y-1.5 pt-1">
+            <EmailBodyEditor
+                key={rodada}
+                anexos={anexos}
+                onChange={setCorpo}
+                onError={setErro}
                 placeholder="Responder nesta conversa..."
-                disabled={enviando}
-                className="flex-1 resize-none rounded-lg border border-[#C7D2FE] dark:border-[#3d4a60] bg-background px-2 py-1.5 text-[11px] outline-none focus:ring-2 focus:ring-brand-500/40 disabled:opacity-50"
+                containerClassName="max-h-[320px]"
+                bodyClassName="min-h-[56px]"
             />
-            <button
-                type="button"
-                onClick={enviar}
-                disabled={enviando || texto.trim().length === 0}
-                title="Enviar resposta"
-                aria-label="Enviar resposta"
-                className="shrink-0 rounded-lg bg-brand-500 p-2 text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
-            >
-                {enviando ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                    <Send className="h-3.5 w-3.5" />
-                )}
-            </button>
+
+            {erro && (
+                <p className="rounded-md bg-red-500/10 px-2 py-1 text-[10px] leading-snug text-red-500 dark:text-red-400">
+                    {erro}
+                </p>
+            )}
+
+            <div className="flex justify-end">
+                <button
+                    type="button"
+                    onClick={enviar}
+                    disabled={!podeEnviar}
+                    className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
+                >
+                    {enviando ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                        <Send className="h-3.5 w-3.5" />
+                    )}
+                    {enviando ? "Enviando..." : "Responder"}
+                </button>
+            </div>
         </div>
     );
 }

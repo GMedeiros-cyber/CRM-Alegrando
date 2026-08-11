@@ -7,7 +7,6 @@ import {
     CalendarClock,
     ChevronDown,
     Loader2,
-    Paperclip,
     Search,
     Send,
     X,
@@ -22,35 +21,19 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { EmojiPickerInput } from "@/components/conversas/emoji-picker-input";
-import { RichTextEditor, type RichTextEditorHandle } from "./rich-text-editor";
 import { EmailChips } from "./email-chips";
-import {
-    DrivePickerButton,
-    isGooglePickerNode,
-    isGooglePickerOpen,
-} from "./drive-picker-button";
-import {
-    createEmailAttachmentUploadUrl,
-    listLeadsByLabels,
-    sendEmailToLead,
-    sendEmailToLeads,
-} from "@/lib/actions/emails";
+import { isGooglePickerOpen } from "./drive-picker-button";
+import { ignorarSeForPortalDeEmail } from "./portal-guards";
+import { listLeadsByLabels, sendEmailToLead, sendEmailToLeads } from "@/lib/actions/emails";
 import {
     EMAIL_FIELD_LABELS,
     EMAIL_FIELD_ORDER,
     EMAIL_FIELD_PRIORITY,
-    type EmailAttachment,
     type EmailFieldKey,
     type LeadEmailRow,
 } from "@/lib/types/email";
-import {
-    ACCEPT_ATTR,
-    MAX_TOTAL_BYTES,
-    formatarBytes,
-    motivoRecusa,
-} from "@/lib/email/attachments";
-import { AttachmentTray } from "./attachment-tray";
+import { EmailBodyEditor } from "./email-body-editor";
+import { useEmailAttachments } from "./use-email-attachments";
 import { Checkbox } from "@/components/ui/checkbox";
 import { isEditorEmpty } from "@/lib/email/editor";
 import { isValidEmail } from "@/lib/email/format";
@@ -93,30 +76,13 @@ export interface EmailComposeModalProps {
 }
 
 export function EmailComposeModal(props: EmailComposeModalProps) {
-    /**
-     * O Google Picker e os popovers da barra de formatação vivem fora da
-     * árvore do Dialog (ambos são portalizados no body), e o Radix trata
-     * clique/Esc neles como interação "fora" — fechando a composição e jogando
-     * o rascunho fora. Aqui o modal aprende a distinguir os dois e não reagir.
-     */
-    function ehExterno(alvo: EventTarget | null): boolean {
-        if (isGooglePickerNode(alvo)) return true;
-        const node = alvo instanceof Node ? alvo : null;
-        const el = node instanceof Element ? node : node?.parentElement;
-        return Boolean(el?.closest("[data-toolbar-popover]"));
-    }
-
-    function ignorarSeForExterno(e: { target?: EventTarget | null; preventDefault: () => void }) {
-        if (ehExterno(e.target ?? null)) e.preventDefault();
-    }
-
     return (
         <Dialog open={props.open} onOpenChange={props.onOpenChange}>
             <DialogContent
                 className="sm:max-w-2xl max-h-[92vh] flex flex-col gap-3 overflow-hidden"
-                onPointerDownOutside={ignorarSeForExterno}
-                onInteractOutside={ignorarSeForExterno}
-                onFocusOutside={ignorarSeForExterno}
+                onPointerDownOutside={ignorarSeForPortalDeEmail}
+                onInteractOutside={ignorarSeForPortalDeEmail}
+                onFocusOutside={ignorarSeForPortalDeEmail}
                 onEscapeKeyDown={(e) => {
                     // Esc com o Picker aberto é pra fechar o Picker, não a
                     // composição inteira.
@@ -151,17 +117,8 @@ function reachableEmails(lead: LeadEmailRow, fields: EmailFieldKey[]): string[] 
 }
 
 function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModalProps) {
-    const editorRef = useRef<RichTextEditorHandle>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
     const [subject, setSubject] = useState("");
     const [body, setBody] = useState("");
-    const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
-    const [uploading, setUploading] = useState(false);
-    /** Arquivos em trânsito, pra aparecerem na bandeja antes de ter URL. */
-    const [uploadingItems, setUploadingItems] = useState<
-        { id: string; name: string; size: number }[]
-    >([]);
 
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [scheduleDate, setScheduleDate] = useState("");
@@ -170,6 +127,9 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
     const [view, setView] = useState<"compose" | "confirm">("compose");
     const [error, setError] = useState("");
     const [sending, startSending] = useTransition();
+
+    const anexos = useEmailAttachments(setError);
+    const { attachments, uploading } = anexos;
 
     // ---------------------------------------------------------- destinatários
     const leadAvailable = useMemo(() => {
@@ -288,102 +248,6 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
             }
             return next;
         });
-    }
-
-    // ------------------------------------------------------------------ anexos
-    const totalBytes = attachments.reduce((sum, a) => sum + a.size, 0);
-
-    /**
-     * Sobe arquivos pro R2 e adiciona à lista de anexos.
-     *
-     * Serve tanto ao clipe quanto ao Ctrl+V de arquivo no corpo — é o mesmo
-     * caminho, não há pipeline paralelo.
-     */
-    async function handleFiles(files: FileList | File[] | null) {
-        const lista = files ? Array.from(files) : [];
-        if (lista.length === 0) return;
-
-        setError("");
-        setUploading(true);
-        // Acumulador próprio: `totalBytes` é do render e não enxerga o que
-        // acabou de entrar neste mesmo lote.
-        let acumulado = totalBytes;
-
-        try {
-            for (const file of lista) {
-                const recusa = motivoRecusa(file);
-                if (recusa) {
-                    setError(recusa);
-                    continue;
-                }
-
-                if (acumulado + file.size > MAX_TOTAL_BYTES) {
-                    const excesso = acumulado + file.size - MAX_TOTAL_BYTES;
-                    setError(
-                        `"${file.name}" passa ${formatarBytes(excesso)} do limite de ${formatarBytes(MAX_TOTAL_BYTES)} do Gmail (a soma vale pra mensagem inteira). Remova algum anexo ou mande este arquivo por link.`,
-                    );
-                    continue;
-                }
-
-                // Print colado vem com nome genérico ("image.png") ou sem nome:
-                // vários prints virariam anexos indistinguíveis.
-                const nome =
-                    file.name && file.name !== "image.png"
-                        ? file.name
-                        : `colado-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}.${file.type.split("/")[1] || "png"}`;
-
-                const id = `${nome}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-                setUploadingItems((prev) => [...prev, { id, name: nome, size: file.size }]);
-
-                try {
-                    const mimeType = file.type || "application/octet-stream";
-                    const prepared = await createEmailAttachmentUploadUrl(nome, mimeType);
-                    if (!prepared.ok) {
-                        setError(`${nome}: ${prepared.error}`);
-                        continue;
-                    }
-
-                    const put = await fetch(prepared.signedUrl, {
-                        method: "PUT",
-                        headers: { "Content-Type": mimeType },
-                        body: file,
-                    });
-                    if (!put.ok) {
-                        // Sem o status, uma falha de upload some sem deixar
-                        // rastro — foi o que aconteceu com o print colado.
-                        setError(
-                            `Falha ao subir "${nome}" (HTTP ${put.status}). Tente de novo.`,
-                        );
-                        continue;
-                    }
-
-                    acumulado += file.size;
-                    setAttachments((prev) => [
-                        ...prev,
-                        {
-                            url: prepared.publicUrl,
-                            filename: nome,
-                            size: file.size,
-                            mimeType,
-                            source: "upload",
-                        },
-                    ]);
-                } catch (err) {
-                    setError(
-                        `Falha ao subir "${nome}": ${err instanceof Error ? err.message : "erro de rede"}`,
-                    );
-                } finally {
-                    setUploadingItems((prev) => prev.filter((i) => i.id !== id));
-                }
-            }
-        } finally {
-            setUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = "";
-        }
-    }
-
-    function removeAttachment(url: string) {
-        setAttachments((prev) => prev.filter((a) => a.url !== url));
     }
 
     // ------------------------------------------------------------------ envio
@@ -507,7 +371,7 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                     {attachments.length > 0 && (
                         <ConfirmRow label="Anexos">
                             {attachments.map((a) => a.filename).join(", ")} (
-                            {humanSize(totalBytes)})
+                            {humanSize(attachments.reduce((soma, a) => soma + a.size, 0))})
                         </ConfirmRow>
                     )}
                     {scheduledFor && (
@@ -629,57 +493,11 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                 />
 
                 {/* ---- corpo ---- */}
-                <RichTextEditor
-                    ref={editorRef}
+                <EmailBodyEditor
+                    anexos={anexos}
                     onChange={setBody}
+                    onError={setError}
                     placeholder="Escreva a mensagem..."
-                    onPasteFiles={(files) => void handleFiles(files)}
-                    attachmentSlot={
-                        <AttachmentTray
-                            attachments={attachments}
-                            uploading={uploadingItems}
-                            onRemove={removeAttachment}
-                        />
-                    }
-                    toolbarExtras={
-                        <>
-                            <button
-                                type="button"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => fileInputRef.current?.click()}
-                                title="Anexar arquivo"
-                                aria-label="Anexar arquivo"
-                                className="p-1.5 rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                            >
-                                {uploading ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                    <Paperclip className="w-4 h-4" />
-                                )}
-                            </button>
-                            <DrivePickerButton
-                                onAttach={(attachment) =>
-                                    setAttachments((prev) =>
-                                        prev.some((a) => a.url === attachment.url)
-                                            ? prev
-                                            : [...prev, attachment],
-                                    )
-                                }
-                                onError={setError}
-                            />
-                            <EmojiPickerInput
-                                onEmojiSelect={(emoji) => editorRef.current?.insertText(emoji)}
-                            />
-                        </>
-                    }
-                />
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept={ACCEPT_ATTR}
-                    hidden
-                    onChange={(e) => void handleFiles(e.target.files)}
                 />
 
                 {/* ---- agendamento ---- */}
