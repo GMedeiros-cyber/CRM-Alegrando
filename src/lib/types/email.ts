@@ -79,6 +79,14 @@ export type EmailReplyRecord = {
     /** Nulo = não lida. É o que alimenta o badge do menu. */
     readAt: string | null;
     attachments: EmailAttachment[];
+    /**
+     * Quantos anexos o Gmail tinha e não chegaram a ser gravados.
+     *
+     * Existe porque essa falha é silenciosa: o texto entra, o arquivo some e
+     * nada na tela avisa. Imagem inline pequena descartada como assinatura
+     * não entra nessa conta.
+     */
+    attachmentsMissing: number;
 };
 
 /**
@@ -100,6 +108,8 @@ export type EmailThreadMessage = {
     bodyText: string | null;
     bodyTextFull: string | null;
     attachments: EmailAttachment[];
+    /** Só em recebidos: anexos que o Gmail tinha e não foram gravados. */
+    attachmentsMissing: number;
     /** Só em enviados. */
     status: EmailSendStatus | null;
     error: string | null;

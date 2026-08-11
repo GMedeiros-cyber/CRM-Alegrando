@@ -337,6 +337,18 @@ function MensagemDaThread({ msg }: { msg: EmailThreadMessage }) {
                     />
                 </div>
             )}
+
+            {/* Sem isto, anexo que falhou some sem deixar rastro e quem lê a
+                conversa nem sabe que havia arquivo. Discreto de propósito: é
+                aviso, não alarme. */}
+            {msg.attachmentsMissing > 0 && (
+                <p className="mt-1 flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400">
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                    {msg.attachmentsMissing === 1
+                        ? "1 anexo não pôde ser carregado"
+                        : `${msg.attachmentsMissing} anexos não puderam ser carregados`}
+                </p>
+            )}
         </div>
     );
 }

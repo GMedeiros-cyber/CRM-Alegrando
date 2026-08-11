@@ -132,6 +132,10 @@ export async function listLeadsByLabels(labelIds: string[]): Promise<LeadEmailRo
     return rows;
 }
 
+const REPLY_COLUMNS_COMPLETO =
+    "id, from_email, from_name, subject, snippet, body_text, body_text_full, body_html, received_at, read_at, attachments, attachments_missing";
+
+/** Sem a migração do contador de anexo faltando. */
 const REPLY_COLUMNS =
     "id, from_email, from_name, subject, snippet, body_text, body_text_full, body_html, received_at, read_at, attachments";
 
@@ -156,6 +160,7 @@ function mapReply(r: Record<string, unknown>): EmailReplyRecord {
         receivedAt: String(r.received_at ?? ""),
         readAt: (r.read_at as string) ?? null,
         attachments: anexosDe(r.attachments),
+        attachmentsMissing: Number(r.attachments_missing) || 0,
     };
 }
 
@@ -210,7 +215,15 @@ export async function listLeadEmailConversations(
     const semEstrutura = (code?: string) =>
         code === "PGRST200" || code === "PGRST204" || code === "42P01" || code === "42703";
 
-    let { data, error } = await query(`${COM_EXTRAS}, email_replies(${REPLY_COLUMNS})`, true);
+    // Uma migração de cada vez: cair um degrau por causa do contador não pode
+    // custar os anexos, que já funcionam.
+    let { data, error } = await query(
+        `${COM_EXTRAS}, email_replies(${REPLY_COLUMNS_COMPLETO})`,
+        true,
+    );
+    if (semEstrutura(error?.code)) {
+        ({ data, error } = await query(`${COM_EXTRAS}, email_replies(${REPLY_COLUMNS})`, true));
+    }
     if (semEstrutura(error?.code)) {
         ({ data, error } = await query(
             `${COM_EXTRAS}, email_replies(${REPLY_COLUMNS_MINIMO})`,
@@ -276,6 +289,7 @@ export async function listLeadEmailConversations(
                 bodyText: envio.body,
                 bodyTextFull: null,
                 attachments: envio.attachments,
+                attachmentsMissing: 0,
                 status: envio.status,
                 error: envio.error,
                 readAt: null,
@@ -292,6 +306,7 @@ export async function listLeadEmailConversations(
                     bodyText: resposta.bodyText ?? resposta.snippet,
                     bodyTextFull: resposta.bodyTextFull,
                     attachments: resposta.attachments,
+                    attachmentsMissing: resposta.attachmentsMissing,
                     status: null,
                     error: null,
                     readAt: resposta.readAt,
