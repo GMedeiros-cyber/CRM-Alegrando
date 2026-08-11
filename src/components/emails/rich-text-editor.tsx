@@ -271,7 +271,10 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
 
                 <div className="shrink-0">{attachmentSlot}</div>
 
-                <div className="shrink-0 flex flex-wrap items-center gap-0.5 border-t border-border bg-muted/60 px-2 py-2">
+                {/* gap-1 e não 0.5: no painel do lead a barra quebra em várias
+                    linhas, e com 2px os controles encostavam uns nos outros.
+                    Preferir quebrar mais a espremer. */}
+                <div className="shrink-0 flex flex-wrap items-center gap-1 border-t border-border bg-muted/60 px-2 py-2">
                     <ToolbarButton
                         active={showToolbar}
                         onClick={() => setShowToolbar((v) => !v)}

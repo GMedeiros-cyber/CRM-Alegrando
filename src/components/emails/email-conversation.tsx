@@ -19,6 +19,7 @@ import { markEmailRepliesRead, replyToEmailReply } from "@/lib/actions/emails";
 import { separarCitacao } from "@/lib/email/format";
 import { isEditorEmpty } from "@/lib/email/editor";
 import { AttachmentTray } from "./attachment-tray";
+import { TextoComLinks } from "./texto-com-links";
 import { EmailBodyEditor } from "./email-body-editor";
 import { useEmailAttachments } from "./use-email-attachments";
 import type { EmailConversation, EmailThreadMessage } from "@/lib/types/email";
@@ -292,9 +293,10 @@ function MensagemDaThread({ msg }: { msg: EmailThreadMessage }) {
                 </span>
             </div>
 
-            <p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-snug text-[#191918] dark:text-[#cbd5e1]">
-                {(enviada ? msg.bodyText : principal) || "(sem conteúdo)"}
-            </p>
+            <TextoComLinks
+                texto={(enviada ? msg.bodyText : principal) || "(sem conteúdo)"}
+                className="mt-0.5 text-[11px] leading-snug text-[#191918] dark:text-[#cbd5e1]"
+            />
 
             {/* Estado do envio como nota de rodapé, e não no lugar do texto:
                 antes o corpo do que a equipe mandou nem aparecia, e a conversa
@@ -320,9 +322,12 @@ function MensagemDaThread({ msg }: { msg: EmailThreadMessage }) {
                         {mostrarCitacao ? "Ocultar" : "Ver"} mensagem completa
                     </button>
                     {mostrarCitacao && (
-                        <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-words border-l-2 border-[#C7D2FE] dark:border-[#3d4a60] pl-2 text-[10px] leading-snug text-[#9B9A97] dark:text-[#64748b]">
-                            {msg.bodyTextFull || citacao}
-                        </p>
+                        <div className="mt-1 max-h-40 overflow-y-auto border-l-2 border-[#C7D2FE] dark:border-[#3d4a60] pl-2">
+                            <TextoComLinks
+                                texto={msg.bodyTextFull || citacao}
+                                className="text-[10px] leading-snug text-[#9B9A97] dark:text-[#64748b]"
+                            />
+                        </div>
                     )}
                 </>
             )}
@@ -452,32 +457,39 @@ function RespostaInline({
                     </p>
                 )}
 
-                <div className="flex justify-end gap-1.5">
-                    <button
-                        type="button"
-                        onClick={() => setAberto(false)}
-                        disabled={enviando}
-                        title="Recolher sem apagar o que já foi escrito"
-                        className="rounded-lg border border-[#C7D2FE] dark:border-[#3d4a60] px-2.5 py-1.5 text-[11px] font-semibold text-[#6366F1] dark:text-[#94a3b8] transition-colors hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] disabled:opacity-40"
-                    >
-                        Recolher
-                    </button>
-                    {temRascunho && (
+                {/* Secundários agrupados à esquerda e o primário empurrado pra
+                    direita: além de caber, mantém "Descartar" longe do botão
+                    de enviar. Quebra em duas linhas quando o painel aperta —
+                    antes a linha estourava a largura e o "Descartar" saía. */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1">
                         <button
                             type="button"
-                            onClick={cancelar}
+                            onClick={() => setAberto(false)}
                             disabled={enviando}
-                            title="Descartar o rascunho"
-                            className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-[#9B9A97] dark:text-[#64748b] transition-colors hover:text-red-500 disabled:opacity-40"
+                            title="Recolher sem apagar o que já foi escrito"
+                            className="rounded-lg border border-[#C7D2FE] dark:border-[#3d4a60] px-2 py-1.5 text-[11px] font-semibold text-[#6366F1] dark:text-[#94a3b8] transition-colors hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] disabled:opacity-40"
                         >
-                            Descartar
+                            Recolher
                         </button>
-                    )}
+                        {temRascunho && (
+                            <button
+                                type="button"
+                                onClick={cancelar}
+                                disabled={enviando}
+                                title="Descartar o rascunho"
+                                aria-label="Descartar o rascunho"
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#9B9A97] dark:text-[#64748b] transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-40"
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                        )}
+                    </div>
                     <button
                         type="button"
                         onClick={enviar}
                         disabled={!podeEnviar}
-                        className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
+                        className="ml-auto flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
                     >
                         {enviando ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
