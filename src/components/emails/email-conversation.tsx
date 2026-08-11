@@ -66,6 +66,7 @@ export function EmailConversationItem({
     onToast,
 }: EmailConversationItemProps) {
     const [aberta, setAberta] = useState(false);
+    const [jaAbriu, setJaAbriu] = useState(false);
     const [confirmando, setConfirmando] = useState(false);
 
     const status = STATUS_UI[conversa.status] ?? STATUS_UI.pending;
@@ -75,6 +76,7 @@ export function EmailConversationItem({
     function alternar() {
         const abrindo = !aberta;
         setAberta(abrindo);
+        if (abrindo) setJaAbriu(true);
 
         // Abrir é o gesto de ler.
         if (abrindo && temNaoLida) {
@@ -207,9 +209,18 @@ export function EmailConversationItem({
                 </div>
             </div>
 
-            {/* ---- a troca ---- */}
-            {aberta && (
-                <div className="border-t border-[#C7D2FE] dark:border-[#3d4a60]/60 px-2 py-2 space-y-1.5">
+            {/* ---- a troca ----
+                Uma vez aberta, a conversa fica MONTADA e só some da tela. É o
+                que salva o rascunho: o corpo do editor é contentEditable, então
+                desmontar leva junto o texto digitado, e recolher a conversa sem
+                querer apagaria uma resposta pela metade. */}
+            {jaAbriu && (
+                <div
+                    className={cn(
+                        "border-t border-[#C7D2FE] dark:border-[#3d4a60]/60 px-2 py-2 space-y-1.5",
+                        !aberta && "hidden",
+                    )}
+                >
                     {conversa.messages.map((msg) => (
                         <MensagemDaThread key={`${msg.direcao}-${msg.id}`} msg={msg} />
                     ))}
@@ -346,6 +357,7 @@ function RespostaInline({
     onReplied: () => void;
     onToast: (toast: { type: "success" | "error"; text: string }) => void;
 }) {
+    const [aberto, setAberto] = useState(false);
     const [corpo, setCorpo] = useState("");
     const [erro, setErro] = useState("");
     const [enviando, startEnviando] = useTransition();
@@ -354,6 +366,7 @@ function RespostaInline({
     // sem trocar a chave o texto anterior continuaria na tela.
     const [rodada, setRodada] = useState(0);
 
+    const temRascunho = !isEditorEmpty(corpo) || anexos.attachments.length > 0;
     const podeEnviar = !isEditorEmpty(corpo) && !anexos.uploading && !enviando;
 
     function enviar() {
@@ -373,43 +386,95 @@ function RespostaInline({
             setCorpo("");
             anexos.limpar();
             setRodada((n) => n + 1);
+            setAberto(false);
             onToast({ type: "success", text: "Resposta enviada" });
             onReplied();
         });
     }
 
+    function cancelar() {
+        setErro("");
+        setCorpo("");
+        anexos.limpar();
+        setRodada((n) => n + 1);
+        setAberto(false);
+    }
+
     return (
-        <div className="space-y-1.5 pt-1">
-            <EmailBodyEditor
-                key={rodada}
-                anexos={anexos}
-                onChange={setCorpo}
-                onError={setErro}
-                placeholder="Responder nesta conversa..."
-                containerClassName="max-h-[320px]"
-                bodyClassName="min-h-[56px]"
-            />
-
-            {erro && (
-                <p className="rounded-md bg-red-500/10 px-2 py-1 text-[10px] leading-snug text-red-500 dark:text-red-400">
-                    {erro}
-                </p>
-            )}
-
-            <div className="flex justify-end">
+        <div className="pt-1">
+            {!aberto && (
                 <button
                     type="button"
-                    onClick={enviar}
-                    disabled={!podeEnviar}
-                    className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
+                    onClick={() => setAberto(true)}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#C7D2FE] dark:border-[#3d4a60] bg-background px-3 py-1.5 text-[11px] font-semibold text-[#6366F1] dark:text-[#94a3b8] transition-colors hover:border-brand-500/50 hover:text-brand-500 dark:hover:text-brand-400"
                 >
-                    {enviando ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                        <Send className="h-3.5 w-3.5" />
+                    <CornerDownLeft className="h-3.5 w-3.5" />
+                    Responder
+                    {/* Recolher não joga o texto fora, mas some com ele da
+                        tela — sem este aviso a resposta pela metade parece
+                        perdida. */}
+                    {temRascunho && (
+                        <span className="rounded-full bg-brand-500 px-1.5 text-[9px] font-bold text-white">
+                            rascunho
+                        </span>
                     )}
-                    {enviando ? "Enviando..." : "Responder"}
                 </button>
+            )}
+
+            {/* Escondido, e não desmontado: o corpo é contentEditable, então
+                desmontar apagaria o que já foi digitado. */}
+            <div className={cn("space-y-1.5", !aberto && "hidden")}>
+                <EmailBodyEditor
+                    key={rodada}
+                    anexos={anexos}
+                    onChange={setCorpo}
+                    onError={setErro}
+                    placeholder="Responder nesta conversa..."
+                    containerClassName="max-h-[320px]"
+                    bodyClassName="min-h-[56px]"
+                />
+
+                {erro && (
+                    <p className="rounded-md bg-red-500/10 px-2 py-1 text-[10px] leading-snug text-red-500 dark:text-red-400">
+                        {erro}
+                    </p>
+                )}
+
+                <div className="flex justify-end gap-1.5">
+                    <button
+                        type="button"
+                        onClick={() => setAberto(false)}
+                        disabled={enviando}
+                        title="Recolher sem apagar o que já foi escrito"
+                        className="rounded-lg border border-[#C7D2FE] dark:border-[#3d4a60] px-2.5 py-1.5 text-[11px] font-semibold text-[#6366F1] dark:text-[#94a3b8] transition-colors hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] disabled:opacity-40"
+                    >
+                        Recolher
+                    </button>
+                    {temRascunho && (
+                        <button
+                            type="button"
+                            onClick={cancelar}
+                            disabled={enviando}
+                            title="Descartar o rascunho"
+                            className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-[#9B9A97] dark:text-[#64748b] transition-colors hover:text-red-500 disabled:opacity-40"
+                        >
+                            Descartar
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={enviar}
+                        disabled={!podeEnviar}
+                        className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
+                    >
+                        {enviando ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                            <Send className="h-3.5 w-3.5" />
+                        )}
+                        {enviando ? "Enviando..." : "Responder"}
+                    </button>
+                </div>
             </div>
         </div>
     );
