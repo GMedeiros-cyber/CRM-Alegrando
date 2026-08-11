@@ -18,10 +18,12 @@ import { deleteEmailSend, listLeadEmailSends } from "@/lib/actions/emails";
 import {
     EMAIL_FIELD_ORDER,
     type EmailFieldKey,
+    type EmailReplyRecord,
     type EmailSendRecord,
 } from "@/lib/types/email";
 import { isValidEmail } from "@/lib/email/format";
 import { EmailComposeModal } from "@/components/emails/email-compose-modal";
+import { EmailReplyList } from "@/components/emails/email-reply-list";
 
 export interface LeadEmailSectionProps {
     telefone: string;
@@ -109,6 +111,96 @@ export function LeadEmailSection({
 
         return () => { void supabase.removeChannel(channel); };
     }, [telefone, canal]);
+
+    /**
+     * Resposta que chega enquanto o painel está aberto.
+     *
+     * Mesmo critério do bloco acima: só entra se o envio de origem já estiver
+     * no histórico — assim a assinatura pode ser global (o Realtime não filtra
+     * por lead) sem que resposta de outro lead apareça aqui.
+     */
+    useEffect(() => {
+        const channel = supabase
+            .channel(`email-replies-${telefone}-${canal}`)
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "email_replies" },
+                (payload) => {
+                    const row = payload.new as Partial<{
+                        id: string;
+                        email_send_id: string;
+                        from_email: string;
+                        from_name: string | null;
+                        subject: string | null;
+                        snippet: string | null;
+                        body_text: string | null;
+                        body_html: string | null;
+                        received_at: string;
+                        read_at: string | null;
+                    }>;
+                    if (!row?.id || !row.email_send_id) return;
+
+                    setHistory((prev) => {
+                        const envio = prev.find((r) => r.id === row.email_send_id);
+                        if (!envio) return prev;
+
+                        const nova: EmailReplyRecord = {
+                            id: row.id!,
+                            fromEmail: row.from_email ?? "",
+                            fromName: row.from_name ?? null,
+                            subject: row.subject ?? null,
+                            snippet: row.snippet ?? null,
+                            bodyText: row.body_text ?? null,
+                            bodyHtml: row.body_html ?? null,
+                            receivedAt: row.received_at ?? new Date().toISOString(),
+                            readAt: row.read_at ?? null,
+                        };
+
+                        return prev.map((r) =>
+                            r.id !== row.email_send_id
+                                ? r
+                                : {
+                                      ...r,
+                                      replies: r.replies.some((x) => x.id === nova.id)
+                                          ? r.replies.map((x) => (x.id === nova.id ? nova : x))
+                                          : [...r.replies, nova],
+                                  },
+                        );
+                    });
+                },
+            )
+            .subscribe();
+
+        return () => { void supabase.removeChannel(channel); };
+    }, [telefone, canal]);
+
+    /** Marca localmente pra a linha sair do destaque na hora do clique. */
+    function marcarLida(replyId: string) {
+        setHistory((prev) =>
+            prev.map((r) => ({
+                ...r,
+                replies: r.replies.map((x) =>
+                    x.id === replyId && x.readAt === null
+                        ? { ...x, readAt: new Date().toISOString() }
+                        : x,
+                ),
+            })),
+        );
+    }
+
+    /**
+     * `respondendo` NÃO volta a null ao fechar: se o modal desmontasse na
+     * hora, a animação de saída não rodaria e a resposta sumiria seca, ao
+     * contrário de todos os outros modais. Quem manda no aberto/fechado é a
+     * flag; o registro só é trocado na próxima abertura.
+     */
+    const [respondendo, setRespondendo] = useState<EmailReplyRecord | null>(null);
+    const [respostaAberta, setRespostaAberta] = useState(false);
+
+    function abrirResposta(reply: EmailReplyRecord) {
+        setRespondendo(reply);
+        setRespostaAberta(true);
+    }
 
     const [confirmando, setConfirmando] = useState<string | null>(null);
 
@@ -207,6 +299,8 @@ export function LeadEmailSection({
                                 onPedirConfirmacao={() => setConfirmando(row.id)}
                                 onCancelarConfirmacao={() => setConfirmando(null)}
                                 onDelete={() => void handleDelete(row.id)}
+                                onLerResposta={marcarLida}
+                                onResponder={abrirResposta}
                             />
                         ))}
                     </div>
@@ -220,6 +314,22 @@ export function LeadEmailSection({
                 onToast={onToast}
                 onSent={() => void fetchHistory()}
             />
+
+            {respondendo && (
+                <EmailComposeModal
+                    open={respostaAberta}
+                    onOpenChange={setRespostaAberta}
+                    target={{
+                        mode: "reply",
+                        replyId: respondendo.id,
+                        toEmail: respondendo.fromEmail,
+                        toName: respondendo.fromName,
+                        subject: respondendo.subject,
+                    }}
+                    onToast={onToast}
+                    onSent={() => void fetchHistory()}
+                />
+            )}
         </div>
     );
 }
@@ -253,12 +363,16 @@ function EmailHistoryRow({
     onPedirConfirmacao,
     onCancelarConfirmacao,
     onDelete,
+    onLerResposta,
+    onResponder,
 }: {
     row: EmailSendRecord;
     confirmando: boolean;
     onPedirConfirmacao: () => void;
     onCancelarConfirmacao: () => void;
     onDelete: () => void;
+    onLerResposta: (replyId: string) => void;
+    onResponder: (reply: EmailReplyRecord) => void;
 }) {
     const reference =
         row.status === "scheduled" ? row.scheduledFor : row.sentAt || row.createdAt;
@@ -313,54 +427,70 @@ function EmailHistoryRow({
     }
 
     return (
-        <div className="group/email flex items-start gap-2 px-2 py-1 rounded-lg bg-[#EEF2FF] dark:bg-[#1e2536]/60 border border-[#C7D2FE] dark:border-[#3d4a60]/60">
-            <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-medium text-[#191918] dark:text-white truncate">
-                    {row.subject}
-                </p>
-                <p className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] truncate">
-                    {row.recipientEmail}
-                    {row.attachments.length > 0 && (
-                        <span className="ml-1 whitespace-nowrap">
-                            · {row.attachments.length}{" "}
-                            {row.attachments.length === 1 ? "anexo" : "anexos"}
-                        </span>
-                    )}
-                </p>
-                {row.status === "failed" && row.error && (
-                    <p className="text-[9px] text-red-400/90 leading-snug break-words">
-                        {row.error}
-                    </p>
-                )}
-            </div>
-
-            <div className="shrink-0 flex items-center gap-1">
-                <div className="text-right">
-                    <span
-                        className={cn(
-                            "flex items-center gap-1 text-[10px] font-semibold justify-end",
-                            status.className,
+        <div>
+            <div className="group/email flex items-start gap-2 px-2 py-1 rounded-lg bg-[#EEF2FF] dark:bg-[#1e2536]/60 border border-[#C7D2FE] dark:border-[#3d4a60]/60">
+                <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-medium text-[#191918] dark:text-white truncate">
+                        {/* Sem isto, a nossa resposta e o e-mail que a originou
+                            ficam indistinguíveis na lista — os dois carregam o
+                            mesmo assunto da conversa. */}
+                        {row.origem === "resposta" && (
+                            <span className="mr-1 text-[9px] font-bold uppercase tracking-wide text-brand-500 dark:text-brand-400">
+                                resposta
+                            </span>
                         )}
-                    >
-                        {status.icon}
-                        {status.text}
-                    </span>
-                    {dateLabel && (
-                        <span className="text-[9px] text-[#9B9A97] dark:text-[#64748b]">
-                            {dateLabel}
-                        </span>
+                        {row.subject}
+                    </p>
+                    <p className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] truncate">
+                        {row.recipientEmail}
+                        {row.attachments.length > 0 && (
+                            <span className="ml-1 whitespace-nowrap">
+                                · {row.attachments.length}{" "}
+                                {row.attachments.length === 1 ? "anexo" : "anexos"}
+                            </span>
+                        )}
+                    </p>
+                    {row.status === "failed" && row.error && (
+                        <p className="text-[9px] text-red-400/90 leading-snug break-words">
+                            {row.error}
+                        </p>
                     )}
                 </div>
-                <button
-                    type="button"
-                    onClick={onPedirConfirmacao}
-                    title={agendado ? "Cancelar agendamento" : "Remover do histórico"}
-                    aria-label={agendado ? "Cancelar agendamento" : "Remover do histórico"}
-                    className="p-1 rounded text-[#9B9A97] dark:text-[#64748b] opacity-0 transition-opacity hover:text-red-500 group-hover/email:opacity-100 focus:opacity-100"
-                >
-                    <Trash2 className="w-3 h-3" />
-                </button>
+
+                <div className="shrink-0 flex items-center gap-1">
+                    <div className="text-right">
+                        <span
+                            className={cn(
+                                "flex items-center gap-1 text-[10px] font-semibold justify-end",
+                                status.className,
+                            )}
+                        >
+                            {status.icon}
+                            {status.text}
+                        </span>
+                        {dateLabel && (
+                            <span className="text-[9px] text-[#9B9A97] dark:text-[#64748b]">
+                                {dateLabel}
+                            </span>
+                        )}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onPedirConfirmacao}
+                        title={agendado ? "Cancelar agendamento" : "Remover do histórico"}
+                        aria-label={agendado ? "Cancelar agendamento" : "Remover do histórico"}
+                        className="p-1 rounded text-[#9B9A97] dark:text-[#64748b] opacity-0 transition-opacity hover:text-red-500 group-hover/email:opacity-100 focus:opacity-100"
+                    >
+                        <Trash2 className="w-3 h-3" />
+                    </button>
+                </div>
             </div>
+
+            <EmailReplyList
+                replies={row.replies}
+                onRead={onLerResposta}
+                onReply={onResponder}
+            />
         </div>
     );
 }

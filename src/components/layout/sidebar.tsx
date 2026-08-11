@@ -18,11 +18,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/useTheme";
+import { useUnreadEmailReplies } from "@/hooks/useUnreadEmailReplies";
 
 const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Kanban", href: "/kanban", icon: Kanban },
-    { name: "Conversas", href: "/conversas", icon: MessageSquare },
+    // As respostas das escolas aparecem no histórico de e-mail do lead, que
+    // vive dentro de Conversas — por isso o contador fica aqui.
+    { name: "Conversas", href: "/conversas", icon: MessageSquare, contaRespostas: true },
     { name: "Agenda", href: "/agenda", icon: CalendarDays },
     { name: "Tarefas", href: "/tarefas", icon: ClipboardCheck },
     { name: "E-mails", href: "/emails", icon: Mail },
@@ -34,6 +37,7 @@ export function Sidebar() {
     const [expanded, setExpanded] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const { theme, toggleTheme, isMounted } = useTheme();
+    const naoLidas = useUnreadEmailReplies();
 
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth < 768);
@@ -80,6 +84,7 @@ export function Sidebar() {
                 {navigation.map((item) => {
                     const isActive =
                         pathname === item.href || pathname.startsWith(item.href + "/");
+                    const badge = item.contaRespostas ? naoLidas : 0;
 
                     return (
                         <Link
@@ -87,6 +92,11 @@ export function Sidebar() {
                             href={item.href}
                             prefetch={true}
                             onClick={() => { if (isMobile) setExpanded(false); }}
+                            title={
+                                badge > 0
+                                    ? `${item.name} — ${badge} ${badge === 1 ? "resposta não lida" : "respostas não lidas"}`
+                                    : item.name
+                            }
                             className={cn(
                                 "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 overflow-hidden",
                                 isActive
@@ -94,14 +104,27 @@ export function Sidebar() {
                                     : "text-slate-900 hover:bg-black/10 hover:text-black"
                             )}
                         >
-                            <item.icon
-                                className={cn(
-                                    "h-5 w-5 shrink-0 transition-colors duration-200",
-                                    isActive
-                                        ? "text-slate-900"
-                                        : "text-slate-900 group-hover:text-black"
+                            {/* O contador fica sobre o ícone, e não ao lado do
+                                nome: assim ele continua visível com o menu
+                                recolhido, que é como ele passa o dia. */}
+                            <span className="relative shrink-0">
+                                <item.icon
+                                    className={cn(
+                                        "h-5 w-5 transition-colors duration-200",
+                                        isActive
+                                            ? "text-slate-900"
+                                            : "text-slate-900 group-hover:text-black"
+                                    )}
+                                />
+                                {badge > 0 && (
+                                    <span
+                                        aria-hidden
+                                        className="absolute -top-1.5 -right-2 min-w-[16px] rounded-full bg-brand-500 px-1 text-[10px] font-bold leading-4 text-center text-white ring-2 ring-[#D4845A]"
+                                    >
+                                        {badge > 9 ? "9+" : badge}
+                                    </span>
                                 )}
-                            />
+                            </span>
                             <span
                                 className={cn(
                                     "whitespace-nowrap transition-all duration-300 overflow-hidden",

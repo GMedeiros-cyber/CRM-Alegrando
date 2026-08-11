@@ -58,6 +58,25 @@ export type EmailAttachment = {
     driveFileId?: string;
 };
 
+/**
+ * Uma resposta da escola, capturada pelo worker do n8n.
+ *
+ * Só existe resposta para envio que tenha `gmail_thread_id`: é por ele que o
+ * worker reconhece a conversa como nossa.
+ */
+export type EmailReplyRecord = {
+    id: string;
+    fromEmail: string;
+    fromName: string | null;
+    subject: string | null;
+    snippet: string | null;
+    bodyText: string | null;
+    bodyHtml: string | null;
+    receivedAt: string;
+    /** Nulo = não lida. É o que alimenta o badge do menu. */
+    readAt: string | null;
+};
+
 /** Uma linha de `email_sends` (histórico no painel do lead). */
 export type EmailSendRecord = {
     id: string;
@@ -70,6 +89,8 @@ export type EmailSendRecord = {
     sentAt: string | null;
     scheduledFor: string | null;
     attachments: EmailAttachment[];
+    /** Respostas recebidas nesta conversa, da mais antiga pra mais nova. */
+    replies: EmailReplyRecord[];
 };
 
 /** Lead alcançável por e-mail, usado na lista do disparo por tag. */
