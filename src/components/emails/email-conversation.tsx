@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
     AlertTriangle,
     CalendarClock,
@@ -244,18 +244,117 @@ export function EmailConversationItem({
     );
 }
 
+/**
+ * Altura em que o corpo passa a ser recolhido — cerca de 7 linhas no tamanho
+ * usado aqui (11px com leading-snug).
+ */
+const MAX_ALTURA_CORPO = 108;
+
+/**
+ * O corpo da mensagem, recolhido quando é longo demais.
+ *
+ * Uma proposta de vários parágrafos ocupava a conversa inteira e empurrava o
+ * resto pra fora da vista. Vale pros dois lados: resposta de escola também
+ * vem quilométrica.
+ *
+ * Recorte VISUAL (max-height), nunca da string: o texto passa pelo autolink,
+ * que monta nós React, e cortar caractere quebraria um link no meio.
+ */
+function CorpoRecolhivel({ texto }: { texto: string }) {
+    const [expandido, setExpandido] = useState(false);
+    const [transborda, setTransborda] = useState(false);
+    const corpoRef = useRef<HTMLDivElement | null>(null);
+    const botaoRef = useRef<HTMLButtonElement | null>(null);
+
+    useEffect(() => {
+        const el = corpoRef.current;
+        if (!el) return;
+
+        // ResizeObserver, e não uma medição única: o mesmo texto ocupa um
+        // número diferente de linhas no painel do desktop, no Sheet do mobile
+        // e ao girar o celular. Medir uma vez deixaria o botão sobrando ou
+        // faltando depois. (Também é o jeito de mexer no estado a partir de um
+        // sistema externo, sem setState síncrono dentro do efeito.)
+        const observador = new ResizeObserver(() => {
+            // scrollHeight continua sendo a altura real do conteúdo mesmo com
+            // o clamp aplicado, então a medida não se auto-invalida.
+            setTransborda(el.scrollHeight > MAX_ALTURA_CORPO + 4);
+        });
+        observador.observe(el);
+        return () => observador.disconnect();
+    }, [texto]);
+
+    const recolhido = transborda && !expandido;
+
+    return (
+        <>
+            <div
+                ref={corpoRef}
+                className={cn(recolhido && "overflow-hidden")}
+                style={recolhido ? { maxHeight: MAX_ALTURA_CORPO } : undefined}
+            >
+                <TextoComLinks
+                    texto={texto}
+                    className="mt-0.5 text-[11px] leading-snug text-[#191918] dark:text-[#cbd5e1]"
+                />
+            </div>
+
+            {transborda && (
+                <button
+                    ref={botaoRef}
+                    type="button"
+                    aria-expanded={expandido}
+                    onClick={() => {
+                        const fechando = expandido;
+                        setExpandido(!expandido);
+                        // Ao recolher, o botão sobe centenas de pixels e a
+                        // pessoa perde a referência do que estava lendo.
+                        if (fechando) {
+                            requestAnimationFrame(() =>
+                                botaoRef.current?.scrollIntoView({ block: "nearest" }),
+                            );
+                        }
+                    }}
+                    className="mt-0.5 flex min-h-[24px] items-center gap-1 rounded px-1.5 py-1 text-[9px] font-semibold text-brand-500 dark:text-brand-400 hover:bg-black/5 dark:hover:bg-white/5"
+                >
+                    <ChevronDown
+                        className={cn("h-2.5 w-2.5 shrink-0 transition-transform", expandido && "rotate-180")}
+                    />
+                    {expandido ? "Mostrar menos" : "Mostrar mensagem inteira"}
+                </button>
+            )}
+        </>
+    );
+}
+
 function MensagemDaThread({ msg }: { msg: EmailThreadMessage }) {
     const [mostrarCitacao, setMostrarCitacao] = useState(false);
     const enviada = msg.direcao === "enviado";
 
     // O corpo recebido vem de fora — é a escola que escreve. Só texto: HTML de
     // terceiro renderizado no painel abriria uma porta de XSS.
-    const { principal, citacao } = (() => {
-        if (enviada) return { principal: "", citacao: "" };
-        const texto = msg.bodyText?.trim() || "";
+    const { principal, citacao } = useMemo(() => {
+        const corpo = msg.bodyText?.trim() || "";
+        if (enviada) return { principal: corpo, citacao: "" };
+
         // Rede de segurança pras respostas ingeridas antes do corte existir.
-        return separarCitacao(texto);
-    })();
+        const limpo = separarCitacao(corpo);
+
+        // O histórico citado sai do corpo ORIGINAL: depois do corte na
+        // ingestão, body_text já não o contém.
+        const completo = msg.bodyTextFull?.trim() || "";
+        if (!completo) return { principal: limpo.principal, citacao: limpo.citacao };
+
+        let citacao = separarCitacao(completo).citacao;
+
+        // Sobrou texto no original que nenhum marcador reconheceu: mostrar o
+        // excedente é melhor do que escondê-lo sem que ninguém saiba.
+        if (!citacao && completo.length > limpo.principal.length + 20) {
+            citacao = completo.slice(limpo.principal.length).trim();
+        }
+
+        return { principal: limpo.principal, citacao };
+    }, [enviada, msg.bodyText, msg.bodyTextFull]);
 
     return (
         <div
@@ -293,10 +392,7 @@ function MensagemDaThread({ msg }: { msg: EmailThreadMessage }) {
                 </span>
             </div>
 
-            <TextoComLinks
-                texto={(enviada ? msg.bodyText : principal) || "(sem conteúdo)"}
-                className="mt-0.5 text-[11px] leading-snug text-[#191918] dark:text-[#cbd5e1]"
-            />
+            <CorpoRecolhivel texto={principal || "(sem conteúdo)"} />
 
             {/* Estado do envio como nota de rodapé, e não no lugar do texto:
                 antes o corpo do que a equipe mandou nem aparecia, e a conversa
@@ -311,20 +407,24 @@ function MensagemDaThread({ msg }: { msg: EmailThreadMessage }) {
                 </p>
             )}
 
-            {!enviada && (citacao || msg.bodyTextFull) && (
+            {/* "histórico citado", e não "mensagem completa": na mesma bolha há
+                outro controle, o do corpo longo. Com rótulos parecidos ninguém
+                saberia qual faz o quê. */}
+            {!enviada && citacao && (
                 <>
                     <button
                         type="button"
                         onClick={() => setMostrarCitacao((v) => !v)}
-                        className="mt-1 flex items-center gap-1 rounded px-1 py-0.5 text-[9px] font-semibold text-[#6366F1] dark:text-[#94a3b8] hover:bg-black/5 dark:hover:bg-white/5"
+                        aria-expanded={mostrarCitacao}
+                        className="mt-1 flex min-h-[24px] items-center gap-1 rounded px-1.5 py-1 text-[9px] font-semibold text-[#6366F1] dark:text-[#94a3b8] hover:bg-black/5 dark:hover:bg-white/5"
                     >
-                        <Quote className="h-2.5 w-2.5" />
-                        {mostrarCitacao ? "Ocultar" : "Ver"} mensagem completa
+                        <Quote className="h-2.5 w-2.5 shrink-0" />
+                        {mostrarCitacao ? "Ocultar" : "Ver"} histórico citado
                     </button>
                     {mostrarCitacao && (
                         <div className="mt-1 max-h-40 overflow-y-auto border-l-2 border-[#C7D2FE] dark:border-[#3d4a60] pl-2">
                             <TextoComLinks
-                                texto={msg.bodyTextFull || citacao}
+                                texto={citacao}
                                 className="text-[10px] leading-snug text-[#9B9A97] dark:text-[#64748b]"
                             />
                         </div>
