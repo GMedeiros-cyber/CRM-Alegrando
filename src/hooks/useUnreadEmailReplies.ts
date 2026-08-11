@@ -1,16 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
 import { countUnreadEmailReplies } from "@/lib/actions/emails";
+
+/**
+ * De quanto em quanto tempo o contador se refaz.
+ *
+ * Um minuto porque o worker que traz as respostas roda de 5 em 5 minutos —
+ * esse é o piso real de frescor do dado, e recontar mais rápido não mostraria
+ * nada mais novo.
+ */
+const INTERVALO_MS = 60_000;
 
 /**
  * Quantas respostas de e-mail ainda não foram lidas.
  *
- * Recontar no servidor a cada evento — em vez de somar/subtrair no cliente —
- * é de propósito: a contagem é `head: true` (só o cabeçalho, sem linhas) e o
- * volume de respostas é baixo, então o custo é irrisório perto de manter um
- * contador que dessincroniza quando duas abas marcam a mesma como lida.
+ * Não usa Realtime de propósito. O navegador fala com o Supabase pela chave
+ * anon, e `email_replies` só libera leitura pra `authenticated` (a sessão é do
+ * Clerk, não do Supabase) — então o Postgres filtra o evento antes de mandar e
+ * a assinatura nunca dispara. Abrir a tabela pro `anon` faria o Realtime
+ * funcionar e exporia o conteúdo de todos os e-mails, porque essa chave vai no
+ * pacote que o navegador baixa.
+ *
+ * A contagem é `head: true` (só o cabeçalho, sem trazer linha), então repetir
+ * de minuto em minuto custa praticamente nada.
  */
 export function useUnreadEmailReplies(): number {
     const [count, setCount] = useState(0);
@@ -27,16 +40,19 @@ export function useUnreadEmailReplies(): number {
     useEffect(() => { refresh(); }, [refresh]);
 
     useEffect(() => {
-        const channel = supabase
-            .channel("email-replies-badge")
-            .on(
-                "postgres_changes",
-                { event: "*", schema: "public", table: "email_replies" },
-                () => refresh(),
-            )
-            .subscribe();
+        const timer = setInterval(() => {
+            if (document.visibilityState === "visible") refresh();
+        }, INTERVALO_MS);
 
-        return () => { void supabase.removeChannel(channel); };
+        const aoVoltar = () => {
+            if (document.visibilityState === "visible") refresh();
+        };
+        document.addEventListener("visibilitychange", aoVoltar);
+
+        return () => {
+            clearInterval(timer);
+            document.removeEventListener("visibilitychange", aoVoltar);
+        };
     }, [refresh]);
 
     return count;

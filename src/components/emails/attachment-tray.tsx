@@ -47,6 +47,11 @@ export interface AttachmentTrayProps {
     /** Arquivos ainda subindo, pra aparecerem antes de existir URL. */
     uploading: { id: string; name: string; size: number }[];
     onRemove: (url: string) => void;
+    /**
+     * Anexo já enviado ou recebido: sem remover e sem o "X de 25 MB".
+     * O teto só faz sentido enquanto se está montando a mensagem.
+     */
+    somenteLeitura?: boolean;
 }
 
 /**
@@ -90,7 +95,12 @@ function Lightbox({
  * aparece como miniatura de verdade, o resto ganha ícone por tipo. Só é
  * renderizada quando há algo — não ocupa espaço à toa.
  */
-export function AttachmentTray({ attachments, uploading, onRemove }: AttachmentTrayProps) {
+export function AttachmentTray({
+    attachments,
+    uploading,
+    onRemove,
+    somenteLeitura = false,
+}: AttachmentTrayProps) {
     const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
 
     if (attachments.length === 0 && uploading.length === 0) return null;
@@ -101,7 +111,12 @@ export function AttachmentTray({ attachments, uploading, onRemove }: AttachmentT
     const perto = total >= WARN_BYTES;
 
     return (
-        <div className="border-t border-border bg-muted/25 px-3 py-2.5">
+        <div
+            className={cn(
+                "px-3 py-2.5",
+                somenteLeitura ? "" : "border-t border-border bg-muted/25",
+            )}
+        >
             {/* Teto com rolagem: sem isto, muito anexo empurra a barra de
                 formatação pra fora da área visível do modal. */}
             <div className="flex flex-wrap gap-2 max-h-[132px] overflow-y-auto">
@@ -112,7 +127,7 @@ export function AttachmentTray({ attachments, uploading, onRemove }: AttachmentT
                         tamanho={anexo.size}
                         mimeType={anexo.mimeType}
                         url={anexo.url}
-                        onRemove={() => onRemove(anexo.url)}
+                        onRemove={somenteLeitura ? undefined : () => onRemove(anexo.url)}
                         onPreview={() => setPreview({ url: anexo.url, name: anexo.filename })}
                     />
                 ))}
@@ -127,18 +142,20 @@ export function AttachmentTray({ attachments, uploading, onRemove }: AttachmentT
                 ))}
             </div>
 
-            <div className="mt-2 flex items-center gap-1.5 text-[11px]">
-                <span className={cn(perto ? "font-semibold text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
-                    {formatarBytes(total)} de {formatarBytes(MAX_TOTAL_BYTES)}
-                </span>
-                {perto && (
-                    <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                        <AlertTriangle className="w-3 h-3 shrink-0" />
-                        anexos grandes podem ser recusados pelo Gmail: a codificação do
-                        e-mail aumenta o tamanho em cerca de um terço
+            {!somenteLeitura && (
+                <div className="mt-2 flex items-center gap-1.5 text-[11px]">
+                    <span className={cn(perto ? "font-semibold text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
+                        {formatarBytes(total)} de {formatarBytes(MAX_TOTAL_BYTES)}
                     </span>
-                )}
-            </div>
+                    {perto && (
+                        <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                            <AlertTriangle className="w-3 h-3 shrink-0" />
+                            anexos grandes podem ser recusados pelo Gmail: a codificação do
+                            e-mail aumenta o tamanho em cerca de um terço
+                        </span>
+                    )}
+                </div>
+            )}
 
             <Lightbox preview={preview} onClose={() => setPreview(null)} />
         </div>

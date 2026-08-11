@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth";
 import { z } from "zod";
 import { getSetting } from "@/lib/actions/settings";
+import { listLeadsWithUnreadEmail } from "@/lib/actions/emails";
 import { applyPlaceholders } from "@/lib/settings_helper";
 import type { LabelColor, LeadLabel } from "@/lib/types/labels";
 
@@ -93,6 +94,8 @@ export type ClienteListItem = {
     fotoUrl: string | null;
     canal: string;
     labels: LeadLabel[];
+    /** Respostas de e-mail não lidas — badge separado do WhatsApp. */
+    emailUnreadCount: number;
 };
 
 /** Detalhe completo do cliente selecionado */
@@ -227,26 +230,143 @@ export async function listClientes(params?: {
 
     const total = rows.length > 0 ? Number(rows[0].total_count || 0) : 0;
 
-    const mapped: ClienteListItem[] = rows.map(r => ({
-        telefone: String(r.telefone),
-        nome: r.nome,
-        email: r.email,
-        status: r.status,
-        statusAtendimento: r.status_atendimento,
-        iaAtiva: r.ia_ativa ?? true,
-        unreadCount: Number(r.unread_count || 0),
-        lastMessageAt: r.last_message_at ? new Date(r.last_message_at) : null,
-        createdAt: r.created_at ? new Date(r.created_at) : null,
-        fotoUrl: r.foto_url || null,
-        canal: r.canal || "alegrando",
-        labels: (r.labels || []).map(l => ({
-            id: l.id,
-            name: l.name,
-            color: l.color as LabelColor,
-        })),
-    }));
+    type LinhaRpc = (typeof rows)[number];
 
-    return { data: mapped, total };
+    const naoLidas = await naoLidasPorLead();
+    const chave = (telefone: string, canal: string) => `${telefone}|${canal}`;
+
+    const mapear = (r: LinhaRpc): ClienteListItem => {
+        const telefone = String(r.telefone);
+        const canalLead = r.canal || "alegrando";
+        return {
+            telefone,
+            nome: r.nome,
+            email: r.email,
+            status: r.status,
+            statusAtendimento: r.status_atendimento,
+            iaAtiva: r.ia_ativa ?? true,
+            unreadCount: Number(r.unread_count || 0),
+            lastMessageAt: r.last_message_at ? new Date(r.last_message_at) : null,
+            createdAt: r.created_at ? new Date(r.created_at) : null,
+            fotoUrl: r.foto_url || null,
+            canal: canalLead,
+            labels: (r.labels || []).map(l => ({
+                id: l.id,
+                name: l.name,
+                color: l.color as LabelColor,
+            })),
+            emailUnreadCount: naoLidas.get(chave(telefone, canalLead))?.count ?? 0,
+        };
+    };
+
+    const mapped = rows.map(mapear);
+
+    // Sem resposta pendente, ou com o usuário filtrando de propósito, a lista
+    // fica exatamente como sempre foi.
+    const podeIcar = naoLidas.size > 0 && page === 1 && !search && !labelIds;
+    if (!podeIcar) return { data: mapped, total };
+
+    const icados = await icarLeadsComEmail({
+        supabase,
+        naoLidas,
+        canal,
+        jaNaPagina: new Set(mapped.map((c) => chave(c.telefone, c.canal))),
+        mapear,
+    });
+
+    if (icados.length === 0) return { data: mapped, total };
+
+    // Quem respondeu por e-mail vai pro topo, do mais recente pro mais antigo.
+    icados.sort((a, b) => {
+        const ra = naoLidas.get(chave(a.telefone, a.canal))?.lastReplyAt ?? "";
+        const rb = naoLidas.get(chave(b.telefone, b.canal))?.lastReplyAt ?? "";
+        return rb.localeCompare(ra);
+    });
+
+    const içadosChaves = new Set(icados.map((c) => chave(c.telefone, c.canal)));
+    return {
+        data: [...icados, ...mapped.filter((c) => !içadosChaves.has(chave(c.telefone, c.canal)))],
+        total,
+    };
+}
+
+/** Teto de leads içados por resposta de e-mail numa página. */
+const MAX_ICADOS = 10;
+
+/** Respostas de e-mail não lidas, indexadas por telefone|canal. */
+async function naoLidasPorLead(): Promise<
+    Map<string, { count: number; lastReplyAt: string }>
+> {
+    try {
+        const linhas = await listLeadsWithUnreadEmail();
+        return new Map(
+            linhas.map((l) => [
+                `${l.telefone}|${l.canal}`,
+                { count: l.count, lastReplyAt: l.lastReplyAt },
+            ]),
+        );
+    } catch (err) {
+        // A lista de conversas é o coração do CRM: se o e-mail falhar, ela
+        // continua abrindo sem o badge.
+        console.error("[naoLidasPorLead]", err);
+        return new Map();
+    }
+}
+
+/**
+ * Leads com resposta de e-mail não lida que NÃO vieram na página atual.
+ *
+ * Busca cada um pela própria RPC, e não por uma consulta paralela, pra que
+ * tag, contador de WhatsApp e data da última mensagem venham calculados
+ * exatamente do mesmo jeito — replicar isso aqui seria duas verdades sobre a
+ * mesma linha.
+ */
+async function icarLeadsComEmail<T>({
+    supabase,
+    naoLidas,
+    canal,
+    jaNaPagina,
+    mapear,
+}: {
+    supabase: ReturnType<typeof createServerSupabaseClient>;
+    naoLidas: Map<string, { count: number; lastReplyAt: string }>;
+    canal: string | null;
+    jaNaPagina: Set<string>;
+    mapear: (linha: T) => ClienteListItem;
+}): Promise<ClienteListItem[]> {
+    const faltantes = [...naoLidas.entries()]
+        .filter(([k]) => !jaNaPagina.has(k))
+        .sort((a, b) => b[1].lastReplyAt.localeCompare(a[1].lastReplyAt))
+        .slice(0, MAX_ICADOS);
+
+    if (faltantes.length === 0) return [];
+
+    const buscas = await Promise.all(
+        faltantes.map(async ([k]) => {
+            const [telefone, canalLead] = k.split("|");
+            if (canal && canalLead !== canal) return null;
+
+            const { data, error } = await supabase.rpc("list_clientes_by_last_msg", {
+                p_canal: canalLead,
+                p_search: telefone,
+                p_offset: 0,
+                p_limit: 5,
+                p_label_ids: null,
+            });
+            if (error) {
+                console.error("[icarLeadsComEmail]", error.message);
+                return null;
+            }
+            // p_search é ILIKE '%...%': pode trazer vizinho, então confere o
+            // telefone exato antes de aceitar.
+            const linha = ((data || []) as T[]).find(
+                (r) => String((r as { telefone: unknown }).telefone) === telefone,
+            );
+            return linha ? mapear(linha) : null;
+        }),
+    );
+
+    return buscas.filter((c): c is ClienteListItem => c !== null);
 }
 
 /**

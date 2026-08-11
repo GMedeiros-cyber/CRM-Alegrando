@@ -70,27 +70,69 @@ export type EmailReplyRecord = {
     fromName: string | null;
     subject: string | null;
     snippet: string | null;
+    /** Só o que a pessoa escreveu — a citação é cortada na ingestão. */
     bodyText: string | null;
+    /** O corpo original inteiro, com o histórico citado. */
+    bodyTextFull: string | null;
     bodyHtml: string | null;
     receivedAt: string;
     /** Nulo = não lida. É o que alimenta o badge do menu. */
     readAt: string | null;
+    attachments: EmailAttachment[];
 };
 
-/** Uma linha de `email_sends` (histórico no painel do lead). */
-export type EmailSendRecord = {
+/**
+ * Uma mensagem dentro de uma conversa — nossa ou da escola.
+ *
+ * Os dois lados moram no mesmo tipo porque na tela eles são lidos em
+ * sequência: separar em duas listas era justamente o que fazia o envio e a
+ * resposta parecerem dois e-mails soltos.
+ */
+export type EmailThreadMessage = {
     id: string;
-    recipientEmail: string;
+    direcao: "enviado" | "recebido";
+    /** Quem aparece no cabeçalho da mensagem. */
+    autor: string;
+    at: string;
+    /** Enviados guardam o HTML que nós mesmos montamos. */
+    bodyHtml: string | null;
+    /** Recebidos são sempre texto — HTML de terceiro não é renderizado. */
+    bodyText: string | null;
+    bodyTextFull: string | null;
+    attachments: EmailAttachment[];
+    /** Só em enviados. */
+    status: EmailSendStatus | null;
+    error: string | null;
+    /** Só em recebidos: nulo = não lida. */
+    readAt: string | null;
+    /** Só em recebidos: aviso de não entrega do mailer-daemon. */
+    devolucao: boolean;
+};
+
+/**
+ * Uma conversa de e-mail no painel do lead.
+ *
+ * Agrupa pela thread do Gmail, então o e-mail que saiu, a resposta da escola e
+ * a nossa réplica são UM item — e não três linhas soltas na lista.
+ */
+export type EmailConversation = {
+    /** Id do envio raiz da thread. */
+    id: string;
     subject: string;
+    recipientEmail: string;
+    /** Última movimentação: é por ela que a lista é ordenada. */
+    lastActivityAt: string;
+    unreadCount: number;
+    /** Status do envio mais recente nosso (fila, falha, programado). */
     status: EmailSendStatus;
     error: string | null;
-    origem: string | null;
-    createdAt: string;
-    sentAt: string | null;
     scheduledFor: string | null;
-    attachments: EmailAttachment[];
-    /** Respostas recebidas nesta conversa, da mais antiga pra mais nova. */
-    replies: EmailReplyRecord[];
+    messages: EmailThreadMessage[];
+    /**
+     * Resposta recebida mais recente — é a ela que o campo inline responde.
+     * Nulo quando a escola ainda não respondeu: aí não há o que responder.
+     */
+    replyTargetId: string | null;
 };
 
 /** Lead alcançável por e-mail, usado na lista do disparo por tag. */

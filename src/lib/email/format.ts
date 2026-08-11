@@ -70,25 +70,59 @@ export function htmlParaTexto(html: string): string {
 }
 
 /**
+ * Marcadores do começo do histórico citado, aplicados sobre o texto inteiro.
+ *
+ * O primeiro aceita a linha de atribuição QUEBRADA. O Gmail enrola o corpo em
+ * 78 colunas, então na prática ela chega assim:
+ *
+ *   Em ter., 11 de ago. de 2026 às 00:01, Silvana Gomes Moura <
+ *   contato@alegrando.com.br> escreveu:
+ *
+ * Procurar "escreveu:" no fim da MESMA linha que começa com "Em" não acha
+ * nada aí — era por isso que a atribuição sobrevivia ao corte e o histórico
+ * do lead virava um paredão.
+ */
+const MARCADORES_CITACAO: RegExp[] = [
+    /^[ \t]*(?:Em|On)\b[\s\S]{0,400}?\b(?:escreveu|wrote):[ \t]*\r?$/m,
+    /^[ \t]*-{2,}\s*(?:Mensagem original|Mensagem encaminhada|Original Message|Forwarded message)/im,
+    /^[ \t]*>/m,
+];
+
+/**
  * Separa o que a pessoa escreveu do histórico citado abaixo.
  *
- * Toda resposta de e-mail arrasta a conversa inteira colada no fim. Sem essa
- * separação, ler uma resposta de duas linhas exige rolar por tudo que já foi
- * dito. Conservador de propósito: sem marcador reconhecido, nada é escondido.
+ * Toda resposta arrasta a conversa inteira colada no fim, e isso piora a cada
+ * troca: na terceira resposta o corpo carrega as duas anteriores aninhadas.
+ *
+ * Conservador de propósito: sem marcador reconhecido — ou com marcador logo no
+ * caractere zero, que deixaria a resposta vazia — devolve o texto inteiro.
+ * Citação a mais é bem menos ruim que resposta sumida.
  */
 export function separarCitacao(texto: string): { principal: string; citacao: string } {
-    const linhas = texto.split("\n");
+    let corte = -1;
+    for (const marcador of MARCADORES_CITACAO) {
+        const achado = marcador.exec(texto);
+        if (achado && (corte === -1 || achado.index < corte)) corte = achado.index;
+    }
 
-    // "Em 10 de ago. de 2026 ... escreveu:" / "On ... wrote:" / "> ..."
-    const marcador = /^\s*(?:>|(?:Em|On)\s.+\s(?:escreveu|wrote):\s*$|-{2,}\s*Mensagem (?:original|encaminhada))/i;
-
-    const corte = linhas.findIndex((linha) => marcador.test(linha));
-    if (corte <= 0) return { principal: texto, citacao: "" };
+    if (corte <= 0) return { principal: texto.trim(), citacao: "" };
 
     return {
-        principal: linhas.slice(0, corte).join("\n").trim(),
-        citacao: linhas.slice(corte).join("\n").trim(),
+        principal: texto.slice(0, corte).trim(),
+        citacao: texto.slice(corte).trim(),
     };
+}
+
+/**
+ * Corta o bloco citado do HTML antes de virar texto.
+ *
+ * É o caminho mais confiável quando o e-mail veio em HTML: o Gmail marca a
+ * citação com `gmail_quote`, então não há adivinhação de marcador nenhuma.
+ */
+export function removerCitacaoHtml(html: string): string {
+    const marcador = /<(?:div|blockquote)[^>]*class="[^"]*gmail_quote/i;
+    const achado = marcador.exec(html);
+    return achado && achado.index > 0 ? html.slice(0, achado.index) : html;
 }
 
 /** As colunas de e-mail de `Clientes _WhatsApp`, como vêm do Supabase. */

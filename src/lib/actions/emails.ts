@@ -10,10 +10,11 @@ import { presignedPutUrl, r2PublicUrl } from "@/lib/whatsapp/r2-client";
 import { MAX_TOTAL_BYTES } from "@/lib/email/attachments";
 import type {
     EmailAttachment,
+    EmailConversation,
     EmailFieldKey,
     EmailReplyRecord,
-    EmailSendRecord,
     EmailSendStatus,
+    EmailThreadMessage,
     LeadEmailRow,
     SendEmailResult,
 } from "@/lib/types/email";
@@ -127,7 +128,15 @@ export async function listLeadsByLabels(labelIds: string[]): Promise<LeadEmailRo
 }
 
 const REPLY_COLUMNS =
+    "id, from_email, from_name, subject, snippet, body_text, body_text_full, body_html, received_at, read_at, attachments";
+
+/** Sem a migração de anexo/corpo completo ainda aplicada. */
+const REPLY_COLUMNS_MINIMO =
     "id, from_email, from_name, subject, snippet, body_text, body_html, received_at, read_at";
+
+function anexosDe(valor: unknown): EmailAttachment[] {
+    return Array.isArray(valor) ? (valor as EmailAttachment[]) : [];
+}
 
 function mapReply(r: Record<string, unknown>): EmailReplyRecord {
     return {
@@ -137,24 +146,45 @@ function mapReply(r: Record<string, unknown>): EmailReplyRecord {
         subject: (r.subject as string) ?? null,
         snippet: (r.snippet as string) ?? null,
         bodyText: (r.body_text as string) ?? null,
+        bodyTextFull: (r.body_text_full as string) ?? null,
         bodyHtml: (r.body_html as string) ?? null,
         receivedAt: String(r.received_at ?? ""),
         readAt: (r.read_at as string) ?? null,
+        attachments: anexosDe(r.attachments),
     };
 }
 
-/** Histórico de e-mails de um lead, já com as respostas de cada conversa. */
-export async function listLeadEmailSends(
+/** É aviso de não entrega, e não alguém escrevendo de volta? */
+function ehDevolucao(fromEmail: string, subject: string | null): boolean {
+    const de = fromEmail.toLowerCase();
+    return (
+        de.startsWith("mailer-daemon@") ||
+        de.startsWith("postmaster@") ||
+        /delivery status notification|undeliverable|returned mail/i.test(subject || "")
+    );
+}
+
+/**
+ * Conversas de e-mail de um lead.
+ *
+ * Agrupa por thread do Gmail: o e-mail que saiu, a resposta da escola e a
+ * nossa réplica pertencem à MESMA conversa. Antes cada um virava uma linha na
+ * lista, e a tela dava a impressão de três e-mails soltos.
+ *
+ * Envio que ainda não tem thread (na fila, programado, falhou) vira uma
+ * conversa de uma mensagem só, chaveada pelo próprio id.
+ */
+export async function listLeadEmailConversations(
     telefone: string,
     canal: string = "alegrando",
-): Promise<EmailSendRecord[]> {
+): Promise<EmailConversation[]> {
     await requireAuth();
     const leadId = await resolveLeadUuid(telefone, canal);
     if (!leadId) return [];
 
     const supabase = createServerSupabaseClient();
     const BASE_COLUMNS =
-        "id, recipient_email, subject, status, error, origem, created_at, sent_at";
+        "id, recipient_email, subject, status, error, origem, created_at, sent_at, gmail_thread_id";
     const COM_EXTRAS = `${BASE_COLUMNS}, scheduled_for, attachments`;
 
     async function query(columns: string, comRespostas: boolean) {
@@ -163,32 +193,34 @@ export async function listLeadEmailSends(
             .select(columns)
             .eq("lead_id", leadId)
             .order("created_at", { ascending: false })
-            .limit(20);
-        // Da mais antiga pra mais nova: a conversa se lê de cima pra baixo.
+            .limit(40);
         return comRespostas
             ? q.order("received_at", { referencedTable: "email_replies", ascending: true })
             : q;
     }
 
-    // PGRST200 = relacionamento inexistente, 42P01 = tabela, 42703 = coluna.
-    // Só esses três: cair de nível por erro de rede esconderia a falha como
-    // "esse lead não tem resposta", que é pior do que a lista vazia honesta.
+    // PGRST200 = relacionamento inexistente, 42P01 = tabela, 42703 = coluna,
+    // PGRST204 = coluna desconhecida no select. Só esses: cair de nível por
+    // erro de rede esconderia a falha como "esse lead não tem resposta".
     const semEstrutura = (code?: string) =>
-        code === "PGRST200" || code === "42P01" || code === "42703";
+        code === "PGRST200" || code === "PGRST204" || code === "42P01" || code === "42703";
 
-    // Uma consulta só traz envio + respostas (embed do PostgREST). As quedas
-    // sucessivas cobrem o CRM subir antes de uma migração: sem a tabela de
-    // respostas ainda funciona, sem anexo/agendamento também.
     let { data, error } = await query(`${COM_EXTRAS}, email_replies(${REPLY_COLUMNS})`, true);
+    if (semEstrutura(error?.code)) {
+        ({ data, error } = await query(
+            `${COM_EXTRAS}, email_replies(${REPLY_COLUMNS_MINIMO})`,
+            true,
+        ));
+    }
     if (semEstrutura(error?.code)) ({ data, error } = await query(COM_EXTRAS, false));
     if (semEstrutura(error?.code)) ({ data, error } = await query(BASE_COLUMNS, false));
 
     if (error) {
-        console.error("[listLeadEmailSends]", error.message);
+        console.error("[listLeadEmailConversations]", error.message);
         return [];
     }
 
-    return ((data || []) as unknown as Record<string, unknown>[]).map((r) => ({
+    const linhas = ((data || []) as unknown as Record<string, unknown>[]).map((r) => ({
         id: String(r.id),
         recipientEmail: String(r.recipient_email ?? ""),
         subject: String(r.subject ?? ""),
@@ -198,11 +230,89 @@ export async function listLeadEmailSends(
         createdAt: String(r.created_at ?? ""),
         sentAt: (r.sent_at as string) ?? null,
         scheduledFor: (r.scheduled_for as string) ?? null,
-        attachments: Array.isArray(r.attachments) ? (r.attachments as EmailAttachment[]) : [],
+        threadId: (r.gmail_thread_id as string) ?? null,
+        attachments: anexosDe(r.attachments),
         replies: Array.isArray(r.email_replies)
             ? (r.email_replies as Record<string, unknown>[]).map(mapReply)
             : [],
     }));
+
+    // Sem thread ainda, a chave é o próprio id: um envio na fila não pode ser
+    // fundido com outro só porque os dois têm thread nula.
+    const grupos = new Map<string, typeof linhas>();
+    for (const linha of linhas) {
+        const chave = linha.threadId || `send:${linha.id}`;
+        const atual = grupos.get(chave) || [];
+        atual.push(linha);
+        grupos.set(chave, atual);
+    }
+
+    const conversas: EmailConversation[] = [];
+
+    for (const grupo of grupos.values()) {
+        // Do mais antigo pro mais novo: a raiz da conversa é o primeiro envio.
+        grupo.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        const raiz = grupo[0];
+        const ultimoEnvio = grupo[grupo.length - 1];
+
+        const messages: EmailThreadMessage[] = [];
+
+        for (const envio of grupo) {
+            messages.push({
+                id: envio.id,
+                direcao: "enviado",
+                autor: "Alegrando",
+                at: envio.sentAt || envio.scheduledFor || envio.createdAt,
+                bodyHtml: null,
+                bodyText: null,
+                bodyTextFull: null,
+                attachments: envio.attachments,
+                status: envio.status,
+                error: envio.error,
+                readAt: null,
+                devolucao: false,
+            });
+
+            for (const resposta of envio.replies) {
+                messages.push({
+                    id: resposta.id,
+                    direcao: "recebido",
+                    autor: resposta.fromName || resposta.fromEmail,
+                    at: resposta.receivedAt,
+                    bodyHtml: null,
+                    bodyText: resposta.bodyText ?? resposta.snippet,
+                    bodyTextFull: resposta.bodyTextFull,
+                    attachments: resposta.attachments,
+                    status: null,
+                    error: null,
+                    readAt: resposta.readAt,
+                    devolucao: ehDevolucao(resposta.fromEmail, resposta.subject),
+                });
+            }
+        }
+
+        messages.sort((a, b) => a.at.localeCompare(b.at));
+
+        const recebidas = messages.filter((m) => m.direcao === "recebido");
+        const ultimaRecebidaReal = [...recebidas].reverse().find((m) => !m.devolucao);
+
+        conversas.push({
+            id: raiz.id,
+            subject: raiz.subject,
+            recipientEmail: raiz.recipientEmail,
+            lastActivityAt: messages[messages.length - 1]?.at || raiz.createdAt,
+            unreadCount: recebidas.filter((m) => m.readAt === null).length,
+            status: ultimoEnvio.status,
+            error: ultimoEnvio.error,
+            scheduledFor: ultimoEnvio.scheduledFor,
+            messages,
+            replyTargetId: ultimaRecebidaReal?.id ?? null,
+        });
+    }
+
+    // Resposta nova sobe a conversa.
+    conversas.sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt));
+    return conversas.slice(0, 20);
 }
 
 /**
@@ -212,20 +322,21 @@ export async function listLeadEmailSends(
  * mexer em nada, então abrir a mesma resposta duas vezes não reescreve a data
  * da primeira leitura.
  */
-export async function markEmailReplyRead(
-    replyId: string,
+export async function markEmailRepliesRead(
+    replyIds: string[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
     await requireAuth();
+    if (replyIds.length === 0) return { ok: true };
     const supabase = createServerSupabaseClient();
 
     const { error } = await supabase
         .from("email_replies")
         .update({ read_at: new Date().toISOString() })
-        .eq("id", replyId)
+        .in("id", replyIds)
         .is("read_at", null);
 
     if (error) {
-        console.error("[markEmailReplyRead]", error.message);
+        console.error("[markEmailRepliesRead]", error.message);
         return { ok: false, error: "Não foi possível marcar como lida." };
     }
     return { ok: true };
@@ -235,8 +346,7 @@ export async function markEmailReplyRead(
  * Quantas respostas ainda não foram lidas — alimenta o badge do menu.
  *
  * `head: true` faz o PostgREST devolver só a contagem no cabeçalho, sem
- * trazer linha nenhuma: o badge é recontado a cada evento de Realtime e não
- * pode custar caro.
+ * trazer linha nenhuma.
  */
 export async function countUnreadEmailReplies(): Promise<number> {
     await requireAuth();
@@ -254,6 +364,83 @@ export async function countUnreadEmailReplies(): Promise<number> {
     return count ?? 0;
 }
 
+/** Resposta não lida agregada por lead, pra lista de Conversas. */
+export type LeadEmailUnread = {
+    telefone: string;
+    canal: string;
+    count: number;
+    /** Data da resposta mais recente — entra no critério de ordenação. */
+    lastReplyAt: string;
+};
+
+/**
+ * Leads com resposta de e-mail não lida.
+ *
+ * Traz TODOS, não só os da página atual: é isso que permite içar pro topo um
+ * lead cuja última atividade foi um e-mail, e que por WhatsApp estaria
+ * enterrado na página 4. O volume é naturalmente pequeno — são respostas
+ * pendentes de leitura, não histórico.
+ */
+export async function listLeadsWithUnreadEmail(): Promise<LeadEmailUnread[]> {
+    await requireAuth();
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+        .from("email_replies")
+        .select("lead_id, received_at")
+        .is("read_at", null)
+        .not("lead_id", "is", null)
+        .order("received_at", { ascending: false })
+        .limit(500);
+
+    if (error) {
+        console.error("[listLeadsWithUnreadEmail]", error.message);
+        return [];
+    }
+
+    const porLead = new Map<string, { count: number; lastReplyAt: string }>();
+    for (const linha of data || []) {
+        const id = String(linha.lead_id);
+        const atual = porLead.get(id);
+        const at = String(linha.received_at ?? "");
+        if (atual) {
+            atual.count += 1;
+            if (at > atual.lastReplyAt) atual.lastReplyAt = at;
+        } else {
+            porLead.set(id, { count: 1, lastReplyAt: at });
+        }
+    }
+
+    if (porLead.size === 0) return [];
+
+    // A lista de Conversas é chaveada por telefone+canal, não pelo uuid.
+    const saida: LeadEmailUnread[] = [];
+    for (const ids of chunk([...porLead.keys()], IN_CHUNK_SIZE)) {
+        const { data: leads, error: leadsError } = await supabase
+            .from("Clientes _WhatsApp")
+            .select("id, telefone, canal")
+            .in("id", ids);
+
+        if (leadsError) {
+            console.error("[listLeadsWithUnreadEmail] leads:", leadsError.message);
+            return [];
+        }
+
+        for (const lead of leads || []) {
+            const agregado = porLead.get(String(lead.id));
+            if (!agregado) continue;
+            saida.push({
+                telefone: String(lead.telefone ?? ""),
+                canal: lead.canal || "alegrando",
+                count: agregado.count,
+                lastReplyAt: agregado.lastReplyAt,
+            });
+        }
+    }
+
+    return saida;
+}
+
 /**
  * Apaga uma linha de `email_sends`.
  *
@@ -263,23 +450,36 @@ export async function countUnreadEmailReplies(): Promise<number> {
  * - já enviado → some só o REGISTRO no CRM. A mensagem já entregue na caixa
  *   do destinatário não é afetada — nada aqui "desenvia" e-mail.
  */
-export async function deleteEmailSend(
-    sendId: string,
+export async function deleteEmailConversation(
+    sendIds: string[],
 ): Promise<{ ok: true; eraAgendado: boolean } | { ok: false; error: string }> {
     await requireAuth();
+    if (sendIds.length === 0) return { ok: false, error: "Nada a remover." };
     const supabase = createServerSupabaseClient();
+
+    // As respostas primeiro: elas referenciam o envio por chave estrangeira,
+    // então apagar o envio antes seria recusado pelo banco.
+    const { error: repliesError } = await supabase
+        .from("email_replies")
+        .delete()
+        .in("email_send_id", sendIds);
+
+    if (repliesError && repliesError.code !== "42P01") {
+        console.error("[deleteEmailConversation] respostas:", repliesError.message);
+        return { ok: false, error: "Não foi possível remover as respostas da conversa." };
+    }
 
     const { data, error } = await supabase
         .from("email_sends")
         .delete()
-        .eq("id", sendId)
+        .in("id", sendIds)
         .select("id, status");
 
     if (error) return { ok: false, error: error.message };
     if (!data || data.length === 0) {
         return { ok: false, error: "Registro não encontrado — talvez já tenha sido removido." };
     }
-    return { ok: true, eraAgendado: data[0].status === "scheduled" };
+    return { ok: true, eraAgendado: data.some((r) => r.status === "scheduled") };
 }
 
 // =============================================================
