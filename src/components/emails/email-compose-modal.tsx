@@ -33,7 +33,6 @@ import {
 import {
     createEmailAttachmentUploadUrl,
     listLeadsByLabels,
-    replyToEmailReply,
     sendEmailToLead,
     sendEmailToLeads,
 } from "@/lib/actions/emails";
@@ -77,22 +76,12 @@ export type ComposeTagsTarget = {
 };
 
 /**
- * Resposta a uma mensagem que a escola mandou.
- *
- * Sem destinatário e sem assunto editáveis de propósito: quem monta a
- * mensagem é a operação `reply` do nó Gmail, que herda os dois da mensagem
- * respondida. Deixar os campos abertos aqui prometeria um controle que o
- * envio não tem.
+ * Este modal serve pra INICIAR um e-mail — pra um lead ou por tag. Responder
+ * dentro de uma conversa em andamento acontece inline, no item da conversa:
+ * ali o destinatário e o assunto já estão decididos, e abrir a composição
+ * inteira só afastaria a resposta do que se está lendo.
  */
-export type ComposeReplyTarget = {
-    mode: "reply";
-    replyId: string;
-    toEmail: string;
-    toName: string | null;
-    subject: string | null;
-};
-
-export type ComposeTarget = ComposeLeadTarget | ComposeTagsTarget | ComposeReplyTarget;
+export type ComposeTarget = ComposeLeadTarget | ComposeTagsTarget;
 
 export interface EmailComposeModalProps {
     open: boolean;
@@ -404,21 +393,10 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
         return Number.isNaN(iso.getTime()) ? null : iso.toISOString();
     }, [scheduleOpen, scheduleDate, scheduleTime]);
 
-    const ehResposta = target.mode === "reply";
-
-    const recipientCount =
-        target.mode === "lead"
-            ? fields.length > 0
-                ? 1
-                : 0
-            : ehResposta
-              ? 1
-              : selectedIds.length;
-
+    const recipientCount = target.mode === "lead" ? (fields.length > 0 ? 1 : 0) : selectedIds.length;
     const canSend =
         recipientCount > 0 &&
-        // A resposta não tem assunto próprio: ele vem da mensagem respondida.
-        (ehResposta || subject.trim().length > 0) &&
+        subject.trim().length > 0 &&
         !isEditorEmpty(body) &&
         !uploading &&
         (!scheduleOpen || Boolean(scheduledFor));
@@ -437,20 +415,14 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                           attachments,
                           scheduledFor,
                       })
-                    : target.mode === "reply"
-                      ? await replyToEmailReply({
-                            replyId: target.replyId,
-                            body,
-                            attachments,
-                        })
-                      : await sendEmailToLeads({
-                            leadIds: selectedIds,
-                            fields,
-                            subject,
-                            body,
-                            attachments,
-                            scheduledFor,
-                        });
+                    : await sendEmailToLeads({
+                          leadIds: selectedIds,
+                          fields,
+                          subject,
+                          body,
+                          attachments,
+                          scheduledFor,
+                      });
 
             if (!result.ok) {
                 setError(result.error);
@@ -466,30 +438,27 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
 
             onToast({
                 type: "success",
-                text: ehResposta
-                    ? `Resposta ${when}`
-                    : result.count === 1
-                      ? `E-mail ${when}`
-                      : `${result.count} e-mails — ${when}`,
+                text:
+                    result.count === 1
+                        ? `E-mail ${when}`
+                        : `${result.count} e-mails — ${when}`,
             });
             onSent?.();
             onOpenChange(false);
         });
     }
 
-    /** Individual e resposta vão direto; disparo em massa passa pela confirmação. */
+    /** Individual vai direto; disparo em massa passa pela confirmação. */
     function handlePrimary() {
-        if (target.mode === "tags") setView("confirm");
-        else doSend();
+        if (target.mode === "lead") doSend();
+        else setView("confirm");
     }
 
-    const sendLabel = ehResposta
-        ? "Responder"
-        : scheduleOpen
-          ? "Programar envio"
-          : target.mode === "lead"
-            ? "Enviar"
-            : `Enviar para ${recipientCount} ${recipientCount === 1 ? "lead" : "leads"}`;
+    const sendLabel = scheduleOpen
+        ? "Programar envio"
+        : target.mode === "lead"
+          ? "Enviar"
+          : `Enviar para ${recipientCount} ${recipientCount === 1 ? "lead" : "leads"}`;
 
     // ---------------------------------------------------------------- CONFIRM
     if (view === "confirm" && target.mode === "tags") {
@@ -580,17 +549,9 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
     return (
         <>
             <DialogHeader>
-                <DialogTitle>
-                    {ehResposta
-                        ? "Responder"
-                        : scheduleOpen
-                          ? "Programar e-mail"
-                          : "Enviar e-mail"}
-                </DialogTitle>
+                <DialogTitle>{scheduleOpen ? "Programar e-mail" : "Enviar e-mail"}</DialogTitle>
                 <DialogDescription>
-                    {target.mode === "reply"
-                        ? target.subject || "(sem assunto)"
-                        : target.mode === "lead"
+                    {target.mode === "lead"
                         ? target.nome || target.telefone
                         : (() => {
                               const names = target.availableLabels
@@ -608,31 +569,7 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
 
             <div className="flex flex-col gap-3 min-h-0 overflow-y-auto pr-1">
                 {/* ---- destinatários ---- */}
-                {target.mode === "reply" ? (
-                    <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Para
-                            </span>
-                            <span className="text-xs font-semibold text-foreground">
-                                {target.toName || target.toEmail}
-                            </span>
-                            {target.toName && (
-                                <span className="text-xs text-muted-foreground">
-                                    {target.toEmail}
-                                </span>
-                            )}
-                        </div>
-                        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                            Sai na mesma conversa, com o assunto{" "}
-                            <span className="font-medium text-foreground">
-                                {target.subject || "(sem assunto)"}
-                            </span>
-                            {" "}— é o que faz a escola ver tudo junto, e não como
-                            mensagens soltas.
-                        </p>
-                    </div>
-                ) : target.mode === "lead" ? (
+                {target.mode === "lead" ? (
                     leadAvailable.length === 0 ? (
                         <p className="text-sm text-muted-foreground italic">
                             Este lead não tem e-mail cadastrado.
@@ -684,20 +621,18 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                 )}
 
                 {/* ---- assunto ---- */}
-                {!ehResposta && (
-                    <input
-                        value={subject}
-                        onChange={(e) => setSubject(e.target.value)}
-                        placeholder="Assunto"
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
-                    />
-                )}
+                <input
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="Assunto"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand-500/40"
+                />
 
                 {/* ---- corpo ---- */}
                 <RichTextEditor
                     ref={editorRef}
                     onChange={setBody}
-                    placeholder={ehResposta ? "Escreva a resposta..." : "Escreva a mensagem..."}
+                    placeholder="Escreva a mensagem..."
                     onPasteFiles={(files) => void handleFiles(files)}
                     attachmentSlot={
                         <AttachmentTray
@@ -791,12 +726,7 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                         type="button"
                         onClick={handlePrimary}
                         disabled={!canSend || sending}
-                        className={cn(
-                            "flex items-center gap-2 bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 transition-colors disabled:opacity-40",
-                            // Sem o menu de agendamento ao lado, o botão precisa
-                            // fechar o canto direito também.
-                            ehResposta ? "rounded-lg" : "rounded-l-lg",
-                        )}
+                        className="flex items-center gap-2 rounded-l-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 transition-colors disabled:opacity-40"
                     >
                         {sending ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -807,16 +737,11 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                         )}
                         {sending ? "Enviando..." : sendLabel}
                     </button>
-                    {/* Resposta não agenda: o worker de agendados só sabe
-                        reenviar um envio novo, e a mensagem sairia fora da
-                        conversa. Melhor não oferecer do que oferecer quebrado. */}
-                    {!ehResposta && (
-                        <ScheduleMenu
-                            scheduling={scheduleOpen}
-                            onPickNow={() => { setScheduleOpen(false); setScheduleDate(""); }}
-                            onPickSchedule={() => setScheduleOpen(true)}
-                        />
-                    )}
+                    <ScheduleMenu
+                        scheduling={scheduleOpen}
+                        onPickNow={() => { setScheduleOpen(false); setScheduleDate(""); }}
+                        onPickSchedule={() => setScheduleOpen(true)}
+                    />
                 </div>
             </div>
 

@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import Image from "next/image";
-import { Users } from "lucide-react";
+import { Mail, Users } from "lucide-react";
 import type { ClienteListItem } from "@/lib/actions/leads";
 import { cn, isValidPhotoUrl } from "@/lib/utils";
 import { LabelBadge } from "@/components/labels/label-badge";
@@ -110,8 +110,22 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
                             {formatLastMessageTime(item.lastMessageAt)}
                         </span>
                         {item.unreadCount > 0 && (
-                            <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-[#191918] dark:text-white text-[10px] font-bold flex items-center justify-center shrink-0 animate-in zoom-in-50">
+                            <span
+                                title={`${item.unreadCount} mensagem(ns) de WhatsApp não lida(s)`}
+                                className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-[#191918] dark:text-white text-[10px] font-bold flex items-center justify-center shrink-0 animate-in zoom-in-50"
+                            >
                                 {item.unreadCount > 99 ? "99+" : item.unreadCount}
+                            </span>
+                        )}
+                        {/* Verde, e com o ícone de envelope: ao lado do contador
+                            do WhatsApp, só o número não diria de onde veio. */}
+                        {item.emailUnreadCount > 0 && (
+                            <span
+                                title={`${item.emailUnreadCount} resposta(s) de e-mail não lida(s)`}
+                                className="min-w-[18px] h-[18px] px-1 gap-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 animate-in zoom-in-50"
+                            >
+                                <Mail className="w-2.5 h-2.5" />
+                                {item.emailUnreadCount > 99 ? "99+" : item.emailUnreadCount}
                             </span>
                         )}
                     </div>
