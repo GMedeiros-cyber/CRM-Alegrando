@@ -51,6 +51,7 @@ import {
     motivoRecusa,
 } from "@/lib/email/attachments";
 import { AttachmentTray } from "./attachment-tray";
+import { Checkbox } from "@/components/ui/checkbox";
 import { isEditorEmpty } from "@/lib/email/editor";
 import { isValidEmail } from "@/lib/email/format";
 import type { Label } from "@/lib/types/labels";
@@ -578,11 +579,9 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                                         key={key}
                                         className="flex items-center gap-2 cursor-pointer"
                                     >
-                                        <input
-                                            type="checkbox"
+                                        <Checkbox
                                             checked={fields.includes(key)}
                                             onChange={() => toggleField(key)}
-                                            className="w-3.5 h-3.5 rounded accent-brand-500 cursor-pointer"
                                         />
                                         <span className="text-xs">
                                             <span className="font-semibold text-foreground">
@@ -865,11 +864,9 @@ function TagRecipients({
                 </span>
                 {EMAIL_FIELD_ORDER.map((key) => (
                     <label key={key} className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                            type="checkbox"
+                        <Checkbox
                             checked={fields.includes(key)}
                             onChange={() => toggleField(key)}
-                            className="w-3.5 h-3.5 rounded accent-brand-500 cursor-pointer"
                         />
                         <span className="text-xs text-foreground">{EMAIL_FIELD_LABELS[key]}</span>
                     </label>
@@ -936,12 +933,11 @@ function TagRecipients({
                                         : "cursor-pointer hover:bg-muted/50",
                                 )}
                             >
-                                <input
-                                    type="checkbox"
+                                <Checkbox
+                                    className="mt-0.5"
                                     checked={checked}
                                     disabled={unreachable}
                                     onChange={() => toggleLead(lead.leadId)}
-                                    className="mt-0.5 w-3.5 h-3.5 rounded accent-brand-500 disabled:cursor-not-allowed"
                                 />
                                 <div className="min-w-0 flex-1">
                                     <p
