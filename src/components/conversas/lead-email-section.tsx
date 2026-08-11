@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Loader2, Mail, RefreshCw, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase/client";
 import {
     deleteEmailConversation,
     listLeadEmailConversations,
@@ -17,19 +18,13 @@ import { EmailComposeModal } from "@/components/emails/email-compose-modal";
 import { EmailConversationItem } from "@/components/emails/email-conversation";
 
 /**
- * De quanto em quanto tempo a seção se atualiza sozinha enquanto está aberta.
+ * Rede de segurança, não o mecanismo principal.
  *
- * O ideal seria Realtime, mas ele não chega: o navegador fala com o Supabase
- * pela chave anon, e `email_replies`/`email_sends` só liberam leitura pra
- * `authenticated` — o Postgres filtra o evento antes de mandar. Abrir essas
- * tabelas pro `anon` resolveria o sintoma e vazaria o conteúdo de todos os
- * e-mails, porque essa chave vai no pacote do navegador.
- *
- * 30s não é arbitrário: o worker que traz as respostas roda de 5 em 5 minutos,
- * então esse é o piso real de frescor do dado. Puxar mais rápido que isso não
- * mostraria nada mais novo.
+ * Quem atualiza a tela é o Realtime (logo abaixo). Este intervalo cobre o caso
+ * de o socket cair sem avisar — o modo de falha do Realtime é silencioso, e uma
+ * resposta que não aparece é indistinguível de nenhuma resposta ter chegado.
  */
-const INTERVALO_ATUALIZACAO_MS = 30_000;
+const INTERVALO_ATUALIZACAO_MS = 120_000;
 
 export interface LeadEmailSectionProps {
     telefone: string;
@@ -107,6 +102,43 @@ export function LeadEmailSection({
             onToast({ type: "error", text: "Não foi possível atualizar os e-mails." }),
         ).finally(() => setAtualizando(false));
     }
+
+    /**
+     * Resposta nova aparece sozinha.
+     *
+     * O socket vai autenticado: o cliente do browser é criado com
+     * `accessToken` apontando pro token do Clerk, e o Realtime usa o mesmo
+     * token do PostgREST — então a policy de `authenticated` aprova a linha e
+     * o evento é entregue. (A lib reautentica o socket a cada heartbeat, então
+     * a rotação do token do Clerk não derruba a assinatura.)
+     *
+     * O callback REBUSCA em vez de remendar o estado local: as conversas são
+     * agrupadas por thread no servidor, e reproduzir esse agrupamento aqui a
+     * partir de uma linha solta seria uma segunda verdade sobre o mesmo dado.
+     */
+    useEffect(() => {
+        const canal_ = supabase
+            .channel(`email-lead-${telefone}-${canal}`)
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "email_replies" },
+                () => void buscar(),
+            )
+            .on(
+                "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "email_sends" },
+                () => void buscar(),
+            )
+            .subscribe((status) => {
+                // Sem isto a falha é muda: o canal morre e a tela só fica
+                // parada, sem nada que distinga isso de "não chegou resposta".
+                if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+                    console.warn(`[email] Realtime ${status} — caiu no intervalo de segurança.`);
+                }
+            });
+
+        return () => { void supabase.removeChannel(canal_); };
+    }, [telefone, canal, buscar]);
 
     /**
      * Atualização periódica + ao voltar pra aba.
