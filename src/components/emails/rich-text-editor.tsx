@@ -53,6 +53,10 @@ interface RichTextEditorProps {
     toolbarExtras?: React.ReactNode;
     /** Arquivo colado no corpo vira anexo, pelo mesmo caminho do clipe. */
     onPasteFiles?: (files: File[]) => void;
+    /** Teto do bloco inteiro — o painel do lead tem bem menos espaço. */
+    containerClassName?: string;
+    /** Altura da área de escrita. */
+    bodyClassName?: string;
 }
 
 /** Comandos com liga/desliga que a barra reflete conforme o cursor anda. */
@@ -117,7 +121,15 @@ type Selecao = ReturnType<typeof useSelecaoSalva>;
  */
 export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(
     function RichTextEditor(
-        { onChange, placeholder, toolbarExtras, onPasteFiles, attachmentSlot },
+        {
+            onChange,
+            placeholder,
+            toolbarExtras,
+            onPasteFiles,
+            attachmentSlot,
+            containerClassName = "max-h-[52vh]",
+            bodyClassName = "min-h-[96px]",
+        },
         ref,
     ) {
         const editorRef = useRef<HTMLDivElement>(null);
@@ -221,7 +233,12 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
             // Coluna flex com teto: o CORPO é quem estica e encolhe, bandeja
             // e barra ficam com altura natural. Sem isto as três áreas somam
             // livremente e, com muitos anexos, a barra era empurrada pra fora.
-            <div className="flex flex-col max-h-[52vh] rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-brand-500/40 overflow-hidden">
+            <div
+                className={cn(
+                    "flex flex-col rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-brand-500/40 overflow-hidden",
+                    containerClassName,
+                )}
+            >
                 <div className="relative flex flex-1 min-h-0 flex-col">
                     {empty && placeholder && (
                         <span className="pointer-events-none absolute left-3 top-2 text-sm text-muted-foreground">
@@ -240,7 +257,10 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
                         role="textbox"
                         aria-multiline="true"
                         aria-label="Corpo do e-mail"
-                        className="flex-1 min-h-[96px] overflow-y-auto px-3 py-2 text-sm outline-none [&_a]:text-[#1a73e8] [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6"
+                        className={cn(
+                            "flex-1 overflow-y-auto px-3 py-2 text-sm outline-none [&_a]:text-[#1a73e8] [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6",
+                            bodyClassName,
+                        )}
                         style={{
                             fontFamily: EMAIL_DEFAULT_FONT,
                             fontSize: EMAIL_DEFAULT_SIZE,

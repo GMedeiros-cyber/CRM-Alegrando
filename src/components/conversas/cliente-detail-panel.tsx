@@ -171,6 +171,8 @@ export interface ClienteDetailPanelProps {
     startSavingCliente: (fn: () => Promise<void>) => void;
     startRunningAction: (fn: () => Promise<void>) => void;
     onToast: (toast: { type: "success" | "error"; text: string }) => void;
+    /** Respostas de e-mail lidas agora — baixa o badge do card na lista. */
+    onEmailLidoLocal: (quantidade: number) => void;
 
     // Labels
     leadLabels: LeadLabel[];
@@ -229,6 +231,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
     startSavingCliente,
     startRunningAction,
     onToast,
+    onEmailLidoLocal,
     leadLabels,
     availableLabels,
     onLabelToggleLocal,
@@ -1047,6 +1050,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                     diretora_email: form.diretoraEmail,
                 }}
                 onToast={onToast}
+                onLidoLocal={onEmailLidoLocal}
             />
 
             {/* Agendamentos */}

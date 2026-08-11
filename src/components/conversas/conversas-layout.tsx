@@ -77,6 +77,8 @@ import { listLabels } from "@/lib/actions/labels";
 import type { Label, LabelColor } from "@/lib/types/labels";
 import { LabelFilterButton } from "@/components/labels/label-filter-button";
 import { EmailComposeModal } from "@/components/emails/email-compose-modal";
+import { ignorarSeForPortalDeEmail } from "@/components/emails/portal-guards";
+import { isGooglePickerOpen } from "@/components/emails/drive-picker-button";
 
 function mapRowToLabel(row: Record<string, unknown>): Label {
     return {
@@ -1460,6 +1462,27 @@ export function ConversasLayout() {
             startSavingCliente={(fn) => startSavingCliente(fn)}
             startRunningAction={(fn) => startRunningAction(fn)}
             onToast={setToast}
+            onEmailLidoLocal={(quantidade) => {
+                // Otimista, como o toggle de tag logo abaixo: a lista não é
+                // recarregada só por causa disso. Se a contagem sair de sincro
+                // (duas abas abertas, por exemplo), o próximo carregamento da
+                // lista corrige — o número vem do banco.
+                markOptimisticChange();
+                setClientesList((prev) =>
+                    prev.map((c) =>
+                        String(c.telefone) === String(selectedTelefone) &&
+                        c.canal === selectedCanal
+                            ? {
+                                  ...c,
+                                  emailUnreadCount: Math.max(
+                                      0,
+                                      c.emailUnreadCount - quantidade,
+                                  ),
+                              }
+                            : c,
+                    ),
+                );
+            }}
             focusField={searchParams.get("focus")}
             leadLabels={cliente.labels}
             availableLabels={availableLabels}
@@ -2072,7 +2095,20 @@ export function ConversasLayout() {
 
             {/* =================== MOBILE: Details Sheet =================== */}
             <Sheet open={mobileDetailsOpen} onOpenChange={setMobileDetailsOpen}>
-                <SheetContent side="right" className="w-[320px] bg-background border-border overflow-y-auto p-0 md:hidden">
+                {/* As guardas existem por causa do campo de responder e-mail que
+                    vive aqui dentro: a barra de formatação e o Google Picker são
+                    portalizados no body, e sem isto o Radix leria um clique neles
+                    como "fora" e fecharia o painel com o rascunho junto. */}
+                <SheetContent
+                    side="right"
+                    className="w-[320px] bg-background border-border overflow-y-auto p-0 md:hidden"
+                    onPointerDownOutside={ignorarSeForPortalDeEmail}
+                    onInteractOutside={ignorarSeForPortalDeEmail}
+                    onFocusOutside={ignorarSeForPortalDeEmail}
+                    onEscapeKeyDown={(e) => {
+                        if (isGooglePickerOpen()) e.preventDefault();
+                    }}
+                >
                     {detailPanelContent}
                 </SheetContent>
             </Sheet>
