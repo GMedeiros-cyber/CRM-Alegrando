@@ -77,6 +77,7 @@ import { listLabels } from "@/lib/actions/labels";
 import type { Label, LabelColor } from "@/lib/types/labels";
 import { LabelFilterButton } from "@/components/labels/label-filter-button";
 import { EmailComposeModal } from "@/components/emails/email-compose-modal";
+import { listLeadsWithUnreadEmail } from "@/lib/actions/emails";
 import { ignorarSeForPortalDeEmail } from "@/components/emails/portal-guards";
 import { isGooglePickerOpen } from "@/components/emails/drive-picker-button";
 
@@ -757,6 +758,55 @@ export function ConversasLayout() {
                 }
             )
             .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
+    /**
+     * Bolinha verde de e-mail no card, ao vivo.
+     *
+     * O contador não vem de `messages` como o do WhatsApp — é calculado no
+     * servidor a partir de `email_replies`. Então o evento do Realtime não
+     * traz o número pronto: ele serve só de aviso pra recontar. A consulta é
+     * pequena (só respostas ainda não lidas) e roda a cada evento.
+     *
+     * Recontar em vez de somar 1 no cliente também conserta o caminho de
+     * volta: quando alguém lê a resposta em outra aba, a bolinha some aqui.
+     */
+    useEffect(() => {
+        async function recontar() {
+            try {
+                const naoLidas = await listLeadsWithUnreadEmail();
+                const porLead = new Map(
+                    naoLidas.map((n) => [`${n.telefone}|${n.canal}`, n.count]),
+                );
+                setClientesList((prev) =>
+                    prev.map((c) => {
+                        const novo = porLead.get(`${c.telefone}|${c.canal}`) ?? 0;
+                        return c.emailUnreadCount === novo
+                            ? c
+                            : { ...c, emailUnreadCount: novo };
+                    }),
+                );
+            } catch {
+                // Badge é informação secundária: não vale derrubar a lista.
+            }
+        }
+
+        const channel = supabase
+            .channel("conversas-email-badge")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "email_replies" },
+                () => void recontar(),
+            )
+            .subscribe((status) => {
+                if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+                    console.warn(`[email] Realtime do badge ${status}.`);
+                }
+            });
 
         return () => {
             supabase.removeChannel(channel);
