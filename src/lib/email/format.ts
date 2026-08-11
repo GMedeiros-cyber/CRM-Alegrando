@@ -125,6 +125,91 @@ export function removerCitacaoHtml(html: string): string {
     return achado && achado.index > 0 ? html.slice(0, achado.index) : html;
 }
 
+export type SegmentoTexto =
+    | { tipo: "texto"; valor: string }
+    | { tipo: "link"; valor: string; href: string };
+
+const PADRAO_LINK =
+    /(https?:\/\/[^\s<>]+|www\.[^\s<>]+|[^\s<>@]+@[^\s<>@]+\.[a-z]{2,})/gi;
+
+/**
+ * Tira do fim da URL o que é pontuação da frase, não do endereço.
+ *
+ * "veja https://exemplo.com/doc." — o ponto é da frase. Parêntese e colchete
+ * só saem quando estão desbalanceados, porque URL de Wikipédia e de Docs
+ * legitimamente carrega os dois.
+ */
+function aparar(bruto: string): string {
+    let url = bruto;
+    while (url.length > 0) {
+        const ultimo = url[url.length - 1];
+
+        if (".,;:!?\"'".includes(ultimo)) {
+            url = url.slice(0, -1);
+            continue;
+        }
+
+        const par: Record<string, string> = { ")": "(", "]": "[", "}": "{" };
+        if (par[ultimo]) {
+            const abre = par[ultimo];
+            const abertos = url.split(abre).length - 1;
+            const fechados = url.split(ultimo).length - 1;
+            if (fechados > abertos) {
+                url = url.slice(0, -1);
+                continue;
+            }
+        }
+        break;
+    }
+    return url;
+}
+
+function hrefDe(url: string): string {
+    if (/^https?:\/\//i.test(url)) return url;
+    if (/^www\./i.test(url)) return `https://${url}`;
+    return `mailto:${url}`;
+}
+
+/**
+ * Quebra o texto em pedaços de texto puro e de link.
+ *
+ * Devolve dados, e não HTML, de propósito: o corpo vem de fora — é a escola
+ * que escreve — e transformar isso em marcação abriria uma porta de XSS. Quem
+ * renderiza monta nós React a partir daqui, então nada do remetente pode virar
+ * tag.
+ */
+export function segmentarLinks(texto: string): SegmentoTexto[] {
+    const saida: SegmentoTexto[] = [];
+    let cursor = 0;
+
+    PADRAO_LINK.lastIndex = 0;
+    let achado: RegExpExecArray | null;
+
+    while ((achado = PADRAO_LINK.exec(texto)) !== null) {
+        const bruto = achado[0];
+        const url = aparar(bruto);
+
+        // Sobrou só pontuação: anda o cursor do regex pra não travar o laço.
+        if (!url) {
+            PADRAO_LINK.lastIndex = achado.index + bruto.length;
+            continue;
+        }
+
+        if (achado.index > cursor) {
+            saida.push({ tipo: "texto", valor: texto.slice(cursor, achado.index) });
+        }
+        saida.push({ tipo: "link", valor: url, href: hrefDe(url) });
+
+        cursor = achado.index + url.length;
+        PADRAO_LINK.lastIndex = cursor;
+    }
+
+    if (cursor < texto.length) {
+        saida.push({ tipo: "texto", valor: texto.slice(cursor) });
+    }
+    return saida;
+}
+
 /** As colunas de e-mail de `Clientes _WhatsApp`, como vêm do Supabase. */
 export type LeadEmailColumns = Record<EmailFieldKey, string | null>;
 
