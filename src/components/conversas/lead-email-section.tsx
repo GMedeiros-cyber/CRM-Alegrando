@@ -36,10 +36,8 @@ export interface LeadEmailSectionProps {
     /**
      * Quantas respostas acabaram de ser lidas.
      *
-     * Serve pro card do lead na lista lateral baixar o badge verde na hora.
-     * Sem isso ele só sumiria no próximo carregamento da lista — e como o
-     * Realtime dessas tabelas não chega ao navegador (a chave anon não
-     * enxerga `email_replies`), esse "próximo carregamento" pode demorar.
+     * Serve pro card do lead na lista lateral baixar o badge verde na hora,
+     * sem esperar o próximo carregamento da lista.
      */
     onLidoLocal?: (quantidade: number) => void;
 }
@@ -73,21 +71,43 @@ export function LeadEmailSection({
     // Guarda a chamada em voo pra um clique repetido no refresh não empilhar
     // requisição nem piscar o ícone fora de hora.
     const emVoo = useRef(false);
+    // Chegou pedido enquanto a busca anterior rodava.
+    const pendente = useRef(false);
 
-    // Sem setState síncrono aqui: tudo acontece nos callbacks da promise, pra
-    // esta função poder ser chamada direto de dentro de um efeito.
+    /**
+     * Recarrega as conversas do servidor, no máximo uma de cada vez.
+     *
+     * Pedido que chega no meio de uma busca é ADIADO, nunca descartado: o
+     * evento do Realtime que troca `pending` por `sent` costuma cair poucos
+     * segundos depois do envio — bem em cima do refetch que o próprio envio
+     * disparou. Simplesmente ignorá-lo deixava a bolha em "Na fila de envio"
+     * até o intervalo de segurança de dois minutos, o que na tela é
+     * indistinguível de "o Realtime não está funcionando".
+     *
+     * Nenhum setState acontece antes do primeiro `await`, então dá pra chamar
+     * esta função direto de dentro de um efeito.
+     */
     const buscar = useCallback(
-        (aoFalhar?: () => void) => {
-            if (emVoo.current) return Promise.resolve();
+        async (aoFalhar?: () => void): Promise<void> => {
+            if (emVoo.current) {
+                pendente.current = true;
+                return;
+            }
             emVoo.current = true;
 
-            return listLeadEmailConversations(telefone, canal)
-                .then((rows) => setConversas(rows))
-                .catch(() => aoFalhar?.())
-                .finally(() => {
-                    emVoo.current = false;
-                    setCarregando(false);
-                });
+            try {
+                do {
+                    pendente.current = false;
+                    try {
+                        setConversas(await listLeadEmailConversations(telefone, canal));
+                    } catch {
+                        aoFalhar?.();
+                    }
+                } while (pendente.current);
+            } finally {
+                emVoo.current = false;
+                setCarregando(false);
+            }
         },
         [telefone, canal],
     );

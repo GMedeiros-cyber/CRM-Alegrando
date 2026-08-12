@@ -63,6 +63,18 @@ export function formatarBytes(bytes: number): string {
     return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
 }
 
+/**
+ * Endereço que faz o navegador SALVAR o anexo em vez de abrir.
+ *
+ * Não dá pra apontar `<a download>` direto pro R2: o atributo é ignorado em URL
+ * de outra origem, e o botão viraria só mais um "abrir em nova aba". A rota
+ * `/api/anexos/download` é same-origin e devolve `Content-Disposition:
+ * attachment` — ver o comentário lá pro porquê de ser proxy e não URL assinada.
+ */
+export function urlDeDownload(url: string, nome: string): string {
+    return `/api/anexos/download?url=${encodeURIComponent(url)}&nome=${encodeURIComponent(nome)}`;
+}
+
 export type TipoAnexo =
     | "imagem"
     | "pdf"
