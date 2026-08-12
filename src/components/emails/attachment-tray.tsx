@@ -2,6 +2,7 @@
 
 import {
     AlertTriangle,
+    Download,
     File,
     FileArchive,
     FileSpreadsheet,
@@ -18,6 +19,7 @@ import {
     WARN_BYTES,
     classificar,
     formatarBytes,
+    urlDeDownload,
     type TipoAnexo,
 } from "@/lib/email/attachments";
 import type { EmailAttachment } from "@/lib/types/email";
@@ -162,6 +164,20 @@ export function AttachmentTray({
     );
 }
 
+/**
+ * Botão de canto do cartão (baixar, remover).
+ *
+ * Visível por padrão e escondido SÓ a partir de `md`: no celular não existe
+ * hover, então `opacity-0 group-hover:` deixaria o controle invisível — e
+ * clicável às cegas, porque opacidade não desliga o ponteiro. 36px de lado pra
+ * dar alvo de toque de verdade.
+ */
+const ACAO =
+    "flex h-9 w-9 shrink-0 items-center justify-center rounded transition-opacity " +
+    "opacity-100 md:opacity-0 md:group-hover/anexo:opacity-100 " +
+    "md:group-focus-within/anexo:opacity-100 md:focus-visible:opacity-100 " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50";
+
 function Cartao({
     nome,
     tamanho,
@@ -180,41 +196,35 @@ function Cartao({
     onPreview?: () => void;
 }) {
     const tipo = classificar(mimeType, nome);
-    const ehImagem = tipo === "imagem" && Boolean(url);
+    // Enquanto sobe não há arquivo pra abrir nem pra baixar: nada de link.
+    const arquivo = subindo ? null : (url ?? null);
+    const ehImagem = tipo === "imagem" && arquivo !== null;
     const Icone = tipo === "imagem" ? File : ICONE[tipo];
     const cor = tipo === "imagem" ? "text-muted-foreground" : COR[tipo];
 
-    return (
-        <div
-            className={cn(
-                "group/anexo relative flex items-center gap-2 rounded-lg border bg-background px-2 py-1.5",
-                subindo ? "border-dashed border-border" : "border-border",
-            )}
-        >
+    /* Ícone/miniatura e nome formam UM alvo só — antes o `else` de não-imagem
+       renderizava um `<div>` sem href e sem handler, e um PDF recebido não abria
+       de jeito nenhum. Cada cartão tem exatamente uma ação de ABRIR (lightbox se
+       for imagem, nova aba pro resto) e uma de BAIXAR: dois "abrir" competindo
+       no mesmo cartão seria só mais um par de rótulos parecidos. */
+    const conteudo = (
+        <>
             {subindo ? (
                 <Loader2 className="w-4 h-4 shrink-0 animate-spin text-muted-foreground" />
             ) : ehImagem ? (
                 // Miniatura real do arquivo — o bucket é público, então a
-                // própria URL do anexo serve de preview. Clicar amplia.
-                <button
-                    type="button"
-                    onClick={onPreview}
-                    title="Ver imagem ampliada"
-                    aria-label={`Ver ${nome} ampliada`}
-                    className="shrink-0 rounded focus:outline-none focus:ring-2 focus:ring-brand-500/50"
-                >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src={url}
-                        alt={nome}
-                        className="h-9 w-9 rounded object-cover border border-border transition-transform hover:scale-105"
-                    />
-                </button>
+                // própria URL do anexo serve de preview.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                    src={url}
+                    alt={nome}
+                    className="h-9 w-9 shrink-0 rounded object-cover border border-border transition-transform group-hover/abrir:scale-105"
+                />
             ) : (
                 <Icone className={cn("w-5 h-5 shrink-0", cor)} />
             )}
 
-            <div className="min-w-0">
+            <div className="min-w-0 text-left">
                 <p className="max-w-[160px] truncate text-xs font-medium text-foreground">
                     {nome}
                 </p>
@@ -222,17 +232,85 @@ function Cartao({
                     {subindo ? "enviando..." : formatarBytes(tamanho)}
                 </p>
             </div>
+        </>
+    );
 
-            {onRemove && (
+    const classeAbrir =
+        "group/abrir flex min-w-0 items-center gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50";
+
+    return (
+        /* `max-w-full` + `min-w-0` no miolo: o cartão ENCOLHE até caber e o nome
+           trunca, em vez de estourar o container. Sem isso o cartão tem largura
+           de conteúdo fixa e vaza justamente onde é mais apertado — a coluna de
+           detalhes do desktop tem 300px, o que sobra ~226px aqui dentro, menos
+           que o Sheet de 320px do mobile. */
+        <div
+            className={cn(
+                "group/anexo relative flex max-w-full items-center gap-2 rounded-lg border bg-background px-2 py-1.5",
+                subindo ? "border-dashed border-border" : "border-border",
+            )}
+        >
+            {!arquivo ? (
+                <div className="flex min-w-0 items-center gap-2">{conteudo}</div>
+            ) : ehImagem && onPreview ? (
                 <button
                     type="button"
-                    onClick={onRemove}
-                    aria-label={`Remover ${nome}`}
-                    title="Remover"
-                    className="ml-1 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-red-500 group-hover/anexo:opacity-100 focus:opacity-100"
+                    onClick={onPreview}
+                    title="Ver imagem ampliada"
+                    aria-label={`Ver ${nome} ampliada`}
+                    className={classeAbrir}
                 >
-                    <X className="w-3.5 h-3.5" />
+                    {conteudo}
                 </button>
+            ) : (
+                /* Nova aba resolve o preview sem escrever visualizador nenhum:
+                   PDF, texto e imagem o navegador já renderiza nativamente. */
+                <a
+                    href={arquivo}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Abrir em nova aba"
+                    aria-label={`Abrir ${nome} em nova aba`}
+                    className={classeAbrir}
+                >
+                    {conteudo}
+                </a>
+            )}
+
+            {/* Agrupados e com folga: "Remover" é destrutivo e não pode ficar
+                colado no "Baixar". */}
+            {(arquivo || onRemove) && (
+                <div className="ml-auto flex shrink-0 items-center gap-1 pl-1">
+                    {arquivo && (
+                        <a
+                            href={urlDeDownload(arquivo, nome)}
+                            download={nome}
+                            /* `target="_blank"` não é enfeite: sem ele, uma
+                               resposta de erro da rota navegaria a janela
+                               inteira e levaria junto o rascunho do
+                               contentEditable da composição. */
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Baixar"
+                            aria-label={`Baixar ${nome}`}
+                            className={cn(ACAO, "text-muted-foreground hover:text-foreground")}
+                        >
+                            <Download className="w-4 h-4" />
+                        </a>
+                    )}
+
+                    {onRemove && (
+                        <button
+                            type="button"
+                            onClick={onRemove}
+                            aria-label={`Remover ${nome}`}
+                            title="Remover"
+                            className={cn(ACAO, "text-muted-foreground hover:text-red-500")}
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
             )}
         </div>
     );
