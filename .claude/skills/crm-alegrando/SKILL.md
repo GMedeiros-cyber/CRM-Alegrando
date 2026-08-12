@@ -17,8 +17,14 @@ quais uma alteração é considerada pronta.
 
 ## 1. Mapa do projeto
 
-Números atuais: 53 componentes, 18 páginas, 10 arquivos de server action, 7 rotas
-de API, ~25,8 mil linhas em `src/`.
+Números atuais: 54 componentes, 18 páginas, 10 arquivos de server action, 7 rotas
+de API, ~26,4 mil linhas em `src/`.
+
+**Os skills deste repositório ficam em `.claude/skills/`** — é o único caminho
+que o Claude Code carrega sozinho. Já houve um `frontend-design` em
+`.agent/skills/` que nenhuma sessão nunca enxergou; foi movido, e
+`.agent/skills/LEIA-ME.md` marca o lugar. `.agent/workflows/` é do Antigravity e
+continua valendo.
 
 ### Fronteira de autenticação
 
@@ -72,7 +78,7 @@ coisas distantes):
 | `conversas/conversas-layout.tsx` | 2190 | tela principal: lista + chat + painel |
 | `conversas/cliente-detail-panel.tsx` | 1301 | painel lateral do lead |
 | `app/(app)/tarefas/page.tsx` | 1183 | tela de tarefas |
-| `lib/actions/emails.ts` | 1058 | envio, agendamento, conversas de e-mail |
+| `lib/actions/emails.ts` | 1089 | envio, agendamento, conversas de e-mail |
 | `lib/actions/leads.ts` | 980 | leads, contadores, badges |
 | `conversas/chat-window.tsx` | 903 | conversa de WhatsApp |
 | `emails/email-compose-modal.tsx` | 834 | composição de e-mail |
@@ -147,6 +153,31 @@ SHA-256 e URL assinada de PUT. Duas propriedades que mudam decisão de projeto:
   resolve é `/api/anexos/download`, que faz proxy do arquivo e devolve
   `Content-Disposition: attachment` — same-origin, então o navegador salva.
 
+### E-mail: o corpo, e o que a conversão pra texto perde
+
+O corpo de uma resposta é mostrado como **texto puro** (§2.4). Isso tem um preço
+que já custou um bug: **`htmlParaTexto` guarda o texto da âncora e joga o `href`
+fora.** Consequências que não são óbvias lendo o código:
+
+- **Arquivo inserido pelo chip do Drive NÃO é anexo.** É um bloco HTML no corpo
+  (`<div class="gmail_chip gmail_drive_chip">` com `<a href>`, `<img>` de ícone e
+  `<span>` de título). Chegava na tela como texto morto — só o título, sem link.
+  O autolink não resolve: não existe URL no texto pra linkar.
+- **Teste com "3 anexos" onde 2 são do Drive chega com 1 anexo, e está certo.**
+- Quem precisa do endereço usa **`extrairLinksDoCorpo`** (`lib/email/format.ts`),
+  que lê o `body_html` — gravado inteiro em todas as respostas — e devolve
+  `LinkDoCorpo[]` estruturado. Roda **na leitura**, no servidor: vale
+  retroativamente pras respostas antigas, sem migration e sem reprocessar.
+- A extração corta a citação antes (`removerCitacaoHtml`): link que só existe no
+  histórico citado viraria cartão repetido a cada resposta da thread.
+- O título do chip sobra como **linha órfã** no texto. `removerTitulosDeChip`
+  tira, comparando a linha inteira — senão aparece duas vezes, uma como texto e
+  outra no cartão. Aplique nos **dois** campos (`body_text` e `body_text_full`):
+  o componente acha a citação por diferença de tamanho entre eles, e limpar só um
+  desalinha a conta.
+- Entidades nomeadas acentuadas (`&ccedil;`, `&Atilde;`) são decodificadas com
+  **caso exato antes do minúsculo** — senão "Conceição" vira "conceição".
+
 ### Integrações e rotinas
 
 - **Google Calendar e Drive** compartilham o client OAuth "AlegrandoCRM", mas têm
@@ -189,7 +220,11 @@ explicitamente ao usuário quando algo depende de deploy.
    bloqueio por extensão (executáveis) e teto de 25 MB (limite do Gmail, contando
    todos os anexos; o aviso começa em 18 MB porque Base64 infla ~33%). É lista de
    **bloqueio**, não de permissão — PDF, docx, xlsx, zip passam por desenho.
-6. **Rota que busca URL vinda do cliente precisa de allowlist de host.** Sem
+6. **URL extraída de HTML de terceiro só pode ser `http`/`https`.** Filtre no
+   **servidor**, com `new URL()` (que também normaliza), antes de o endereço
+   chegar ao componente — `javascript:`, `data:` e `vbscript:` viram `href`
+   executável se passarem. Ver `urlSegura` em `lib/email/format.ts`.
+7. **Rota que busca URL vinda do cliente precisa de allowlist de host.** Sem
    isso é SSRF: o servidor vira um proxy para qualquer endereço, inclusive a
    rede interna da Vercel. O padrão do projeto está em
    `src/app/api/anexos/download/route.ts` — só aceita URL que comece com
@@ -440,7 +475,9 @@ enquanto se investigava JWT, policy e publicação.
    citação do Gmail) e "recolher texto longo" são coisas diferentes; rótulos
    parecidos em botões vizinhos confundem em uma semana de uso. Corolário: um
    cartão de anexo tem **uma** ação de abrir (lightbox para imagem, nova aba
-   para o resto) e **uma** de baixar — não duas de abrir competindo.
+   para o resto) e **uma** de baixar — não duas de abrir competindo. E cartão de
+   **link** (arquivo no Drive de terceiro) não oferece "baixar": o arquivo não é
+   nosso e o acesso depende da permissão de lá.
 6. **Refatorar de carona.** Arquivo de 2000 linhas convida, mas misturar
    refatoração com correção torna impossível saber o que quebrou.
 7. **Comentário que sobrevive ao código que descreve.** Um comentário afirmando
@@ -458,7 +495,7 @@ enquanto se investigava JWT, policy e publicação.
 - [ ] Nenhum service role, segredo ou PII cruzou para o cliente ou para o log.
 - [ ] Não regredi: portal-guards, marcação de lida ao expandir, estilos de
       bounce e de não lida, selo de rascunho, editor recolhido por padrão,
-      abrir/baixar anexo.
+      abrir/baixar anexo, cartão de link do Drive.
 - [ ] Se mexi em workflow do n8n: religuei `availableInMCP` e conferi que nada
       mais mudou junto.
 - [ ] Se depende de deploy, avisei — **commitar não publica** (§1).

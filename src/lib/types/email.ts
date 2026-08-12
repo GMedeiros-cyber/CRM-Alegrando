@@ -41,6 +41,37 @@ export const EMAIL_FIELD_PRIORITY: EmailFieldKey[] = [
 
 export type EmailSendStatus = "pending" | "scheduled" | "sent" | "failed";
 
+export type TipoLinkCorpo =
+    | "planilha"
+    | "documento"
+    | "apresentacao"
+    | "formulario"
+    | "pasta"
+    | "pdf"
+    | "arquivo"
+    | "link";
+
+/**
+ * Um link que existia no HTML do corpo e não sobreviveu à conversão pra texto.
+ *
+ * Sai do servidor como DADO, nunca como marcação: o corpo vem de fora e o
+ * título é escrito por terceiro. Quem renderiza monta nós React a partir disto.
+ * Extraído por `extrairLinksDoCorpo` (`lib/email/format.ts`).
+ */
+export type LinkDoCorpo = {
+    url: string;
+    titulo: string;
+    tipo: TipoLinkCorpo;
+    /**
+     * Arquivo na nuvem (chip do Drive) x âncora comum.
+     *
+     * Separa duas coisas com tratamento diferente: o chip vira cartão E some do
+     * texto (senão o título aparece duas vezes); a âncora comum vira cartão mas
+     * o texto dela continua na frase, onde faz sentido.
+     */
+    nuvem: boolean;
+};
+
 /**
  * Anexo de um e-mail.
  *
@@ -108,6 +139,14 @@ export type EmailThreadMessage = {
     bodyText: string | null;
     bodyTextFull: string | null;
     attachments: EmailAttachment[];
+    /**
+     * Links que existiam no HTML do corpo e a conversão pra texto descartou.
+     *
+     * Arquivo inserido pelo chip do Drive NÃO é anexo: é um bloco HTML no
+     * corpo. Sem isto ele chegava na tela como texto morto — só o título, sem
+     * link. Extraído no servidor a partir do `body_html`, que já está gravado.
+     */
+    links: LinkDoCorpo[];
     /** Só em recebidos: anexos que o Gmail tinha e não foram gravados. */
     attachmentsMissing: number;
     /** Só em enviados. */

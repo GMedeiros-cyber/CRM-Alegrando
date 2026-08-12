@@ -19,6 +19,7 @@ import { markEmailRepliesRead, replyToEmailReply } from "@/lib/actions/emails";
 import { separarCitacao } from "@/lib/email/format";
 import { isEditorEmpty } from "@/lib/email/editor";
 import { AttachmentTray } from "./attachment-tray";
+import { CartoesDeLink } from "./link-cards";
 import { TextoComLinks } from "./texto-com-links";
 import { EmailBodyEditor } from "./email-body-editor";
 import { useEmailAttachments } from "./use-email-attachments";
@@ -392,7 +393,19 @@ function MensagemDaThread({ msg }: { msg: EmailThreadMessage }) {
                 </span>
             </div>
 
-            <CorpoRecolhivel texto={principal || "(sem conteúdo)"} />
+            <CorpoRecolhivel
+                texto={
+                    principal ||
+                    // Chip do Drive sozinho, sem uma palavra digitada: o corpo
+                    // fica mesmo vazio depois de tirar o título duplicado, e os
+                    // cartões abaixo já dizem tudo que há pra dizer.
+                    (msg.links.length > 0 ? "" : "(sem conteúdo)")
+                }
+            />
+
+            {/* Logo abaixo do corpo porque era ali que estavam: o chip do Drive
+                é um bloco NO corpo, não um anexo. */}
+            <CartoesDeLink links={msg.links} />
 
             {/* Estado do envio como nota de rodapé, e não no lugar do texto:
                 antes o corpo do que a equipe mandou nem aparecia, e a conversa
