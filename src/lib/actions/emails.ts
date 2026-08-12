@@ -6,9 +6,11 @@ import { requireAuth } from "@/lib/auth";
 import { fetchWithTimeout } from "@/lib/fetch-utils";
 import {
     extractEmails,
+    extrairLinksDoCorpo,
     htmlParaTexto,
     pickEmails,
     plainTextToHtml,
+    removerTitulosDeChip,
 } from "@/lib/email/format";
 import { cleanEditorHtml, isEditorEmpty, wrapEmailHtml } from "@/lib/email/editor";
 import { presignedPutUrl, r2PublicUrl } from "@/lib/whatsapp/r2-client";
@@ -21,6 +23,7 @@ import type {
     EmailSendStatus,
     EmailThreadMessage,
     LeadEmailRow,
+    LinkDoCorpo,
     SendEmailResult,
 } from "@/lib/types/email";
 
@@ -164,6 +167,19 @@ function mapReply(r: Record<string, unknown>): EmailReplyRecord {
     };
 }
 
+/**
+ * Tira do texto os títulos que já vão aparecer como cartão de link.
+ *
+ * Só os de nuvem: o chip do Drive deixa o título como linha órfã no texto, e
+ * sem isto ele apareceria duas vezes. Âncora comum não entra — o texto dela
+ * ("segue o contrato") faz parte da frase e tem que continuar lá.
+ */
+function semTitulosDeChip(texto: string | null, links: LinkDoCorpo[]): string | null {
+    if (texto === null) return null;
+    const titulos = links.filter((l) => l.nuvem).map((l) => l.titulo);
+    return removerTitulosDeChip(texto, titulos) || null;
+}
+
 /** É aviso de não entrega, e não alguém escrevendo de volta? */
 function ehDevolucao(fromEmail: string, subject: string | null): boolean {
     const de = fromEmail.toLowerCase();
@@ -244,8 +260,11 @@ export async function listLeadEmailConversations(
         subject: String(r.subject ?? ""),
         // Reduzido a texto já aqui: o painel do lead mostra as duas pontas da
         // conversa do mesmo jeito, e mandar o HTML inteiro pro cliente só pra
-        // descartá-lo na renderização seria peso à toa.
+        // descartá-lo na renderização seria peso à toa. Os links do HTML são
+        // extraídos ANTES de reduzir (`extrairLinksDoCorpo`), porque é
+        // justamente o `href` que a redução perde.
         body: r.body ? htmlParaTexto(String(r.body)) : null,
+        bodyHtml: r.body ? String(r.body) : null,
         status: (r.status || "pending") as EmailSendStatus,
         error: (r.error as string) ?? null,
         origem: (r.origem as string) ?? null,
@@ -280,15 +299,18 @@ export async function listLeadEmailConversations(
         const messages: EmailThreadMessage[] = [];
 
         for (const envio of grupo) {
+            const linksEnvio = extrairLinksDoCorpo(envio.bodyHtml);
+
             messages.push({
                 id: envio.id,
                 direcao: "enviado",
                 autor: "Alegrando",
                 at: envio.sentAt || envio.scheduledFor || envio.createdAt,
                 bodyHtml: null,
-                bodyText: envio.body,
+                bodyText: semTitulosDeChip(envio.body, linksEnvio),
                 bodyTextFull: null,
                 attachments: envio.attachments,
+                links: linksEnvio,
                 attachmentsMissing: 0,
                 status: envio.status,
                 error: envio.error,
@@ -297,15 +319,24 @@ export async function listLeadEmailConversations(
             });
 
             for (const resposta of envio.replies) {
+                const linksResposta = extrairLinksDoCorpo(resposta.bodyHtml);
+
                 messages.push({
                     id: resposta.id,
                     direcao: "recebido",
                     autor: resposta.fromName || resposta.fromEmail,
                     at: resposta.receivedAt,
                     bodyHtml: null,
-                    bodyText: resposta.bodyText ?? resposta.snippet,
-                    bodyTextFull: resposta.bodyTextFull,
+                    bodyText: semTitulosDeChip(
+                        resposta.bodyText ?? resposta.snippet,
+                        linksResposta,
+                    ),
+                    // O corpo completo passa pela MESMA limpeza: o componente
+                    // acha a citação por diferença de tamanho entre os dois, e
+                    // limpar só um desalinharia a conta.
+                    bodyTextFull: semTitulosDeChip(resposta.bodyTextFull, linksResposta),
                     attachments: resposta.attachments,
+                    links: linksResposta,
                     attachmentsMissing: resposta.attachmentsMissing,
                     status: null,
                     error: null,
