@@ -213,7 +213,8 @@ export function KanbanCard({ lead, isOverlay, onClick }: KanbanCardProps) {
                                     e.stopPropagation();
                                     removeCheckItem(item.id);
                                 }}
-                                className="opacity-0 group-hover/check:opacity-100 text-red-400 hover:text-red-300 transition-opacity"
+                                aria-label="Remover item"
+                                className="opacity-100 md:opacity-0 md:group-hover/check:opacity-100 md:group-focus-within/check:opacity-100 md:focus-visible:opacity-100 text-red-400 hover:text-red-300 transition-opacity"
                             >
                                 <Trash2 className="w-3 h-3" />
                             </button>

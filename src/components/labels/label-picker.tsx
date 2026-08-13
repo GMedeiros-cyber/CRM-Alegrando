@@ -254,7 +254,7 @@ export function LabelPicker({
                                 </span>
                                 {active && <Check className="w-3.5 h-3.5 shrink-0 text-brand-500 dark:text-brand-400" />}
                             </button>
-                            <div className="flex items-center gap-0.5 opacity-0 group-hover/lbl:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover/lbl:opacity-100 md:group-focus-within/lbl:opacity-100 transition-opacity">
                                 <button
                                     type="button"
                                     onClick={() => startEdit(l)}

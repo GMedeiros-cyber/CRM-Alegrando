@@ -1892,7 +1892,9 @@ export function ConversasLayout() {
                                 {/* Mobile: details button */}
                                 <button
                                     onClick={() => setMobileDetailsOpen(true)}
-                                    className="md:hidden p-2 rounded-lg hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors"
+                                    title="Dados do cliente"
+                                    aria-label="Dados do cliente"
+                                    className="lg:hidden p-2 rounded-lg hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors"
                                 >
                                     <PanelRightOpen className="w-5 h-5" />
                                 </button>
@@ -2113,8 +2115,13 @@ export function ConversasLayout() {
             {/* =================== RIGHT: DETAILS (desktop) =================== */}
             {/* Recolhível: o chat (flex-1) reflowa sozinho; transition na largura
                 dá o ajuste suave. Em mobile o painel continua como Sheet. */}
+            {/* Coluna fixa só a partir de `lg`, e não de `md`, por aritmética:
+                a 768px sobram 656px de conteúdo, e lista (350) + detalhes (300)
+                + bordas já somam 654 — o chat ficava com 6px, ilegível. Entre
+                768 e 1023 os detalhes continuam a um toque, pelo mesmo Sheet
+                que o mobile usa. */}
             <div className={cn(
-                "hidden md:flex flex-col border-l-2 border-border bg-background bento-enter [animation-delay:300ms] transition-all duration-300 overflow-hidden",
+                "hidden lg:flex flex-col border-l-2 border-border bg-background bento-enter [animation-delay:300ms] transition-all duration-300 overflow-hidden",
                 detailsCollapsed ? "w-[44px] min-w-[44px]" : "w-[300px] min-w-[300px]"
             )}>
                 {detailsCollapsed ? (
@@ -2151,7 +2158,7 @@ export function ConversasLayout() {
                     como "fora" e fecharia o painel com o rascunho junto. */}
                 <SheetContent
                     side="right"
-                    className="w-[320px] bg-background border-border overflow-y-auto p-0 md:hidden"
+                    className="w-[320px] max-w-[90vw] bg-background border-border overflow-y-auto p-0 lg:hidden"
                     onPointerDownOutside={ignorarSeForPortalDeEmail}
                     onInteractOutside={ignorarSeForPortalDeEmail}
                     onFocusOutside={ignorarSeForPortalDeEmail}

@@ -204,7 +204,7 @@ export function EmailConversationItem({
                         onClick={() => setConfirmando(true)}
                         title="Remover conversa"
                         aria-label="Remover conversa"
-                        className="p-1 rounded text-[#9B9A97] dark:text-[#64748b] opacity-0 transition-opacity hover:text-red-500 group-hover/conversa:opacity-100 focus:opacity-100"
+                        className="p-1 rounded text-[#9B9A97] dark:text-[#64748b] transition-opacity hover:text-red-500 opacity-100 md:opacity-0 md:group-hover/conversa:opacity-100 md:group-focus-within/conversa:opacity-100 md:focus-visible:opacity-100"
                     >
                         <Trash2 className="w-3 h-3" />
                     </button>
