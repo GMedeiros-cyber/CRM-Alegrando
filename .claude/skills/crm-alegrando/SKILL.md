@@ -30,10 +30,28 @@ continua valendo.
 
 - **`src/proxy.ts`** — é o middleware do Clerk (nome fora do convencional; não
   procure por `middleware.ts`, ele não existe). Aplica `auth.protect()` em tudo
-  que não está na lista de rotas públicas.
-- **Rotas públicas** (fora da sessão do Clerk): `/sign-in`, `/sign-up`,
-  `/unauthorized`, `/api/webhooks/*`, `/api/cron/*`, `/api/email-replies/*`,
-  `/api/health`. "Público" aqui significa *chamado por serviço, não por pessoa* —
+  que não está na lista de rotas públicas, **e** confere o e-mail da sessão
+  contra `ALLOWED_EMAILS`.
+- **Guarda de autorização em layout não protege nada além do render.** No App
+  Router a invocação de uma **server action não passa pelo layout** — nem rota de
+  API. A allowlist morava só em `app/(app)/layout.tsx`, então uma sessão indevida
+  continuava chamando `listLeadEmailConversations`, `sendEmailToLead` e as demais,
+  e lendo os 737 leads. Vale como regra geral: **autorização é no middleware**;
+  no layout ela é no máximo segunda camada.
+- **Entrar alguém novo são DOIS passos.** `/sign-up` está fechado (fora da lista
+  pública), então: (1) criar a conta no painel do Clerk e (2) acrescentar o
+  e-mail em `ALLOWED_EMAILS` na Vercel. Esquecer o segundo faz a pessoa logar
+  normalmente e cair em "não autorizado" — o sintoma não parece configuração.
+- **Há DUAS instâncias do Clerk.** O `.env.local` aponta para a de teste
+  (`sk_test`, 1 usuário); a produção usa a live (`sk_live`, 4 usuários). Listar
+  usuários com a chave local devolve a instância errada — foi o que quase montou
+  uma allowlist com uma pessoa só. Para saber quem usa o CRM de verdade, a fonte
+  boa é a tabela `users` do Supabase de produção, que o layout sincroniza.
+- **Rotas públicas** (fora da sessão do Clerk): `/sign-in`, `/unauthorized`,
+  `/api/webhooks/*`, `/api/cron/*`, `/api/email-replies/*`, `/api/health`.
+  `/sign-up` **saiu** da lista — cadastro aberto era a porta de entrada.
+  `/sign-in` e `/unauthorized` têm de continuar públicas: são as telas de saída
+  da allowlist, e protegê-las põe quem não tem acesso num laço de redirect. "Público" aqui significa *chamado por serviço, não por pessoa* —
   **cada uma faz a própria conferência de segredo**. Ao criar uma rota nova nesse
   conjunto, a verificação de segredo é obrigatória e não opcional.
   Rota de API que a **pessoa** usa (ex.: `/api/anexos/download`) fica **fora**
@@ -238,26 +256,43 @@ banco velho.
    `src/app/api/anexos/download/route.ts` — só aceita URL que comece com
    `R2_PUBLIC_URL`.
 
-### Achados de segurança em aberto (decidir, não ignorar)
+### Estado da segurança (auditado em 13/08/2026)
 
-- **`WEBHOOK_AUTH_DISABLE=true` desliga a autenticação dos webhooks.** É uma
-  válvula de emergência legítima, mas se ficar ligada em produção os webhooks
-  passam a aceitar qualquer chamada. Não está definida no `.env.local`; falta
-  **verificar o valor na Vercel (Production)**. Considere fazer a flag expirar
-  sozinha.
-- **O log de 401 imprime o prefixo do segredo esperado** (`prefix_esperado='xxxx'`
-  em `webhook-auth.ts`, nas **duas** linhas: Z-API e Evolution). Logs vazam para
-  painéis e terceiros. Remova o prefixo do segredo esperado do log — o do
-  recebido, para depuração, é aceitável.
-- **`/api/email-replies/anexo-url` autentica comparando o bearer com a própria
-  `SUPABASE_SERVICE_ROLE_KEY`.** Funciona, mas obriga o n8n a guardar a chave de
-  acesso total ao banco. Um segredo dedicado a essa rota reduziria o estrago de
-  um vazamento no n8n.
-- **Não há rate limiting em lugar nenhum.** As rotas públicas (webhooks,
-  `anexo-url`, `health`) aceitam chamadas ilimitadas. Baixo risco hoje, mas é o
-  tipo de coisa que só aparece quando já está sendo abusada.
-- **20 `console.log` em código de produção.** Confira se algum imprime corpo de
-  mensagem, telefone ou e-mail — logs de servidor não são lugar de PII.
+Resolvidos, não repita a investigação:
+
+- **`WEBHOOK_AUTH_DISABLE`** ficou 94 dias definida em produção, mas com valor
+  diferente de `"true"` — e a comparação é de igualdade estrita, então a
+  autenticação nunca esteve desligada. Variável removida da Vercel; o caminho
+  no código continua, para quem precisar recriar a válvula num incidente.
+- **`prefix_esperado` saiu dos logs de 401.** O do recebido ficou: é dado de
+  quem chamou e responde "veio token errado ou token nenhum?".
+- **PII e URL de mídia saíram dos logs** (`lib/log-redact.ts`:
+  `telefoneMascarado`, `hostDe`). Era pior do que parecia — o `sender.ts` logava
+  a URL pública do R2, e o bucket é público: quem lesse o log abria o anexo.
+- **Os segredos legados viraram `Sensitive` na Vercel** (13 variáveis, incluindo
+  service role e Clerk). Antes eram legíveis por quem tivesse acesso ao painel.
+  Efeito colateral: `vercel env pull` não devolve mais esses valores, e como
+  `--sensitive` só vale em Production/Preview, elas saíram do ambiente
+  Development.
+- **`ALLOWED_EMAILS` não existia na Vercel**, então a checagem de acesso era
+  pulada inteira (`if (allowedEmails.length > 0)`). Somado a `/sign-up` aberto e
+  à allowlist do Clerk indisponível no plano (402), qualquer um que achasse o
+  endereço criava conta e entrava. Nenhuma conta indevida chegou a existir.
+
+Em aberto, decisão tomada de não fazer agora:
+
+- **Sem rate limiting.** A conta é **Hobby** e a config do firewall está vazia
+  (`versions: []`); regra de rate limit exige Pro. As rotas públicas já
+  conferem segredo próprio, então isto é defesa em profundidade, não única
+  camada. Retomar se subir de plano.
+- **`/api/email-replies/anexo-url` autentica com a própria
+  `SUPABASE_SERVICE_ROLE_KEY`**, o que obriga o n8n a guardar a chave de acesso
+  total. É concentração de poder desnecessária, mas com o painel restrito a uma
+  pessoa é melhoria, não correção.
+
+Contexto que calibra a gravidade de qualquer vazamento em log: **a retenção de
+runtime log no Hobby é de 1 hora e não há log drain configurado.** Vazamento em
+log tem janela curta e plateia de um. Se um dia entrar log drain, a conta muda.
 
 Sobre tipagem: o `src/` tem **um único** `any` explícito —
 `src/components/conversas/reaction-picker.tsx:23`
