@@ -191,11 +191,19 @@ fora.** Consequências que não são óbvias lendo o código:
 
 ### Deploy
 
-O repositório **não está conectado** ao projeto na Vercel: os deploys são upload
-por CLI (`vercel --prod`), sem commit associado. É a causa dos recorrentes
-"commitei e não subiu" — o commit existe e o deploy nunca aconteceu. Enquanto
-isso não for religado em Settings → Git, **commitar não publica**; diga
-explicitamente ao usuário quando algo depende de deploy.
+O repositório **está conectado** ao projeto na Vercel — GitHub
+`GMedeiros-cyber/CRM-Alegrando`, branch de produção `main`. Confira com
+`vercel api /v9/projects/crm-alegrando` e olhe o campo `link`.
+
+**`git push origin main` publica.** Não precisa de `vercel --prod`; rodar os dois
+só cria dois deployments de produção para o mesmo código (foi o que aconteceu
+por duas rodadas seguidas antes de alguém reparar na lista do `vercel ls`).
+
+Uma versão anterior deste documento dizia o contrário — "commitar não publica" —
+e isso deixou de valer. A consequência prática é a regra do §7: **migration
+primeiro, sempre**, porque o deploy não espera mais por você. Empurrar código que
+depende de coluna nova antes de aplicá-la coloca a versão nova no ar contra o
+banco velho.
 
 ---
 
@@ -491,8 +499,10 @@ enquanto se investigava JWT, policy e publicação.
 
 ## 7. Migrations e deploy
 
-- **Migration primeiro, deploy depois.** Com o repositório conectado à Vercel, o
-  deploy deixa de esperar por você.
+- **Migration primeiro, sempre.** Não é preferência: o repositório está conectado
+  à Vercel e `git push origin main` publica sozinho (§1). O deploy não espera por
+  você, então a ordem é aplicar a migration, conferir que pegou, e só então
+  empurrar o código.
 - Existe cascata de tolerância nos dois lados (o `select` do CRM cai para uma
   lista reduzida de colunas; o worker tem um nó de gravação sem as colunas
   novas), então rodar à frente do banco não quebra nem perde dado. **Mas confira

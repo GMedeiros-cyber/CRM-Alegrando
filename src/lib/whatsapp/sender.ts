@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from "@/lib/fetch-utils";
+import { telefoneMascarado } from "@/lib/log-redact";
 
 function formatPhoneZapi(telefone: string): string {
   // Grupos: ID canônico não leva prefixo 55. Aceita "<digits>-group" ou
@@ -44,7 +45,7 @@ export async function sendWhatsAppImage(
     return { success: false, error: "Telefone inválido: " + telefone };
   }
 
-  console.log("[ZAPI-IMG] Enviando para:", phone, "url:", imageUrl);
+  console.log("[ZAPI-IMG] Enviando para", telefoneMascarado(phone));
 
   try {
     const response = await fetchWithTimeout(`${zapiBase(instance, token)}/send-image`, {
@@ -92,7 +93,7 @@ export async function sendWhatsAppVideo(
     return { success: false, error: "Telefone inválido: " + telefone };
   }
 
-  console.log("[ZAPI-VIDEO] Enviando para:", phone, "url:", videoUrl);
+  console.log("[ZAPI-VIDEO] Enviando para", telefoneMascarado(phone));
 
   try {
     const response = await fetchWithTimeout(`${zapiBase(instance, token)}/send-video`, {
@@ -139,7 +140,7 @@ export async function sendWhatsAppAudio(
     return { success: false, error: "Telefone inválido: " + telefone };
   }
 
-  console.log("[ZAPI-AUDIO] Enviando para:", phone, "url:", audioUrl);
+  console.log("[ZAPI-AUDIO] Enviando para", telefoneMascarado(phone));
 
   try {
     const response = await fetchWithTimeout(`${zapiBase(instance, token)}/send-audio`, {
@@ -189,7 +190,7 @@ export async function sendWhatsAppDocument(
 
   const phone = formatPhoneZapi(telefone);
   if (!phone || phone.length < 10) {
-    console.error("[ZAPI-DOC] Telefone inválido:", telefone);
+    console.error("[ZAPI-DOC] Telefone inválido:", telefoneMascarado(telefone));
     return { success: false, error: "Telefone inválido: " + telefone };
   }
 
@@ -215,7 +216,7 @@ export async function sendWhatsAppDocument(
     ? fileContentBase64
     : `data:${mime};base64,${fileContentBase64}`;
 
-  console.log("[ZAPI-DOC] Enviando para:", phone, "arquivo:", fileName, "ext:", extension, "mime:", mime);
+  console.log("[ZAPI-DOC] Enviando para", telefoneMascarado(phone), `ext=${extension} mime=${mime}`);
 
   try {
     const response = await fetchWithTimeout(
@@ -420,7 +421,7 @@ export async function sendWhatsAppMessage(
   }
 
   const phone = formatPhoneZapi(telefone);
-  console.log("[ZAPI] Enviando para:", phone);
+  console.log("[ZAPI] Enviando para", telefoneMascarado(phone));
 
   try {
     const response = await fetchWithTimeout(
@@ -475,7 +476,7 @@ export async function fetchZapiProfilePicture(telefone: string): Promise<string 
       { headers: buildZapiHeaders(clientToken) }
     );
     if (!res.ok) {
-      console.warn(`[ZAPI-PIC] ${res.status} para ${phone}`);
+      console.warn(`[ZAPI-PIC] ${res.status} para ${telefoneMascarado(phone)}`);
       return null;
     }
     const body = (await res.json()) as { link?: string; errorMessage?: string };

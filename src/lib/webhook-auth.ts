@@ -31,8 +31,12 @@ export function verifyZapiWebhook(req: Request): { ok: true } | { ok: false; sta
     }
     const got = req.headers.get("client-token") ?? req.headers.get("Client-Token");
     if (!safeCompare(got?.trim() ?? null, expected.trim())) {
+        // Sem `prefix_esperado`: imprimir os 4 primeiros caracteres do segredo
+        // que NÓS guardamos entrega meio caminho a quem lê o log. O prefixo do
+        // RECEBIDO fica, porque é dado de quem chamou e é o que responde a
+        // pergunta útil na depuração — "veio token errado ou token nenhum?".
         console.warn(
-            `[webhook-auth] ZAPI 401 | header_presente=${got !== null} | len_recebido=${got?.length ?? 0} | len_esperado=${expected.length} | prefix_recebido='${got?.slice(0,4) ?? "(none)"}' | prefix_esperado='${expected.slice(0,4)}' | headers_keys=${Array.from(req.headers.keys()).join(",")}`
+            `[webhook-auth] ZAPI 401 | header_presente=${got !== null} | len_recebido=${got?.length ?? 0} | len_esperado=${expected.length} | prefix_recebido='${got?.slice(0,4) ?? "(none)"}' | headers_keys=${Array.from(req.headers.keys()).join(",")}`
         );
         return { ok: false, status: 401, message: "Token inválido" };
     }
@@ -56,7 +60,7 @@ export function verifyEvolutionWebhook(req: Request): { ok: true } | { ok: false
     const got = req.headers.get("apikey") ?? req.headers.get("Apikey");
     if (!safeCompare(got?.trim() ?? null, expected.trim())) {
         console.warn(
-            `[webhook-auth] EVOLUTION 401 | header_presente=${got !== null} | len_recebido=${got?.length ?? 0} | len_esperado=${expected.length} | prefix_recebido='${got?.slice(0,4) ?? "(none)"}' | prefix_esperado='${expected.slice(0,4)}' | headers_keys=${Array.from(req.headers.keys()).join(",")}`
+            `[webhook-auth] EVOLUTION 401 | header_presente=${got !== null} | len_recebido=${got?.length ?? 0} | len_esperado=${expected.length} | prefix_recebido='${got?.slice(0,4) ?? "(none)"}' | headers_keys=${Array.from(req.headers.keys()).join(",")}`
         );
         return { ok: false, status: 401, message: "Token inválido" };
     }

@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { getSetting } from "@/lib/actions/settings";
 import { applyPlaceholders } from "@/lib/settings_helper";
+import { telefoneMascarado } from "@/lib/log-redact";
 
 export async function POST(req: Request) {
     // 1. Validar token
@@ -108,7 +109,7 @@ export async function POST(req: Request) {
                     .limit(1)
                     .maybeSingle();
                 if (enviadoRecente) {
-                    console.log(`[followup] D+1 skip dedup para ${telefone} — já enviamos nas últimas 23h`);
+                    console.log(`[followup] D+1 skip dedup para ${telefoneMascarado(telefone)} — já enviamos nas últimas 23h`);
                     continue;
                 }
 
@@ -122,7 +123,7 @@ export async function POST(req: Request) {
                 if (result.success) {
                     avaliacaoEnviadas++;
                     console.log(
-                        `[followup] D+1 avaliação enviada para ${telefone}`
+                        `[followup] D+1 avaliação enviada para ${telefoneMascarado(telefone)}`
                     );
 
                     // Salvar no histórico de chat (cron só atende canal alegrando)
@@ -152,7 +153,7 @@ export async function POST(req: Request) {
                 if (result.success) {
                     followupsEnviados++;
                     console.log(
-                        `[followup] D+${followupDias} follow-up enviado para ${telefone}`
+                        `[followup] D+${followupDias} follow-up enviado para ${telefoneMascarado(telefone)}`
                     );
 
                     // Salvar no histórico de chat (cron só atende canal alegrando)
