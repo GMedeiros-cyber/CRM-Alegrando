@@ -177,8 +177,9 @@ export function KanbanColumn({ column, leads, onLeadClick, onColumnRenamed, onCo
                 {!isProtected && !confirmingDelete && (
                     <button
                         onClick={() => setConfirmingDelete(true)}
-                        className="opacity-0 group-hover/col:opacity-100 text-[#9B9A97] dark:text-[#64748b] hover:text-red-400 transition-all shrink-0"
+                        className="opacity-100 md:opacity-0 md:group-hover/col:opacity-100 md:group-focus-within/col:opacity-100 md:focus-visible:opacity-100 text-[#9B9A97] dark:text-[#64748b] hover:text-red-400 transition-all shrink-0"
                         title="Excluir coluna"
+                        aria-label="Excluir coluna"
                     >
                         <Trash2 className="w-3.5 h-3.5" />
                     </button>

@@ -264,7 +264,8 @@ function TrelloCard({
                             setShowUsers(false);
                             setShowDeleteConfirm(false);
                         }}
-                        className="absolute top-2 right-2 p-1.5 text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white opacity-0 group-hover:opacity-100 transition-opacity bg-[#C7D2FE] hover:bg-[#A5B4FC] rounded"
+                        aria-label="Editar cartão"
+                        className="absolute top-2 right-2 p-1.5 text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:focus-visible:opacity-100 transition-opacity bg-[#C7D2FE] hover:bg-[#A5B4FC] rounded"
                     >
                         <SquarePen className="w-3.5 h-3.5 text-[#37352F] dark:text-[#cbd5e1]" />
                     </button>

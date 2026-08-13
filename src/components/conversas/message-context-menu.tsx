@@ -112,12 +112,23 @@ export function MessageContextMenu({
     return (
         <>
             {/* Trigger: chevron no estilo WhatsApp */}
+            {/* Visível por padrão e escondido só a partir de `md`: em aparelho
+                sem hover este botão é o ÚNICO caminho para responder, reagir,
+                fixar e apagar — e `opacity-0` não desliga o ponteiro, então ele
+                virava um alvo invisível de 20px que ainda aceitava o toque.
+                Dava para apagar mensagem sem ver o que se estava tocando.
+
+                O `before:` amplia só a área de clique, sem mexer no layout: o
+                círculo continua com 20px e o alvo passa a 36px. Vale ampliar
+                ESTE porque ele só abre o menu; os itens destrutivos ficam lá
+                dentro, onde um toque a mais é proteção, não estorvo. */}
             <button
                 ref={triggerRef}
                 type="button"
                 onClick={toggleOpen}
-                className="opacity-0 group-hover/msg:opacity-100 flex items-center justify-center w-5 h-5 rounded-full bg-[#191918]/15 backdrop-blur-sm text-white/80 hover:bg-black/50 hover:text-[#191918] dark:hover:text-white transition-all"
+                className="relative flex items-center justify-center w-5 h-5 rounded-full bg-[#191918]/15 backdrop-blur-sm text-white/80 hover:bg-black/50 hover:text-[#191918] dark:hover:text-white transition-all before:absolute before:-inset-2 before:content-[''] md:before:content-none opacity-100 md:opacity-0 md:group-hover/msg:opacity-100 md:group-focus-within/msg:opacity-100 md:focus-visible:opacity-100"
                 title="Opções"
+                aria-label="Opções da mensagem"
             >
                 <ChevronDown className="w-3.5 h-3.5" />
             </button>

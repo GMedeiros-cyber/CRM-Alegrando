@@ -346,11 +346,18 @@ subestimava todo estouro em 64px.
 cascata e zera o `-mx`. Na prática a tela vive dentro dos mesmos 208px — medido,
 não deduzido. O `-m-6` só vale no eixo vertical.
 
-**A soma das colunas fixas é o que quebra o tablet.** Em `conversas-layout`, a
-768px valem `md:` e ficam lado a lado a lista (`md:w-[350px]`) e o painel de
-detalhes (`w-[300px]`), com o chat em `flex-1` no meio: 350 + 300 + bordas = 654
-de 656 úteis, e **o chat fica com 6px**. Ao acrescentar coluna fixa, some as
-colunas contra a tabela acima antes de escolher o breakpoint.
+**A soma das colunas fixas é o que quebra o tablet.** Em `conversas-layout` a
+lista tem `md:w-[350px]` e o painel de detalhes tinha `hidden md:flex` com
+`w-[300px]`: a 768px isso dava 350 + 300 + bordas = 654 dos 656 úteis, e **o chat
+ficava com 6px**. Corrigido movendo só o painel (e o Sheet que o substitui) de
+`md:` para `lg:` — a 768px o chat passou a 306px e os detalhes seguem a um
+toque. Ao acrescentar coluna fixa, some as colunas contra a tabela acima **antes**
+de escolher o breakpoint; `md:` não é o padrão, é uma conta.
+
+**`grid-cols-2` dentro do painel do lead cabe — já foi medido.** Os 226px úteis
+dão colunas de 109px, com rótulo em uma linha e o `TimePicker` ocupando 107px.
+Não "conserte" empilhando: dobra a altura do bloco (51px → 110px) num painel que
+já rola. Só mexa se a medição de novo disser outra coisa.
 
 Padrão certo já usado no projeto, para copiar: `novo-lead-modal.tsx:82` faz
 `w-[380px] max-w-[90vw]` — largura de conforto com teto de segurança.

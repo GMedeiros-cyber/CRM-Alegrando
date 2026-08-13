@@ -775,7 +775,8 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                                     </div>
                                     <button
                                         onClick={() => onDeletePasseio(p.id)}
-                                        className="opacity-0 group-hover/passeio:opacity-100 text-red-400 hover:text-red-300 transition-opacity shrink-0 ml-2"
+                                        aria-label="Excluir passeio"
+                                        className="opacity-100 md:opacity-0 md:group-hover/passeio:opacity-100 md:group-focus-within/passeio:opacity-100 md:focus-visible:opacity-100 text-red-400 hover:text-red-300 transition-opacity shrink-0 ml-2"
                                     >
                                         <Trash2 className="w-3 h-3" />
                                     </button>
@@ -1186,7 +1187,8 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                             </span>
                             <button
                                 onClick={() => onDeleteTask(task.id)}
-                                className="opacity-0 group-hover/task:opacity-100 text-red-400 hover:text-red-300 transition-opacity shrink-0"
+                                aria-label="Excluir tarefa"
+                                className="opacity-100 md:opacity-0 md:group-hover/task:opacity-100 md:group-focus-within/task:opacity-100 md:focus-visible:opacity-100 text-red-400 hover:text-red-300 transition-opacity shrink-0"
                             >
                                 <Trash2 className="w-3 h-3" />
                             </button>
