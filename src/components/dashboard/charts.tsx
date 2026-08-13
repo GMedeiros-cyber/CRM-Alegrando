@@ -41,7 +41,7 @@ const CustomTooltipContent = ({
 // =========================================
 // Leads por Mês — dados reais
 // =========================================
-type CanalView = "alegrando" | "festas";
+type CanalView = "alegrando";
 
 export function LeadsPorMesChart() {
     const [data, setData] = useState<{ mes: string; leads: number }[]>([]);
@@ -62,7 +62,7 @@ export function LeadsPorMesChart() {
         ? data.filter((d) => d.mes === mesAtualLabel)
         : data;
 
-    const canalLabel = canal === "alegrando" ? "Alegrando" : "Festas";
+    const canalLabel = "Alegrando";
     const subtitle = view === "mes_atual"
         ? `${canalLabel} — apenas ${mesAtualLabel.toLowerCase()}`
         : `${canalLabel} — evolução dos últimos 6 meses`;
@@ -88,17 +88,6 @@ export function LeadsPorMesChart() {
                             }`}
                         >
                             Alegrando
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setCanal("festas")}
-                            className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-colors ${
-                                canal === "festas"
-                                    ? "bg-pink-500 text-white"
-                                    : "text-muted-foreground hover:text-foreground"
-                            }`}
-                        >
-                            🎉 Festas
                         </button>
                     </div>
                     <div className="flex items-center gap-1 rounded-full bg-background/60 border border-border/50 p-0.5">
@@ -154,7 +143,7 @@ export function LeadsPorMesChart() {
                             <Tooltip content={<CustomTooltipContent />} cursor={false} />
                             <Bar
                                 dataKey="leads"
-                                fill={canal === "festas" ? "#ec4899" : "#ef5544"}
+                                fill="#ef5544"
                                 radius={[8, 8, 0, 0]}
                                 name="Leads"
                             />

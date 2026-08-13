@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useTransition, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -79,6 +79,7 @@ import { LabelFilterButton } from "@/components/labels/label-filter-button";
 import { EmailComposeModal } from "@/components/emails/email-compose-modal";
 import { listLeadsWithUnreadEmail } from "@/lib/actions/emails";
 import { ignorarSeForPortalDeEmail } from "@/components/emails/portal-guards";
+import { CANAL_ATIVO } from "@/lib/canal";
 import { isGooglePickerOpen } from "@/components/emails/drive-picker-button";
 
 function mapRowToLabel(row: Record<string, unknown>): Label {
@@ -280,10 +281,9 @@ type ClientesListCacheEntry = {
 };
 
 export function ConversasLayout() {
-    const router = useRouter();
     const searchParams = useSearchParams();
     const initialTelefone = searchParams.get("telefone");
-    const initialCanal = searchParams.get("canal") || "alegrando";
+    const initialCanal = searchParams.get("canal") || CANAL_ATIVO;
 
     // State
     const [clientesList, setClientesList] = useState<ClienteListItem[]>([]);
@@ -354,17 +354,15 @@ export function ConversasLayout() {
     const [loadingAgendamentos, setLoadingAgendamentos] = useState(false);
 
     const [sortOrder, setSortOrder] = useState<string>("recent");
-    const [canalFiltro, setCanalFiltro] = useState<"todos" | "alegrando" | "festas">("todos");
+    // Canal fixo: festas foi encerrado e o seletor saiu da tela. Continua como
+    // variavel (e nao literal) porque as consultas abaixo ja a recebem.
+    const canalFiltro = CANAL_ATIVO;
     const [iaFiltro, setIaFiltro] = useState<"todos" | "ia_ativa" | "manual">("todos");
     const [tipoFiltro, setTipoFiltro] = useState<"todos" | "grupos">("todos");
     const [labelFiltro, setLabelFiltro] = useState<string[]>([]);
     const [availableLabels, setAvailableLabels] = useState<Label[]>([]);
     const [emailBlastOpen, setEmailBlastOpen] = useState(false);
     useEffect(() => {
-        const stored = localStorage.getItem("crm_canal_filtro");
-        if (stored === "todos" || stored === "alegrando" || stored === "festas") {
-            setCanalFiltro(stored);
-        }
         // Query string ?ia=ativa|manual sobrescreve localStorage (vinda do dashboard)
         const queryIa = searchParams.get("ia");
         if (queryIa === "ativa") {
@@ -941,6 +939,26 @@ export function ConversasLayout() {
         }
     }, []);
 
+    /**
+     * Botão voltar do navegador.
+     *
+     * Com `history.pushState` quem empilha a entrada somos nós, então o
+     * `popstate` também é nosso: sem isto a URL voltaria e a tela ficaria no
+     * lead anterior — voltar aparentemente sem efeito, que é pior do que não
+     * ter histórico nenhum.
+     */
+    useEffect(() => {
+        function aoVoltar() {
+            const params = new URLSearchParams(window.location.search);
+            const telefone = params.get("telefone");
+            setSelectedTelefone(telefone);
+            setSelectedCanal(params.get("canal") || CANAL_ATIVO);
+            setMobileView(telefone ? "chat" : "list");
+        }
+        window.addEventListener("popstate", aoVoltar);
+        return () => window.removeEventListener("popstate", aoVoltar);
+    }, []);
+
     // Select cliente and mark as read
     const handleSelectCliente = useCallback(
         async (telefone: string, canal: string = "alegrando") => {
@@ -948,7 +966,19 @@ export function ConversasLayout() {
             setSelectedCanal(canal);
             setMobileView("chat");
             setReplyTo(null);
-            router.push(`/conversas?telefone=${telefone}&canal=${canal}`, { scroll: false });
+
+            // `history.pushState` em vez de `router.push`: a URL existe só para
+            // o lead selecionado sobreviver a um F5 e poder ser compartilhado —
+            // o estado da tela já é local, e nada aqui depende de re-render do
+            // servidor. O `router.push` disparava uma busca do RSC payload a
+            // cada troca de lead: uma ida ao serverless que, com a função fria,
+            // custava segundos. Continua sendo pushState (e não replaceState)
+            // para o botão voltar do navegador percorrer os leads visitados.
+            window.history.pushState(
+                null,
+                "",
+                `/conversas?telefone=${telefone}&canal=${canal}`,
+            );
 
             // Fire-and-forget — não bloqueia a navegação
             markAsRead(telefone, canal)
@@ -961,7 +991,7 @@ export function ConversasLayout() {
                 ))
                 .catch((err) => console.error("[conversas] Erro ao marcar como lida:", err));
         },
-        [router]
+        []
     );
 
     useEffect(() => {
@@ -1093,7 +1123,7 @@ export function ConversasLayout() {
 
     function sendTextMessage(text: string, currentReply: import("@/lib/actions/leads").LeadMessage | null) {
         if (!cliente?.telefone) return;
-        const senderName = cliente.canal === "festas" ? "Festas" : "Alegrando";
+        const senderName = "Alegrando";
         const optimisticId = addOptimisticRef.current?.(text, senderName) ?? null;
 
         (async () => {
@@ -1341,7 +1371,7 @@ export function ConversasLayout() {
     function handleSendAudio() {
         if (!cliente?.telefone || !audioAttachment) return;
         const { file, previewUrl } = audioAttachment;
-        const senderName = cliente.canal === "festas" ? "Festas" : "Alegrando";
+        const senderName = "Alegrando";
         setAudioAttachment(null); // fecha o preview; a bolha otimista assume
         sendAudioCore(file, previewUrl, senderName, cliente.telefone, cliente.canal ?? "alegrando");
     }
@@ -1354,7 +1384,7 @@ export function ConversasLayout() {
 
     async function sendAttachment(att: { file: File; preview: string | null; caption: string; id: string }) {
         if (!cliente?.telefone) return;
-        const senderName = cliente.canal === "festas" ? "Festas" : "Alegrando";
+        const senderName = "Alegrando";
         const isVideo = att.file.type.startsWith("video/");
         const isImage = att.file.type.startsWith("image/");
         const mediaType: "image" | "video" | "document" = isImage ? "image" : isVideo ? "video" : "document";
@@ -1720,23 +1750,6 @@ export function ConversasLayout() {
                         </div>
                     </div>
 
-                    {/* Canal filter */}
-                    <div className="mt-2 flex items-center gap-1.5">
-                        {(["todos", "alegrando", "festas"] as const).map((v) => (
-                            <button
-                                key={v}
-                                onClick={() => { setCanalFiltro(v); localStorage.setItem("crm_canal_filtro", v); }}
-                                className={cn(
-                                    "text-[10px] font-semibold uppercase px-2.5 py-1 rounded-full border transition-colors",
-                                    canalFiltro === v
-                                        ? "bg-brand-500/20 text-brand-400 border-brand-500/40"
-                                        : "bg-[#EEF2FF] dark:bg-[#1e2536]/40 text-[#6366F1] dark:text-[#94a3b8] border-[#C7D2FE] dark:border-[#3d4a60]/40 hover:text-[#6366F1] dark:hover:text-[#94a3b8]"
-                                )}
-                            >
-                                {v === "todos" ? "Todos" : v === "alegrando" ? "Alegrando" : "Festas 🎉"}
-                            </button>
-                        ))}
-                    </div>
 
                     {/* IA filter — quick row to clear current filter when active */}
                     {iaFiltro !== "todos" && (
@@ -1899,12 +1912,8 @@ export function ConversasLayout() {
                                     <PanelRightOpen className="w-5 h-5" />
                                 </button>
 
-                                {/* AI Toggle / Festas badge */}
-                                {cliente.canal === "festas" ? (
-                                    <span className="inline-flex px-3 py-1.5 rounded-xl bg-pink-200 border border-pink-400 text-pink-800 text-xs font-bold">
-                                        🎉 Festas
-                                    </span>
-                                ) : (
+                                {/* AI Toggle */}
+                                {(
                                     <div
                                         className={cn(
                                             "hidden md:flex items-center gap-3 px-3 py-2 rounded-xl border-2 transition-colors",
@@ -2067,9 +2076,9 @@ export function ConversasLayout() {
                                         <Input
                                             value={chatMessage}
                                             onChange={(e) => setChatMessage(e.target.value)}
-                                            disabled={(cliente.iaAtiva && cliente.canal !== "festas") || attachments.length > 0}
+                                            disabled={cliente.iaAtiva || attachments.length > 0}
                                             placeholder={
-                                                (cliente.iaAtiva && cliente.canal !== "festas")
+                                                cliente.iaAtiva
                                                     ? "Pause a IA para enviar manualmente..."
                                                     : attachments.length > 0
                                                         ? "Adicione legenda nos arquivos acima ou clique em enviar"
@@ -2088,7 +2097,7 @@ export function ConversasLayout() {
                                             disabled={
                                                 isSendingMessage ||
                                                 isSendingFile ||
-                                                (cliente.iaAtiva && cliente.canal !== "festas") ||
+                                                cliente.iaAtiva ||
                                                 (attachments.length === 0 && !chatMessage.trim())
                                             }
                                             className="flex items-center justify-center w-10 h-10 rounded-xl bg-brand-500 text-[#191918] dark:text-white hover:bg-brand-600 disabled:opacity-50 transition-colors shadow-lg shadow-brand-500/25 shrink-0"

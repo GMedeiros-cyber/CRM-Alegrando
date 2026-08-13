@@ -347,7 +347,7 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                     </ConfirmRow>
                     {target.canal !== "todos" && (
                         <ConfirmRow label="Canal">
-                            {target.canal === "festas" ? "Festas" : "Alegrando"}
+                            {"Alegrando"}
                         </ConfirmRow>
                     )}
                     <ConfirmRow label="E-mails que serão usados">
@@ -424,7 +424,7 @@ function ComposeForm({ target, onOpenChange, onToast, onSent }: EmailComposeModa
                                   .join(", ");
                               const canalSuffix =
                                   target.canal !== "todos"
-                                      ? ` · canal ${target.canal === "festas" ? "Festas" : "Alegrando"}`
+                                      ? ` · canal Alegrando`
                                       : "";
                               return `${names || "Leads filtrados"}${canalSuffix}`;
                           })()}

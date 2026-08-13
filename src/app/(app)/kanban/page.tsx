@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
+import { CANAL_ATIVO } from "@/lib/canal";
 
 // Lazy: @dnd-kit pesa ~80KB+ — adia até a página abrir.
 const KanbanBoard = dynamic(
@@ -27,7 +28,6 @@ import {
     CheckCircle2,
     AlertCircle,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export default function KanbanPage() {
     const [columns, setColumns] = useState<KanbanColumn[]>([]);
@@ -38,12 +38,9 @@ export default function KanbanPage() {
         text: string;
     } | null>(null);
     const [isRefreshing, startRefresh] = useTransition();
-    const [kanbanCanal, setKanbanCanal] = useState<"alegrando" | "festas">(() => {
-        if (typeof window !== "undefined") {
-            return (localStorage.getItem("crm_kanban_canal") as "alegrando" | "festas") || "alegrando";
-        }
-        return "alegrando";
-    });
+    // Canal fixo: festas foi encerrado e o seletor saiu do quadro. Continua
+    // sendo passado a `getKanbanData` — a consulta precisa da cláusula.
+    const kanbanCanal = CANAL_ATIVO;
 
     async function loadData(canal?: string) {
         try {
@@ -102,23 +99,6 @@ export default function KanbanPage() {
 
                 {/* Toolbar */}
                 <div className="flex items-center gap-2">
-                    {(["alegrando", "festas"] as const).map((v) => (
-                        <button
-                            key={v}
-                            onClick={() => {
-                                setKanbanCanal(v);
-                                localStorage.setItem("crm_kanban_canal", v);
-                            }}
-                            className={cn(
-                                "text-[11px] font-semibold uppercase px-3 py-2 rounded-xl border-2 transition-colors",
-                                kanbanCanal === v
-                                    ? "bg-brand-500/20 text-brand-400 border-brand-500/40"
-                                    : "bg-card text-muted-foreground border-border hover:text-foreground hover:border-muted-foreground/40"
-                            )}
-                        >
-                            {v === "alegrando" ? "🎒 Alegrando" : "🎉 Festas"}
-                        </button>
-                    ))}
                     <button
                         onClick={() => {
                             setMessage(null);

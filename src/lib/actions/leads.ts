@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getSetting } from "@/lib/actions/settings";
 import { listLeadsWithUnreadEmail } from "@/lib/actions/emails";
 import { applyPlaceholders } from "@/lib/settings_helper";
+import { canalDaConsulta } from "@/lib/canal";
 import type { LabelColor, LeadLabel } from "@/lib/types/labels";
 
 // =============================================
@@ -195,7 +196,9 @@ export async function listClientes(params?: {
     const page = params?.page ?? 1;
     const limit = params?.limit ?? 50;
     const offset = (page - 1) * limit;
-    const canal = params?.canal && params.canal !== "todos" ? params.canal : null;
+    // Nunca nulo: sem cláusula de canal a RPC devolve os 424 leads de festas
+    // junto. Era exatamente isso que o filtro "Todos" fazia, e ele saiu da tela.
+    const canal = canalDaConsulta(params?.canal);
     const labelIds = params?.labelIds && params.labelIds.length > 0 ? params.labelIds : null;
 
     const { data, error } = await supabase.rpc("list_clientes_by_last_msg", {

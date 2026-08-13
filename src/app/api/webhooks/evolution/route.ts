@@ -6,7 +6,30 @@ import { verifyEvolutionWebhook } from "@/lib/webhook-auth";
 import { proxyMediaFromEvolution } from "@/lib/whatsapp/media-storage";
 import { fetchWithTimeout } from "@/lib/fetch-utils";
 
+/**
+ * O canal *festas* foi encerrado em agosto/2026 e esta rota parou de ingerir.
+ *
+ * Ela continua respondendo de propósito, e com **200**: provedor de webhook que
+ * recebe erro costuma reagir com retentativa exponencial e alerta, e o objetivo
+ * aqui é que ele pare em silêncio, não que fique batendo. O corpo diz o motivo,
+ * para quem for ler o log do lado de lá.
+ *
+ * Apagar a rota seria pior: o provedor passaria a receber 404 do Next, que é
+ * indistinguível de um deploy quebrado.
+ *
+ * Para reativar: apagar este bloco e repor as variáveis `EVOLUTION_*` na Vercel.
+ * O resto do handler continua inteiro abaixo, sem uso.
+ */
+const INGESTAO_DESATIVADA = true;
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
+    if (INGESTAO_DESATIVADA) {
+        return NextResponse.json({
+            status: "canal desativado",
+            detalhe: "O canal 'festas' foi encerrado e não recebe mais mensagens.",
+        });
+    }
+
     const auth = verifyEvolutionWebhook(req);
     if (!auth.ok) {
         return NextResponse.json({ error: auth.message }, { status: auth.status });

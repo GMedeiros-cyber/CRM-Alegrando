@@ -145,14 +145,9 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
                         Grupo
                     </span>
                 )}
-                {!isGroup && !item.iaAtiva && item.canal !== "festas" && (
+                {!isGroup && !item.iaAtiva && (
                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-orange-200 text-orange-800 border border-orange-400">
                         Manual
-                    </span>
-                )}
-                {!isGroup && item.canal === "festas" && (
-                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-pink-200 text-pink-800 border border-pink-400">
-                        🎉 Festas
                     </span>
                 )}
                 {/* Tags: limita a 3 visíveis, "+N" no excedente */}
