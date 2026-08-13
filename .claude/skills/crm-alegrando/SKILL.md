@@ -111,12 +111,42 @@ tarefa — mas ao mexer nele, mexa cirurgicamente e releia o entorno.
 Contagem de referências no código (`grep -rF '"<tabela>"' src`), útil para saber
 o que é central:
 
-**Troca de lead não navega.** `handleSelectCliente` usa `history.pushState`, e
-não `router.push`: o push disparava uma busca do RSC payload a cada clique — uma
-ida ao serverless que, com a função fria (61 visitantes/mês, lambda quase sempre
-frio), custava segundos. Quem empilha a entrada do histórico somos nós, então o
-`popstate` também é nosso — há um listener que devolve o estado ao voltar. Ao
-mexer ali, **o botão voltar faz parte do teste**.
+### Latência: é cold start, não banco
+
+**Medido, não suposto.** O banco responde em **0,2 ms** — `EXPLAIN (ANALYZE)` no
+lead com 1.224 mensagens, índice `(telefone, canal, created_at DESC)`, 12 buffers.
+Não há SQL nem índice a otimizar.
+
+O custo está na função serverless. Em `/api/health`, que é uma linha de JSON:
+
+| | tempo |
+|---|---|
+| quente | 0,20–0,24 s |
+| após 22 min ocioso | **1,64 s** (as seguintes voltam a 0,21 s) |
+
+São ~1,4 s de cold start na rota mais barata que existe. As de Conversas carregam
+Clerk e Supabase num bundle de 3,25 MB — o custo delas é **maior**, não menor.
+Com 61 visitantes/mês o lambda está quase sempre frio.
+
+**Cada rota é uma lambda separada — e `.rsc` é outra ainda.** O `vercel inspect`
+lista `λ agenda` e `λ agenda.rsc` como entradas distintas. Três consequências
+que não são óbvias:
+
+- `router.push` com query nova busca o **RSC payload**, que mora na lambda
+  `<rota>.rsc` — só usada em navegação client-side, logo fria quase sempre. Por
+  isso `handleSelectCliente` usa `history.pushState`: não é só uma viagem a
+  menos, é deixar de acordar uma lambda que ninguém mais acorda. Quem empilha a
+  entrada do histórico passa a ser o componente, então o `popstate` também é
+  dele — há um listener que devolve o estado ao voltar, e **o botão voltar faz
+  parte do teste** de qualquer mexida ali.
+- **Ping em `/api/health` para "manter quente" não serve.** Ele aquece a lambda
+  do health e mais nada. Aquecer a de Conversas exigiria requisição autenticada
+  na própria rota — ping anônimo para em `307` no middleware, sem nunca executar
+  a página.
+- Sobra uma exposição a frio por troca de lead: a server action `loadCliente`.
+  Só sai lendo o lead direto do browser, o que depende de abrir
+  `"Clientes _WhatsApp"` para `authenticated` — decisão de segurança, não de
+  performance.
 
 | tabela | usos | papel |
 |---|---|---|
