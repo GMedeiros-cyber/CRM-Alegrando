@@ -111,7 +111,25 @@ tarefa — mas ao mexer nele, mexa cirurgicamente e releia o entorno.
 Contagem de referências no código (`grep -rF '"<tabela>"' src`), útil para saber
 o que é central:
 
-### Latência: é cold start, não banco
+### Latência: primeiro a geografia, depois o cold start
+
+**As funções rodam em `gru1` (São Paulo), e isso é deliberado** — está em
+`vercel.json`, não na config do painel, para aparecer no diff. O padrão da Vercel
+é `iad1` (Virgínia), e com o Supabase em São Paulo cada server action fazia
+navegador (SP) → lambda (Virgínia) → Supabase (SP) → volta: duas travessias de
+~9.000 km para buscar dado da mesma cidade do usuário.
+
+Medido daqui, na mesma rota (`/api/health`, quente):
+
+| região | mediana |
+|---|---|
+| `iad1` | 215–220 ms |
+| `gru1` | **87 ms** (p90 118) |
+
+**2,5× em toda função** — página, rota de API e server action —, sem uma linha de
+código. Antes de otimizar consulta, confira em que hemisfério a função está.
+
+### O cold start, que sobra depois disso
 
 **Medido, não suposto.** O banco responde em **0,2 ms** — `EXPLAIN (ANALYZE)` no
 lead com 1.224 mensagens, índice `(telefone, canal, created_at DESC)`, 12 buffers.
