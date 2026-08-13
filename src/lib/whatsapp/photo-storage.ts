@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { hostDe } from "@/lib/log-redact";
 
 const BUCKET = "avatars";
 
@@ -46,14 +47,14 @@ export async function proxyPhotoToStorage(
       headers: { "User-Agent": "Mozilla/5.0 (compatible; AlegrandoCRM/1.0)" },
     });
     if (!res.ok) {
-      console.error(`[PHOTO-PROXY] Download ${res.status} de ${sourceUrl.slice(0, 120)}`);
+      console.error(`[PHOTO-PROXY] Download ${res.status} de ${hostDe(sourceUrl)}`);
       return null;
     }
 
     const contentType = res.headers.get("content-type") || "image/jpeg";
     const buffer = Buffer.from(await res.arrayBuffer());
     if (buffer.byteLength === 0) {
-      console.warn("[PHOTO-PROXY] Resposta vazia para", sourceUrl.slice(0, 120));
+      console.warn("[PHOTO-PROXY] Resposta vazia de", hostDe(sourceUrl));
       return null;
     }
 

@@ -20,6 +20,7 @@ import { verifyZapiWebhook } from "@/lib/webhook-auth";
 import { fetchWithTimeout } from "@/lib/fetch-utils";
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { telefoneMascarado } from "@/lib/log-redact";
 
 // Tipos de evento que representam uma mensagem real chegando.
 // Callbacks de status (DeliveryCallback, ReadCallback, etc.) são ignorados.
@@ -260,7 +261,9 @@ async function forwardToN8n(payload: ZApiWebhookPayload, n8nUrl: string): Promis
       8_000,
     );
     if (!res.ok) {
-      console.error(`[ZAPI-PROXY] n8n retornou ${res.status} para ${n8nUrl}`);
+      // Sem a URL no log: `N8N_ZAPI_WEBHOOK_URL` é variável secreta, e só existe
+      // um destino possível aqui — o status já diz tudo que se precisa saber.
+      console.error(`[ZAPI-PROXY] n8n retornou ${res.status}`);
     }
   } catch (err) {
     console.error("[ZAPI-PROXY] Falha ao repassar para o n8n:", err);
@@ -312,7 +315,7 @@ async function processReaction(
     .update({ reactions: newReactions })
     .eq("id", targetMsg.id);
 
-  console.log(`[ZAPI-PROXY] Reação ${reactionEmoji} (${reacterKey}) salva em ${targetMsg.id}`);
+  console.log(`[ZAPI-PROXY] Reação ${reactionEmoji} (${telefoneMascarado(reacterKey)}) salva em ${targetMsg.id}`);
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -635,7 +638,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           .maybeSingle();
 
         if (recentDup) {
-          console.log(`[ZAPI-PROXY] Dedup multi-device: conteúdo idêntico em 2s para ${realPhone}. Ignorando.`);
+          console.log(`[ZAPI-PROXY] Dedup multi-device: conteúdo idêntico em 2s para ${telefoneMascarado(realPhone)}. Ignorando.`);
         } else {
           const content = await persistMediaContent(supabase, rawContent, media_type, realPhone, payload.messageId);
 
@@ -729,7 +732,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           if (insertErr) {
             console.error("[ZAPI-PROXY] Falha ao salvar mensagem da equipe:", insertErr.message);
           } else {
-            console.log(`[ZAPI-PROXY] Mensagem da equipe salva: ${payload.messageId} para ${phone}`);
+            console.log(`[ZAPI-PROXY] Mensagem da equipe salva: ${payload.messageId} para ${telefoneMascarado(phone)}`);
           }
         }
       }
