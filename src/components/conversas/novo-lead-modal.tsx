@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createCliente } from "@/lib/actions/leads";
 import { uploadContactPhoto } from "@/lib/actions/messages";
-import { cn } from "@/lib/utils";
-import { Phone, User, UserRound, UserPlus, Plus, X, Loader2, Cake } from "lucide-react";
+import { Phone, User, UserRound, UserPlus, Plus, X, Loader2 } from "lucide-react";
+import { CANAL_ATIVO } from "@/lib/canal";
 
 interface NovoLeadModalProps {
     onClose: () => void;
@@ -16,9 +16,9 @@ interface NovoLeadModalProps {
 
 export function NovoLeadModal({ onClose, onCreated, onToast }: NovoLeadModalProps) {
     const [newLeadForm, setNewLeadForm] = useState({ telefone: "", nome: "" });
-    const [newLeadCanal, setNewLeadCanal] = useState<"alegrando" | "festas">("alegrando");
+    // Canal fixo: festas foi encerrado. Lead novo nasce sempre em alegrando.
+    const newLeadCanal = CANAL_ATIVO;
     const [newLeadResponsavel, setNewLeadResponsavel] = useState("");
-    const [aniversariante, setAniversariante] = useState("");
     const [newLeadPhoto, setNewLeadPhoto] = useState<{ file: File; preview: string } | null>(null);
     const newLeadPhotoRef = useRef<HTMLInputElement>(null);
     const [isCreatingLead, startCreatingLead] = useTransition();
@@ -26,9 +26,7 @@ export function NovoLeadModal({ onClose, onCreated, onToast }: NovoLeadModalProp
     function resetAndClose() {
         setNewLeadPhoto(null);
         setNewLeadForm({ telefone: "", nome: "" });
-        setNewLeadCanal("alegrando");
         setNewLeadResponsavel("");
-        setAniversariante("");
         onClose();
     }
 
@@ -61,13 +59,11 @@ export function NovoLeadModal({ onClose, onCreated, onToast }: NovoLeadModalProp
                     fotoUrl,
                     canal: newLeadCanal,
                     responsavel: newLeadResponsavel.trim() || null,
-                    aniversariante: newLeadCanal === "festas" ? (aniversariante.trim() || null) : null,
+                    aniversariante: null,
                 });
                 setNewLeadForm({ telefone: "", nome: "" });
-                setNewLeadCanal("alegrando");
-                setNewLeadResponsavel("");
-                setAniversariante("");
-                setNewLeadPhoto(null);
+                        setNewLeadResponsavel("");
+                        setNewLeadPhoto(null);
                 onToast({ type: "success", text: "Lead criado com sucesso!" });
                 onClose();
                 onCreated(tel, newLeadCanal);
@@ -161,7 +157,7 @@ export function NovoLeadModal({ onClose, onCreated, onToast }: NovoLeadModalProp
                             }}
                         />
                     </div>
-                    {newLeadCanal !== "festas" && (
+                    {(
                         <div className="space-y-1">
                             <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
                                 <UserRound className="w-3 h-3" />
@@ -175,42 +171,6 @@ export function NovoLeadModal({ onClose, onCreated, onToast }: NovoLeadModalProp
                                 onKeyDown={(e) => {
                                     if (e.key === "Enter") handleCreateLead();
                                 }}
-                            />
-                        </div>
-                    )}
-                    <div className="space-y-1">
-                        <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
-                            Canal
-                        </Label>
-                        <div className="flex gap-2">
-                            {(["alegrando", "festas"] as const).map((c) => (
-                                <button
-                                    key={c}
-                                    type="button"
-                                    onClick={() => setNewLeadCanal(c)}
-                                    className={cn(
-                                        "flex-1 h-8 rounded-lg text-xs font-semibold border-2 transition-colors",
-                                        newLeadCanal === c
-                                            ? "bg-brand-500/20 text-brand-400 border-brand-500/40"
-                                            : "bg-[#EEF2FF] dark:bg-[#1e2536]/40 text-[#6366F1] dark:text-[#94a3b8] border-[#C7D2FE] dark:border-[#3d4a60]/40 hover:text-[#37352F] dark:hover:text-[#cbd5e1]"
-                                    )}
-                                >
-                                    {c === "alegrando" ? "🎒 Alegrando" : "🎉 Festas"}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    {newLeadCanal === "festas" && (
-                        <div className="space-y-1">
-                            <Label className="text-[10px] font-semibold text-[#37352F] dark:text-[#cbd5e1] uppercase tracking-wider flex items-center gap-1">
-                                <Cake className="w-3 h-3" />
-                                Aniversariante
-                            </Label>
-                            <Input
-                                value={aniversariante}
-                                onChange={(e) => setAniversariante(e.target.value)}
-                                placeholder="Nome do aniversariante (opcional)"
-                                className="rounded-lg h-9 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
                             />
                         </div>
                     )}

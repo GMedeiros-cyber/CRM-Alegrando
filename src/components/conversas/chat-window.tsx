@@ -128,7 +128,7 @@ function SenderLabel({
     // Equipe: mostra label unificado por canal (independente do nome
     // individual do operador no payload do WhatsApp). Evita confusão como
     // "Márcia" aparecendo em mensagens enviadas pelo canal Alegrando.
-    const teamLabel = canal === "festas" ? "Festas" : "Alegrando";
+    const teamLabel = "Alegrando";
     return (
         <div className="flex items-center gap-1.5 mb-1">
             <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10">

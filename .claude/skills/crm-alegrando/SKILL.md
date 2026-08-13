@@ -111,6 +111,13 @@ tarefa — mas ao mexer nele, mexa cirurgicamente e releia o entorno.
 Contagem de referências no código (`grep -rF '"<tabela>"' src`), útil para saber
 o que é central:
 
+**Troca de lead não navega.** `handleSelectCliente` usa `history.pushState`, e
+não `router.push`: o push disparava uma busca do RSC payload a cada clique — uma
+ida ao serverless que, com a função fria (61 visitantes/mês, lambda quase sempre
+frio), custava segundos. Quem empilha a entrada do histórico somos nós, então o
+`popstate` também é nosso — há um listener que devolve o estado ao voltar. Ao
+mexer ali, **o botão voltar faz parte do teste**.
+
 | tabela | usos | papel |
 |---|---|---|
 | `"Clientes _WhatsApp"` | 45 | **tabela de leads** — o coração do CRM |
@@ -134,9 +141,10 @@ reverte um filtro em produção sem perceber.
 
 ### WhatsApp
 
-- **Dois canais, dois provedores:** Z-API (canal *alegrando*) e Evolution API
-  (canal *festas*, operado pela Márcia). Webhooks separados em
-  `api/webhooks/zapi` (776 linhas) e `api/webhooks/evolution` (417).
+- **Um canal ativo: *alegrando*, via Z-API.** O canal *festas* (Evolution API,
+  operado pela Márcia) foi **encerrado em agosto/2026** — ver a seção abaixo.
+  Webhooks continuam em `api/webhooks/zapi` (776 linhas) e
+  `api/webhooks/evolution` (o segundo agora só responde "canal desativado").
 - `src/lib/whatsapp/sender.ts` (670 linhas) concentra o envio.
 - **Mídia vai toda para o R2 com dedup global por hash de conteúdo**
   (`media-storage.ts`), inclusive áudio. Isso não é otimização: reenviar o mesmo
@@ -148,6 +156,46 @@ reverte um filtro em produção sem perceber.
 - **Áudio:** gravar OGG/Opus de verdade (opus-recorder) e mandar a **URL pública**
   ao provedor, não base64 — é o que faz aparecer a onda sonora nativa da nota de
   voz. Enviar WebM rotulado como ogg produz áudio de 00:00.
+
+### O canal *festas* está DESATIVADO, não apagado
+
+Encerrado em agosto/2026. **Os dados continuam inteiros no banco** — e são a
+maior parte dele:
+
+| | alegrando | festas |
+|---|---|---|
+| Leads | 313 (42%) | **424 (58%)** |
+| Mensagens | 9.006 (37%) | **15.056 (63%)** |
+
+O que foi feito (tudo reversível): a interface perdeu os seletores de canal
+(Conversas, Kanban, Dashboard, novo lead) e os selos "🎉 Festas"; as consultas
+passaram a exigir cláusula de canal (`lib/canal.ts`, `canalDaConsulta` — **nunca
+devolve nulo**, porque era assim que o filtro "Todos" trazia os 424 de volta);
+`api/webhooks/evolution` responde "canal desativado" com **200** (erro faria o
+provedor entrar em retentativa exponencial); e as variáveis `EVOLUTION_*` saíram
+da Vercel — os valores continuam no `.env.local` do Gabriel.
+
+**O caminho de despacho por provedor continua inteiro e sem uso** em
+`lib/actions/messages.ts` e `lib/whatsapp/sender.ts`, e os condicionais
+`canal === "festas"` de `cliente-detail-panel.tsx` também. É código morto de
+propósito: removê-lo é refatoração, e mantê-lo é o que torna a volta barata.
+
+**Para reativar:** devolver `"festas"` aos seletores, `INGESTAO_DESATIVADA =
+false` na rota do Evolution, e repor as `EVOLUTION_*`.
+
+#### Fase 2 — apagar de vez (NÃO executada, exige autorização explícita)
+
+Se um dia for para apagar, nesta ordem e nunca antes:
+
+1. **Exportar** as linhas de festas de `messages`, `"Clientes _WhatsApp"`,
+   `kanban_columns` e a única de `passeios_historico`, guardado fora do banco.
+2. **Mídia no R2 exige checagem cruzada.** 169 leads de festas têm foto e as
+   mensagens têm mídia no bucket. **O dedup é por hash de conteúdo**: o mesmo
+   objeto pode ser referenciado por mensagens de festas *e* de alegrando. Apagar
+   objeto olhando só as mensagens de festas quebra mídia do canal que fica.
+3. **Ordem respeitando dependência**: mensagens antes dos leads.
+4. Toda cláusula explicitamente restrita a `canal = 'festas'`. Um `DELETE` ou
+   `UPDATE` sem ela atinge o negócio que continua operando.
 
 ### Cloudflare R2 — o que o código já assume
 

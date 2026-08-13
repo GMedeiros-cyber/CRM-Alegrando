@@ -188,7 +188,7 @@ export default function DashboardPage() {
                     value={stats !== null ? stats.leadsTotal : "..."}
                     subtitle={
                         stats !== null
-                            ? `🎒 ${stats.leadsAlegrando} Alegrando · 🎉 ${stats.leadsFestas} Festas`
+                            ? `${stats.leadsAlegrando} leads`
                             : "Acumulado geral"
                     }
                     icon={Users}

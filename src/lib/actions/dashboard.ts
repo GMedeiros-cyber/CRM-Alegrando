@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth";
+import { canalDaConsulta } from "@/lib/canal";
 
 // =============================================
 // DASHBOARD STATS — RPC agregada (substitui 3 fetches)
@@ -50,7 +51,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 // =============================================
 
 export async function getLeadsPorMes(
-    canal?: "alegrando" | "festas"
+    canal?: string
 ): Promise<{ mes: string; leads: number }[]> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
@@ -64,9 +65,9 @@ export async function getLeadsPorMes(
         .gte("created_at", sixMonthsAgo.toISOString())
         .order("created_at", { ascending: true });
 
-    if (canal) {
-        query = query.eq("canal", canal);
-    }
+    // Sempre com canal: sem a cláusula o gráfico volta a somar os leads de
+    // festas, que continuam no banco.
+    query = query.eq("canal", canalDaConsulta(canal));
 
     const { data: leads, error } = await query;
 
