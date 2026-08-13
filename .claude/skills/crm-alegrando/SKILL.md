@@ -317,10 +317,43 @@ horizontal deliberado** — tirá-los espreme as colunas e quebra o quadro. Os
 breakpoint-guardados (`w-full sm:w-fit sm:min-w-[320px]`).
 
 Ofensor real confirmado: **`src/app/(app)/tarefas/page.tsx:1108`**, um
-`w-fit min-w-[320px]` **sem** guarda de breakpoint, dentro do shell que tem
-`p-6` — a 320px de viewport sobram 272px de conteúdo, então dá scroll
-horizontal. Trocar por `w-full sm:w-fit sm:min-w-[320px]`, igual às outras duas
-páginas.
+`w-fit min-w-[320px]` **sem** guarda de breakpoint. Transborda **128px a 320px**
+e 73px a 375px — e o sintoma **não é scroll horizontal, é recorte**: a raiz da
+página tem `overflow-hidden`, então o cabeçalho é cortado e o texto some sem
+deixar rastro. Trocar por `w-full sm:w-fit sm:min-w-[320px]`, igual às outras
+duas páginas.
+
+### O orçamento de largura — o número que a maioria das contas esquece
+
+O shell (`src/app/(app)/layout.tsx`) põe **`pl-[64px]`** no `<main>` (o rail
+fixo da sidebar, que existe em TODAS as larguras) **mais** `p-6 lg:p-8`. Então a
+largura útil de conteúdo é bem menor que o viewport:
+
+| viewport | útil |
+|---|---|
+| 320px | **208px** |
+| 375px | 263px |
+| 768px | 656px |
+| 1024px | 896px |
+| 1440px | 1312px |
+
+Meça contra essa coluna, não contra o viewport. Uma versão anterior deste
+documento dizia "a 320px sobram 272px" — tinha esquecido o rail de 64px, e
+subestimava todo estouro em 64px.
+
+**`mx-auto` anula margem negativa horizontal.** `conversas-layout.tsx:1669` tem
+`-m-6 lg:-m-8 … mx-auto` querendo sangrar até a borda; o `mx-auto` vem depois na
+cascata e zera o `-mx`. Na prática a tela vive dentro dos mesmos 208px — medido,
+não deduzido. O `-m-6` só vale no eixo vertical.
+
+**A soma das colunas fixas é o que quebra o tablet.** Em `conversas-layout`, a
+768px valem `md:` e ficam lado a lado a lista (`md:w-[350px]`) e o painel de
+detalhes (`w-[300px]`), com o chat em `flex-1` no meio: 350 + 300 + bordas = 654
+de 656 úteis, e **o chat fica com 6px**. Ao acrescentar coluna fixa, some as
+colunas contra a tabela acima antes de escolher o breakpoint.
+
+Padrão certo já usado no projeto, para copiar: `novo-lead-modal.tsx:82` faz
+`w-[380px] max-w-[90vw]` — largura de conforto com teto de segurança.
 
 E **`max-w-[1600px]` em `src/app/(app)/layout.tsx:63` não é um problema** — é o
 teto do container centralizado do app. A primeira versão deste documento o
