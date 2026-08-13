@@ -129,6 +129,18 @@ Medido daqui, na mesma rota (`/api/health`, quente):
 **2,5× em toda função** — página, rota de API e server action —, sem uma linha de
 código. Antes de otimizar consulta, confira em que hemisfério a função está.
 
+**Quem atravessa o oceano agora é o Clerk.** `api.clerk.com` responde em ~200 ms
+medido do Brasil, contra os ~20–50 ms que custaria de `iad1`. Isso está embutido
+nos 87 ms acima (a medição foi na rota real), então não é problema — mas é o
+primeiro lugar a olhar se algum caminho **dependente do Clerk** parecer lento.
+
+O caminho que paga essa conta é a allowlist do `proxy.ts`: quando o e-mail não
+vem no token da sessão, ela busca o usuário no Clerk (com cache de 5 min por
+instância). **Dá para zerar isso:** no painel do Clerk, em Sessions →
+personalizar o token da sessão, acrescentar `"email": "{{user.primary_email_address}}"`.
+O `proxy.ts` já prefere o claim quando ele existe e só cai para a API quando
+não — ou seja, a melhoria é de configuração, sem tocar em código.
+
 ### O cold start, que sobra depois disso
 
 **Medido, não suposto.** O banco responde em **0,2 ms** — `EXPLAIN (ANALYZE)` no
