@@ -4,18 +4,20 @@ import { cn } from "@/lib/utils";
 import type { ContagensAbas, ListaAba } from "@/lib/actions/leads";
 
 /**
- * `contagem: false` em "Todas" não é esquecimento.
+ * Não existe pílula "Todas".
  *
- * O número dela é o total da base, que já passa de 99 e virava um "99+" — um
- * selo que ocupa o maior espaço da barra e não informa nada, já que "Todas" é,
- * por definição, tudo. Tirando ele, as quatro pílulas cabem lado a lado na
- * coluna de 350px sem rolagem; com ele, a quarta ficava fora da tela.
+ * Ela não era um filtro, era a ausência de filtro — e ocupava um quarto da
+ * barra para dizer "nada selecionado", com um selo "99+" que, sendo o total da
+ * base, não informava nada. Voltar para todas agora é clicar de novo na aba
+ * ligada, que é como filtro de chip se comporta em qualquer lugar.
+ *
+ * Sobra o efeito colateral bom: com três pílulas em vez de quatro, cada uma
+ * ganha um terço da coluna e o rótulo para de truncar.
  */
-const ABAS: { valor: ListaAba; rotulo: string; chave: keyof ContagensAbas; contagem: boolean }[] = [
-    { valor: "todas", rotulo: "Todas", chave: "todas", contagem: false },
-    { valor: "nao_lidas", rotulo: "Não lidas", chave: "naoLidas", contagem: true },
-    { valor: "favoritos", rotulo: "Favoritos", chave: "favoritos", contagem: true },
-    { valor: "emails", rotulo: "E-mails", chave: "emails", contagem: true },
+const ABAS: { valor: Exclude<ListaAba, "todas">; rotulo: string; chave: keyof ContagensAbas }[] = [
+    { valor: "nao_lidas", rotulo: "Não lidas", chave: "naoLidas" },
+    { valor: "favoritos", rotulo: "Favoritos", chave: "favoritos" },
+    { valor: "emails", rotulo: "E-mails", chave: "emails" },
 ];
 
 export interface ListasTabBarProps {
@@ -47,10 +49,10 @@ export function ListasTabBar({ aba, onChange, contagens, carregando }: ListasTab
             // cortada na borda — que era o que parecia desalinhado.
             className="mt-3 flex items-stretch gap-1"
         >
-            {ABAS.map(({ valor, rotulo, chave, contagem }) => {
+            {ABAS.map(({ valor, rotulo, chave }) => {
                 const ativa = aba === valor;
                 const n = contagens[chave];
-                const mostrarSelo = contagem && !carregando && n > 0;
+                const mostrarSelo = !carregando && n > 0;
 
                 return (
                     <button
@@ -58,7 +60,10 @@ export function ListasTabBar({ aba, onChange, contagens, carregando }: ListasTab
                         type="button"
                         role="tab"
                         aria-selected={ativa}
-                        onClick={() => onChange(valor)}
+                        title={ativa ? `Mostrar todas as conversas` : `Ver só ${rotulo.toLowerCase()}`}
+                        // Clicar na aba já ligada desliga o filtro. É o que
+                        // substitui a pílula "Todas" que existia aqui.
+                        onClick={() => onChange(ativa ? "todas" : valor)}
                         className={cn(
                             "flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full border px-1.5 py-1.5",
                             "text-[11px] font-semibold leading-none transition-colors",

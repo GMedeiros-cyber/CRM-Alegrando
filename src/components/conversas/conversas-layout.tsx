@@ -369,6 +369,20 @@ export function ConversasLayout() {
 
     const [labelFiltro, setLabelFiltro] = useState<string[]>([]);
     const [availableLabels, setAvailableLabels] = useState<Label[]>([]);
+
+    /**
+     * Identidade da BASE das contagens — sem a aba, de propósito.
+     *
+     * Os quatro números descrevem canal + busca + tags e são iguais em todas as
+     * abas. Trocar de aba, portanto, não os invalida. Antes a barra escondia os
+     * selos enquanto `loading` estivesse ligado, e como a troca de aba dispara
+     * carregamento, os números sumiam e voltavam a cada clique — o "efeito
+     * refresh". Comparando a base, o pisca some e a proteção continua: mudar a
+     * busca ou as tags ainda esconde os selos até chegarem os novos.
+     */
+    const baseAtual = `${searchTerm}|${canalFiltro}|${[...labelFiltro].sort().join(",")}`;
+    const [baseDasContagens, setBaseDasContagens] = useState<string | null>(null);
+    const contagensDesatualizadas = baseDasContagens !== baseAtual;
     const [emailBlastOpen, setEmailBlastOpen] = useState(false);
     useEffect(() => {
         // Query string ?ia=ativa|manual sobrescreve localStorage (vinda do dashboard)
@@ -424,7 +438,11 @@ export function ConversasLayout() {
               ? contagens.naoLidas
               : aba === "favoritos"
                 ? contagens.favoritos
-                : contagens.emails;
+                // E-mails vem inteira numa resposta só (é limitada pelo que
+                // ainda não foi lido), então o total é o que já está na tela —
+                // usar a contagem aqui faria "carregar mais" pedir para sempre
+                // se um lead da lista de não lidas tivesse sumido da base.
+                : totalClientes;
 
     /**
      * Estrela: pinta na hora e desfaz se o servidor recusar.
@@ -593,7 +611,9 @@ export function ConversasLayout() {
     // recente) mostra a lista cacheada instantaneamente e revalida em background.
     const loadList = useCallback(async () => {
         const version = ++loadListVersionRef.current;
-        const cacheKey = `${searchTerm || ""}|${canalFiltro}|${[...labelFiltro].sort().join(",")}|${aba}`;
+        // A base é a cacheKey SEM a aba: é a ela que as contagens pertencem.
+        const baseKey = `${searchTerm}|${canalFiltro}|${[...labelFiltro].sort().join(",")}`;
+        const cacheKey = `${baseKey}|${aba}`;
         const cached = clientesListCache.current.get(cacheKey);
         const hasFreshCache = cached && Date.now() - cached.ts < CLIENTES_LIST_TTL;
 
@@ -609,6 +629,7 @@ export function ConversasLayout() {
             loadedCountRef.current = cached.data.length;
             setTotalClientes(cached.total);
             setContagens(cached.contagens);
+            setBaseDasContagens(baseKey);
             setLoading(false);
             setShowFilterSkeleton(false);
         } else if (cached && !keyChanged) {
@@ -617,6 +638,7 @@ export function ConversasLayout() {
             loadedCountRef.current = cached.data.length;
             setTotalClientes(cached.total);
             setContagens(cached.contagens);
+            setBaseDasContagens(baseKey);
             setLoading(false);
             setShowFilterSkeleton(false);
         } else if (keyChanged) {
@@ -655,6 +677,7 @@ export function ConversasLayout() {
             loadedCountRef.current = unique.length;
             setTotalClientes(result.total);
             setContagens(result.contagens);
+            setBaseDasContagens(baseKey);
             clientesListCache.current.set(cacheKey, {
                 data: unique,
                 total: result.total,
@@ -1907,7 +1930,7 @@ export function ConversasLayout() {
                         aba={aba}
                         onChange={setAba}
                         contagens={contagens}
-                        carregando={loading || showFilterSkeleton}
+                        carregando={contagensDesatualizadas}
                     />
 
                     {/* IA filter — quick row to clear current filter when active */}
