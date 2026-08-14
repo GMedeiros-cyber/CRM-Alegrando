@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import Image from "next/image";
-import { Mail, Users } from "lucide-react";
+import { Mail, Star, Users } from "lucide-react";
 import type { ClienteListItem } from "@/lib/actions/leads";
 import { cn, isValidPhotoUrl } from "@/lib/utils";
 import { LabelBadge } from "@/components/labels/label-badge";
@@ -40,6 +40,7 @@ interface LeadListItemProps {
     isSelected: boolean;
     onClick: () => void;
     tick: number;
+    onToggleFavorito: () => void;
 }
 
 export function isGroupTelefone(telefone: string | number): boolean {
@@ -55,10 +56,31 @@ export function isGroupTelefone(telefone: string | number): boolean {
     return false;
 }
 
-const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: LeadListItemProps) {
+const LeadListItemInner = function LeadListItem({
+    item,
+    isSelected,
+    onClick,
+    onToggleFavorito,
+}: LeadListItemProps) {
     const telefoneStr = String(item.telefone);
     const isGroup = isGroupTelefone(item.telefone);
     return (
+        /**
+         * A estrela é IRMÃ do card, não filha.
+         *
+         * O card é um `<button>` de verdade, e botão dentro de botão é HTML
+         * inválido — o React avisa, e o comportamento de teclado fica
+         * imprevisível. As alternativas seriam rebaixar o card a
+         * `div role="button"` (perdendo Enter/Espaço nativos na ação que é
+         * usada cem vezes mais) ou aninhar mesmo assim.
+         *
+         * Sendo irmãos posicionados, os dois continuam `<button>` nativos: cada
+         * um com seu foco, seu Enter e seu Espaço, e o clique na estrela nem
+         * chega perto do card — não é propagação contida, é evento em outro
+         * elemento. A ordem no DOM deixa o card primeiro, então o Tab alcança
+         * abrir a conversa antes de favoritar.
+         */
+        <div className="relative">
         <button
             onClick={onClick}
             className={cn(
@@ -164,6 +186,30 @@ const LeadListItemInner = function LeadListItem({ item, isSelected, onClick }: L
                 )}
             </div>
         </button>
+
+        {/* Logo abaixo do avatar. O deslocamento acompanha o padding do card
+            (py-3 = 12px) mais a altura da foto (36px). */}
+        <button
+            type="button"
+            onClick={onToggleFavorito}
+            aria-pressed={item.favorito}
+            aria-label={
+                item.favorito
+                    ? `Desfavoritar ${item.nome || telefoneStr}`
+                    : `Favoritar ${item.nome || telefoneStr}`
+            }
+            title={item.favorito ? "Remover dos favoritos" : "Marcar como favorito"}
+            className={cn(
+                "absolute left-2 top-[50px] flex h-7 w-7 items-center justify-center rounded-full transition-colors",
+                "hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50",
+                item.favorito
+                    ? "text-amber-500"
+                    : "text-[#9B9A97] dark:text-[#64748b] hover:text-amber-500",
+            )}
+        >
+            <Star className={cn("h-3.5 w-3.5", item.favorito && "fill-current")} />
+        </button>
+        </div>
     );
 };
 
