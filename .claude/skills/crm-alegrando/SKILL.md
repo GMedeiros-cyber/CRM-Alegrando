@@ -688,8 +688,19 @@ enquanto se investigava JWT, policy e publicação.
 - **Escrever workflow: leia do servidor imediatamente antes, mute sobre esse
   retorno, e releia depois para confirmar.** O retorno do PUT não é prova. Já
   houve regressão silenciosa que apagou uma correção validada.
-- **Escrita pela API pública zera `availableInMCP`.** Religue pela UI ao final,
-  senão o workflow some das ferramentas MCP e o próximo diagnóstico fica cego.
+- **Escrita pela API pública zera `availableInMCP`.** Não é bug: a API v1
+  rejeita o PUT se `settings` trouxer `availableInMCP` ou `timeSavedMode`
+  (`must NOT have additional properties`), então a flag não pode ser reenviada
+  e cai a cada escrita. Religue pela UI ao final, senão o workflow some das
+  ferramentas MCP e o próximo diagnóstico fica cego.
+- **Antes de religar o toggle, FECHE e REABRA a aba do n8n.** A aba guarda o
+  workflow como estava quando foi carregada, e salvar o toggle grava **aquele**
+  estado inteiro por cima — desfazendo em silêncio o que a API acabou de
+  escrever. Já aconteceu: 22 nós viraram 17 de novo, com o `updatedAt` nove
+  minutos à frente da escrita e nenhum erro em lugar nenhum. **Conferir por
+  contagem de nós não basta** — releia o conteúdo (o código do dedup, o método
+  do nó de gravação), porque uma reversão devolve um workflow que funciona,
+  só que o antigo.
 - Nos Code nodes, **`$input` é a saída do nó imediatamente anterior** — não
   necessariamente o nó cujo dado você quer. Referencie explicitamente
   (`$('Nome do nó')`) e pareie por **linhagem** (`itemMatching()`), não por
