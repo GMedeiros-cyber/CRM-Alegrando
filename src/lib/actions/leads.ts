@@ -284,10 +284,41 @@ export async function listClientes(params?: {
         count_emails?: number | string | null;
     }>;
 
-    const total = rows.length > 0 ? Number(rows[0].total_count || 0) : 0;
+    let total = rows.length > 0 ? Number(rows[0].total_count || 0) : 0;
 
     // Vêm iguais em toda linha (janela sobre a base), então a primeira basta.
-    const primeira = rows[0];
+    let primeira = rows[0];
+
+    // ABA VAZIA: as contagens viajam NAS LINHAS (window functions), então uma
+    // aba sem resultado não devolve linha nenhuma — e os quatro números somem
+    // justamente quando são mais necessários. Abrir "Favoritos" com zero
+    // favoritos apagava também o "57" de Não lidas, ou seja, escondia a
+    // informação que faria a pessoa sair de uma tela vazia.
+    //
+    // Os números descrevem a BASE (canal + busca + tags), não a aba — logo não
+    // dependem do que a aba devolveu, e recontá-los é legítimo. Uma segunda
+    // consulta com `p_aba => 'todas'` e limite 1 traz a linha que os carrega.
+    //
+    // Só neste caso, e só com uma linha: no caminho normal não há consulta
+    // extra. Resolver no cliente (guardar o número anterior) foi descartado —
+    // manteria na tela uma contagem velha depois de mudar a busca, que é
+    // exatamente o defeito que o `carregando` da barra já evita.
+    if (rows.length === 0 && aba !== "todas") {
+        const { data: dadosBase, error: erroBase } = await supabase.rpc(
+            "list_clientes_by_last_msg",
+            { ...argsBase, p_offset: 0, p_limit: 1, p_aba: "todas" },
+        );
+        if (erroBase) {
+            // Não derruba a lista: a aba vazia continua vazia, só sem os
+            // números. Pior que contagem ausente seria a tela inteira falhar.
+            console.error("[listClientes] recontagem da aba vazia falhou:", erroBase.message);
+        } else {
+            const linhasBase = (dadosBase || []) as typeof rows;
+            primeira = linhasBase[0];
+            total = linhasBase.length > 0 ? Number(linhasBase[0].total_count || 0) : 0;
+        }
+    }
+
     const contagens: ContagensAbas = {
         todas: total,
         naoLidas: Number(primeira?.count_nao_lidas || 0),
