@@ -26,8 +26,24 @@ function safeCompare(a: string | null | undefined, b: string | null | undefined)
 }
 
 /**
- * Valida o Client-Token enviado pela Z-API nos webhooks.
- * A Z-API envia o token configurado no painel via header "Client-Token".
+ * Nomes de header que a Z-API já usou para mandar o token.
+ *
+ * São DOIS porque a Z-API trocou `Client-Token` por `z-api-token` sem aviso, em
+ * 12/08/2026 — e o webhook passou a devolver 401 para tudo. O provedor
+ * simplesmente desistiu de reenviar, e a ingestão ficou 43 horas parada sem
+ * ninguém perceber: envio continuava funcionando, então a tela parecia viva.
+ *
+ * Aceitar os dois, e não trocar de um para o outro: não se sabe se a mudança é
+ * permanente, e manter o nome antigo custa uma linha.
+ *
+ * Sem variantes com maiúscula — `Headers.get` é case-insensitive por
+ * especificação, então `"Client-Token"` ao lado de `"client-token"` nunca
+ * chegou a fazer nada.
+ */
+const HEADERS_TOKEN_ZAPI = ["client-token", "z-api-token"] as const;
+
+/**
+ * Valida o token enviado pela Z-API nos webhooks.
  * Confronta com ZAPI_CLIENT_TOKEN do ambiente.
  *
  * Retorna { ok: true } se válido, ou { ok: false, status, message } com a resposta a ser devolvida.
@@ -38,7 +54,10 @@ export function verifyZapiWebhook(req: Request): { ok: true } | { ok: false; sta
         console.error("[webhook-auth] ZAPI_CLIENT_TOKEN não configurado — rejeitando todos os webhooks Z-API");
         return { ok: false, status: 500, message: "Webhook auth não configurado" };
     }
-    const got = req.headers.get("client-token") ?? req.headers.get("Client-Token");
+    const got = HEADERS_TOKEN_ZAPI.reduce<string | null>(
+        (achado, nome) => achado ?? req.headers.get(nome),
+        null,
+    );
     if (!safeCompare(got?.trim() ?? null, expected.trim())) {
         // Sem `prefix_esperado`: imprimir os 4 primeiros caracteres do segredo
         // que NÓS guardamos entrega meio caminho a quem lê o log. O prefixo do
@@ -52,6 +71,9 @@ export function verifyZapiWebhook(req: Request): { ok: true } | { ok: false; sta
     return { ok: true };
 }
 
+/** Mesmo padrão do Z-API: uma lista, sem variante de caixa. */
+const HEADERS_TOKEN_EVOLUTION = ["apikey"] as const;
+
 /**
  * Valida o apikey enviado pela Evolution API nos webhooks.
  * Confronta com EVOLUTION_API_KEY do ambiente.
@@ -62,7 +84,10 @@ export function verifyEvolutionWebhook(req: Request): { ok: true } | { ok: false
         console.error("[webhook-auth] EVOLUTION_API_KEY não configurado — rejeitando todos os webhooks Evolution");
         return { ok: false, status: 500, message: "Webhook auth não configurado" };
     }
-    const got = req.headers.get("apikey") ?? req.headers.get("Apikey");
+    const got = HEADERS_TOKEN_EVOLUTION.reduce<string | null>(
+        (achado, nome) => achado ?? req.headers.get(nome),
+        null,
+    );
     if (!safeCompare(got?.trim() ?? null, expected.trim())) {
         console.warn(
             `[webhook-auth] EVOLUTION 401 | header_presente=${got !== null} | len_recebido=${got?.length ?? 0} | len_esperado=${expected.length} | prefix_recebido='${got?.slice(0,4) ?? "(none)"}' | headers_keys=${Array.from(req.headers.keys()).join(",")}`
