@@ -439,19 +439,33 @@ export function ConversasLayout() {
     const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
     /**
-     * Auto-crescimento da caixa do chat, até 5 linhas.
+     * Auto-crescimento da caixa do chat, até ~5 linhas.
      *
      * `height: auto` antes de ler o `scrollHeight` não é redundante: sem isso o
      * scrollHeight nunca desce, e a caixa que cresceu não voltaria a encolher ao
      * apagar as linhas. Mexe no `style` direto em vez de guardar altura em
      * estado — é medição de layout, e passar por render daria um salto visível.
      */
-    useEffect(() => {
-        const el = chatInputRef.current;
+    const ajustarAlturaCaixa = useCallback((el: HTMLTextAreaElement | null) => {
         if (!el) return;
         el.style.height = "auto";
         el.style.height = `${Math.min(el.scrollHeight, 132)}px`;
-    }, [chatMessage]);
+    }, []);
+
+    /**
+     * Ref-callback, e não só um efeito: a caixa DESMONTA ao gravar áudio. Com
+     * apenas o efeito abaixo, voltar da gravação com um rascunho de três linhas
+     * remontava a caixa com altura de uma — e ela só se acertaria na tecla
+     * seguinte. Medir no momento em que o nó entra no DOM resolve na origem.
+     */
+    const registrarCaixa = useCallback((el: HTMLTextAreaElement | null) => {
+        chatInputRef.current = el;
+        ajustarAlturaCaixa(el);
+    }, [ajustarAlturaCaixa]);
+
+    useEffect(() => {
+        ajustarAlturaCaixa(chatInputRef.current);
+    }, [chatMessage, ajustarAlturaCaixa]);
 
     // Audio attachment (preview before send)
     const [audioAttachment, setAudioAttachment] = useState<{ file: File; previewUrl: string } | null>(null);
@@ -2150,7 +2164,7 @@ export function ConversasLayout() {
                                 {!isRecordingAudio && (
                                     <>
                                         <textarea
-                                            ref={chatInputRef}
+                                            ref={registrarCaixa}
                                             rows={1}
                                             value={chatMessage}
                                             onChange={(e) => setChatMessage(e.target.value)}
