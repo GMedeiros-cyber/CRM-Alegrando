@@ -99,7 +99,13 @@ export type ClienteListItem = {
     emailUnreadCount: number;
     /** Estrela na lista. Compartilhado entre usuários, igual a `last_seen_at`. */
     favorito: boolean;
-    /** Já trocou e-mail (envio ou resposta) — alimenta a aba "E-mails". */
+    /**
+     * Já trocou e-mail alguma vez, em qualquer direção. Vem da RPC.
+     *
+     * **NÃO é o que alimenta a aba "E-mails"** — essa usa resposta recebida e
+     * não lida (`emailUnreadCount`). Confundir os dois foi o bug de origem: um
+     * lead entrava na aba por e-mail que nós mandamos, e nunca mais saía.
+     */
     temEmail: boolean;
 };
 
@@ -319,17 +325,37 @@ export async function listClientes(params?: {
         }
     }
 
-    const contagens: ContagensAbas = {
-        todas: total,
-        naoLidas: Number(primeira?.count_nao_lidas || 0),
-        favoritos: Number(primeira?.count_favoritos || 0),
-        emails: Number(primeira?.count_emails || 0),
-    };
-
     type LinhaRpc = (typeof rows)[number];
 
     const naoLidas = await naoLidasPorLead();
     const chave = (telefone: string, canal: string) => `${telefone}|${canal}`;
+
+    /**
+     * "E-mails" é CAIXA DE ENTRADA, não histórico.
+     *
+     * A primeira versão usava `tem_email` da RPC, que é "já trocou e-mail algum
+     * dia, em qualquer direção" — então um lead entrava na aba por causa de uma
+     * mensagem que NÓS mandamos, e ficava lá para sempre. Na tela isso lia como
+     * "chegou e-mail deste lead", que é falso.
+     *
+     * Agora a aba é exatamente o conjunto de leads com **resposta recebida e não
+     * lida**: aparece quando chega, sai quando é lida. Mesma regra do selo verde
+     * no card e do "Não lidas" do WhatsApp ao lado — três lugares, uma definição.
+     *
+     * Vem de `naoLidasPorLead()` e não da RPC de propósito: a RPC não conhece
+     * `email_replies.lida`, e ensiná-la exigiria migration nova para reproduzir
+     * uma contagem que este processo já tem em mãos.
+     */
+    const comEmailChegando = [...naoLidas.keys()].filter(
+        (k) => !canal || k.split("|")[1] === canal,
+    );
+
+    const contagens: ContagensAbas = {
+        todas: total,
+        naoLidas: Number(primeira?.count_nao_lidas || 0),
+        favoritos: Number(primeira?.count_favoritos || 0),
+        emails: comEmailChegando.length,
+    };
 
     const mapear = (r: LinhaRpc): ClienteListItem => {
         const telefone = String(r.telefone);
@@ -356,6 +382,28 @@ export async function listClientes(params?: {
             temEmail: r.tem_email === true,
         };
     };
+
+    // A aba E-mails não sai da RPC: ela É o conjunto acima, buscado inteiro de
+    // uma vez. Cabe numa página porque é limitado pelo que ainda não foi lido —
+    // hoje 1 lead, e por construção some conforme a equipe responde. Por isso
+    // devolve `total` igual ao que trouxe: não há segunda página para pedir.
+    if (aba === "emails") {
+        const leads = await icarLeadsComEmail({
+            supabase,
+            naoLidas,
+            canal,
+            jaNaPagina: new Set<string>(),
+            mapear,
+            limite: comEmailChegando.length,
+        });
+        // Mais recente primeiro: a resposta que chegou agora é a que interessa.
+        leads.sort((a, b) => {
+            const ra = naoLidas.get(chave(a.telefone, a.canal))?.lastReplyAt ?? "";
+            const rb = naoLidas.get(chave(b.telefone, b.canal))?.lastReplyAt ?? "";
+            return rb.localeCompare(ra);
+        });
+        return { data: leads, total: leads.length, contagens };
+    }
 
     const mapped = rows.map(mapear);
 
@@ -460,17 +508,25 @@ async function icarLeadsComEmail<T>({
     canal,
     jaNaPagina,
     mapear,
+    limite,
 }: {
     supabase: ReturnType<typeof createServerSupabaseClient>;
     naoLidas: Map<string, { count: number; lastReplyAt: string }>;
     canal: string | null;
     jaNaPagina: Set<string>;
     mapear: (linha: T) => ClienteListItem;
+    /**
+     * Teto de leads buscados. O padrão existe para o içamento na aba "Todas",
+     * onde muitos leads içados empurrariam a lista normal para fora da tela. A
+     * aba "E-mails" passa o número exato, porque ali o conjunto não é um
+     * destaque no topo — é a lista inteira.
+     */
+    limite?: number;
 }): Promise<ClienteListItem[]> {
     const faltantes = [...naoLidas.entries()]
         .filter(([k]) => !jaNaPagina.has(k))
         .sort((a, b) => b[1].lastReplyAt.localeCompare(a[1].lastReplyAt))
-        .slice(0, MAX_ICADOS);
+        .slice(0, limite ?? MAX_ICADOS);
 
     if (faltantes.length === 0) return [];
 
