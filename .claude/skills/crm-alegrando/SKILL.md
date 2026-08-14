@@ -80,6 +80,13 @@ teste de um segundo: **`email_replies` existe? Então é o banco vivo.** É o
 anti-padrão "medir o cliente errado" (§8.2) na variante mais cara: medir o
 **banco** errado, com números plausíveis.
 
+**Migration no banco vivo é pelo painel, não por ferramenta.** A sessão do
+Claude Code recebe `You do not have permission` no projeto vivo e enxerga só o
+antigo — então `apply_migration` por MCP, se alguém insistir passando um `ref`,
+aplica DDL **no banco congelado** e reporta sucesso. O caminho certo é o
+arquivo `migration_*.sql` na raiz do repo, colado no SQL Editor. Não há `psql`
+nem CLI do Supabase nesta máquina, e o `.env.local` não tem string de conexão.
+
 **O projeto antigo está `ACTIVE_HEALTHY`, não mais restrito** — e isso destrava
 uma frente que estava anotada como "pode não dar": as **560 mensagens do canal
 alegrando cuja mídia ainda aponta para lá** podem ser migradas por backfill.
