@@ -436,6 +436,22 @@ export function ConversasLayout() {
         id: string;
     }>>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const chatInputRef = useRef<HTMLTextAreaElement>(null);
+
+    /**
+     * Auto-crescimento da caixa do chat, até 5 linhas.
+     *
+     * `height: auto` antes de ler o `scrollHeight` não é redundante: sem isso o
+     * scrollHeight nunca desce, e a caixa que cresceu não voltaria a encolher ao
+     * apagar as linhas. Mexe no `style` direto em vez de guardar altura em
+     * estado — é medição de layout, e passar por render daria um salto visível.
+     */
+    useEffect(() => {
+        const el = chatInputRef.current;
+        if (!el) return;
+        el.style.height = "auto";
+        el.style.height = `${Math.min(el.scrollHeight, 132)}px`;
+    }, [chatMessage]);
 
     // Audio attachment (preview before send)
     const [audioAttachment, setAudioAttachment] = useState<{ file: File; previewUrl: string } | null>(null);
@@ -1298,8 +1314,16 @@ export function ConversasLayout() {
     }
 
     // ========= File select handler (preview before send) =========
-    function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-        const files = Array.from(e.target.files || []);
+
+    /**
+     * Entrada única da bandeja de anexos do chat.
+     *
+     * Extraído de `handleFileSelect` para o colar (Ctrl+V) cair exatamente no
+     * mesmo lugar do 📎 — limite de tamanho, preview e foco na legenda. Dois
+     * caminhos separados divergiriam no primeiro ajuste de limite.
+     */
+    function adicionarArquivos(files: File[]) {
+        if (files.length === 0) return;
         const FILE_MAX = 10 * 1024 * 1024;
         const VIDEO_MAX = 16 * 1024 * 1024;
         for (const file of files) {
@@ -1319,9 +1343,57 @@ export function ConversasLayout() {
             id: Date.now().toString() + Math.random().toString(36).slice(2),
         }));
         setAttachments(prev => [...prev, ...newAttachments]);
-        e.target.value = "";
         // Auto-focus the caption of the first new attachment
         setTimeout(() => firstCaptionRef.current?.focus(), 50);
+    }
+
+    function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+        adicionarArquivos(Array.from(e.target.files || []));
+        e.target.value = "";
+    }
+
+    /**
+     * Colar na caixa do chat.
+     *
+     * Só intercepta quando o clipboard traz ARQUIVO. Texto — inclusive uma URL
+     * de imagem copiada da web — segue o caminho normal e é colado como texto:
+     * adivinhar que uma URL colada deveria virar anexo surpreende mais do que
+     * ajuda, e quebraria o uso mais comum da caixa, que é colar um endereço pra
+     * mandar pra escola.
+     *
+     * `clipboardData.files` já cobre tanto o print (bitmap `image/png`) quanto o
+     * arquivo copiado do explorador de arquivos.
+     */
+    function handleChatPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+        const arquivos = Array.from(e.clipboardData?.files ?? []);
+        if (arquivos.length === 0) return;
+        e.preventDefault();
+        adicionarArquivos(arquivos);
+    }
+
+    /**
+     * Quebra de linha do Alt+Enter.
+     *
+     * `execCommand` em vez de montar a string na mão porque ele passa pela pilha
+     * de desfazer do navegador e mantém o cursor onde estava — Ctrl+Z continua
+     * funcionando. O `else` cobre o dia em que o navegador aposentar a API: aí o
+     * cursor é reposicionado à mão, no frame seguinte, já que o valor só chega
+     * ao DOM depois do render do React.
+     */
+    function inserirQuebraDeLinha() {
+        const el = chatInputRef.current;
+        if (!el) return;
+        el.focus();
+        if (document.execCommand("insertText", false, "\n")) return;
+
+        const inicio = el.selectionStart ?? el.value.length;
+        const fim = el.selectionEnd ?? inicio;
+        const novo = `${el.value.slice(0, inicio)}\n${el.value.slice(fim)}`;
+        setChatMessage(novo);
+        requestAnimationFrame(() => {
+            const alvo = chatInputRef.current;
+            if (alvo) alvo.selectionStart = alvo.selectionEnd = inicio + 1;
+        });
     }
 
     // ========= Audio record / send handlers =========
@@ -2036,7 +2108,11 @@ export function ConversasLayout() {
 
                         {/* Input */}
                         <div className="px-5 py-3 border-t-2 border-border shrink-0 bg-background/80">
-                            <div className="flex gap-2 items-center">
+                            {/* `items-end` e não `items-center`: a caixa cresce pra
+                                cima ao quebrar linha, e os botões precisam ficar
+                                colados na base junto com a última linha. Em
+                                repouso tudo tem h-10, então o visual é o mesmo. */}
+                            <div className="flex gap-2 items-end">
                                 {/* Emoji picker */}
                                 <EmojiPickerInput
                                     onEmojiSelect={(emoji) => setChatMessage((prev) => prev + emoji)}
@@ -2073,9 +2149,12 @@ export function ConversasLayout() {
                                 />
                                 {!isRecordingAudio && (
                                     <>
-                                        <Input
+                                        <textarea
+                                            ref={chatInputRef}
+                                            rows={1}
                                             value={chatMessage}
                                             onChange={(e) => setChatMessage(e.target.value)}
+                                            onPaste={handleChatPaste}
                                             disabled={cliente.iaAtiva || attachments.length > 0}
                                             placeholder={
                                                 cliente.iaAtiva
@@ -2084,9 +2163,39 @@ export function ConversasLayout() {
                                                         ? "Adicione legenda nos arquivos acima ou clique em enviar"
                                                         : "Digite uma mensagem..."
                                             }
-                                            className="rounded-xl flex-1 h-10 bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8] focus:border-brand-500 focus:ring-brand-500/20"
+                                            className="rounded-xl flex-1 min-h-10 resize-none overflow-y-auto border px-3 py-2 text-sm leading-6 shadow-xs outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50 bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#94a3b8] focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20"
                                             onKeyDown={(e) => {
-                                                if (e.key === "Enter" && !e.shiftKey && !cliente.iaAtiva && attachments.length === 0) {
+                                                if (e.key !== "Enter") return;
+
+                                                // Acento morto e IME: enquanto a
+                                                // composição está aberta, o Enter é
+                                                // do teclado, não nosso. Sem esta
+                                                // guarda, digitar "não" no ABNT2
+                                                // podia enviar no meio da palavra.
+                                                // `keyCode 229` cobre o Safari, que
+                                                // nem sempre popula `isComposing`.
+                                                if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+
+                                                // Shift+Enter: o textarea já quebra
+                                                // linha sozinho. Deixar o default
+                                                // correr preserva o desfazer nativo
+                                                // e o cursor no meio do texto.
+                                                if (e.shiftKey) return;
+
+                                                // Alt+Enter NÃO tem quebra por
+                                                // padrão — ao contrário do Shift, o
+                                                // navegador engole a tecla. Por isso
+                                                // este ramo insere na mão, e não
+                                                // basta um `return` como o de cima.
+                                                if (e.altKey) {
+                                                    e.preventDefault();
+                                                    inserirQuebraDeLinha();
+                                                    return;
+                                                }
+
+                                                if (e.ctrlKey || e.metaKey) return;
+
+                                                if (!cliente.iaAtiva && attachments.length === 0) {
                                                     e.preventDefault();
                                                     handleSendMessage();
                                                 }
@@ -2114,7 +2223,7 @@ export function ConversasLayout() {
                             <p className="text-[10px] text-[#9B9A97] dark:text-[#64748b] mt-1.5 text-center">
                                 {cliente.iaAtiva
                                     ? "IA ativa — pause para enviar mensagens manualmente"
-                                    : "Enter para enviar · Clique 📎 para anexar arquivos"}
+                                    : "Enter envia · Alt+Enter (ou Shift+Enter) quebra linha · 📎 ou Ctrl+V para anexar"}
                             </p>
                         </div>
                     </>

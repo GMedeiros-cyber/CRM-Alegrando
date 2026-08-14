@@ -26,6 +26,39 @@ import { NextResponse } from "next/server";
 // Sem barra no final, igual ao `r2-client.ts`.
 const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
 
+/**
+ * Storage público do projeto Supabase ANTIGO (`mtzlpogvcyhhjaagmlxn`).
+ *
+ * A mídia do WhatsApp só passou a subir pro R2 em 23/07/2026; tudo que entrou
+ * antes disso mora aqui e continua sendo servido — o projeto velho segue de pé.
+ * Medido no banco: das 159 imagens do chat, **69 ainda apontam pra cá**. Sem
+ * esta segunda base, o botão "Baixar" erraria em quase metade das imagens da
+ * conversa, e só se descobriria clicando numa mensagem antiga.
+ *
+ * Constante e não variável de ambiente de propósito: é um fato histórico do
+ * acervo, não configuração — não existe cenário em que este endereço mude. E
+ * não é segredo: está no `content` de centenas de linhas de `messages` e num
+ * bucket público.
+ *
+ * O prefixo de caminho é parte da chave: `/storage/v1/object/public/` limita a
+ * rota ao que já é público. Sem ele, a allowlist liberaria a API inteira do
+ * projeto antigo pra qualquer caminho.
+ */
+const STORAGE_LEGADO = "https://mtzlpogvcyhhjaagmlxn.supabase.co/storage/v1/object/public/";
+
+/**
+ * Origens que a rota aceita buscar, com o prefixo de caminho exigido em cada
+ * uma. Lista, e não string única, porque o acervo tem duas casas (ver acima).
+ */
+function basesPermitidas(): URL[] {
+    const bases: URL[] = [];
+    // Barra no fim é obrigatória: é ela que faz o `startsWith` do pathname
+    // comparar um segmento inteiro.
+    if (R2_PUBLIC_URL) bases.push(new URL(`${R2_PUBLIC_URL}/`));
+    bases.push(new URL(STORAGE_LEGADO));
+    return bases;
+}
+
 /** Erro em texto puro: esta resposta é lida por gente, numa aba do navegador. */
 function erro(mensagem: string, status: number) {
     return new NextResponse(mensagem, {
@@ -51,11 +84,6 @@ export async function GET(req: Request) {
     const { userId } = await auth();
     if (!userId) return erro("Não autorizado.", 401);
 
-    if (!R2_PUBLIC_URL) {
-        console.error("[anexo-download] R2_PUBLIC_URL não configurada");
-        return erro("Download de anexo não está configurado no servidor.", 500);
-    }
-
     const params = new URL(req.url).searchParams;
     const alvo = (params.get("url") ?? "").trim();
     const nome = (params.get("nome") ?? "").trim().slice(0, 200) || "anexo";
@@ -66,15 +94,22 @@ export async function GET(req: Request) {
     // inclusive a rede interna da Vercel (SSRF). Compara origem E prefixo de
     // caminho, e não `startsWith` na string crua — `…r2.dev.outrodominio.com`
     // passaria por uma comparação ingênua.
-    const base = new URL(`${R2_PUBLIC_URL}/`);
     let destino: URL;
     try {
         destino = new URL(alvo);
     } catch {
         return erro("Endereço de anexo inválido.", 400);
     }
-    if (destino.origin !== base.origin || !destino.pathname.startsWith(base.pathname)) {
-        console.warn(`[anexo-download] recusado: fora do R2 (${destino.origin})`);
+    const permitido = basesPermitidas().some(
+        (base) => destino.origin === base.origin && destino.pathname.startsWith(base.pathname),
+    );
+    if (!permitido) {
+        // `r2_configurado` no log separa "endereço realmente estranho" de
+        // "R2_PUBLIC_URL faltando no ambiente" — que produzem a mesma recusa e
+        // exigem correções opostas.
+        console.warn(
+            `[anexo-download] recusado: fora da allowlist (${destino.origin}) | r2_configurado=${Boolean(R2_PUBLIC_URL)}`,
+        );
         return erro("Este anexo não está num endereço que o CRM possa baixar.", 400);
     }
 
