@@ -18,6 +18,34 @@ export const MAX_TOTAL_BYTES = 25 * 1024 * 1024;
  */
 export const WARN_BYTES = 18 * 1024 * 1024;
 
+/**
+ * Por quanto tempo um anexo em trânsito ainda conta como **espera**.
+ *
+ * Passado isso, `attachments_pending` deixa de virar "Carregando…" na tela e
+ * passa a ser lido como falha. É defesa em profundidade: no caminho normal
+ * quem converte pendente em faltando é o próprio worker, e o UPDATE chega pelo
+ * Realtime. Esta regra cobre o caso em que o worker não roda mais — instância
+ * fora do ar, workflow desativado — e a bolha ficaria girando para sempre num
+ * anexo que nunca vem. Sumiço silencioso trocado por mentira silenciosa.
+ *
+ * O GÊMEO desta constante vive no n8n, no Code node "Selecionar novas
+ * respostas" do worker `NOAIuHJmIUh6Fdne`, como `JANELA_MIN`. São sistemas
+ * diferentes e não há como importar uma na outra: **se mudar aqui, mude lá no
+ * mesmo movimento.** Divergir abre uma janela em que a tela diz "falhou"
+ * enquanto o worker ainda está tentando.
+ */
+export const JANELA_ANEXO_PENDENTE_MIN = 10;
+
+/**
+ * A conta roda no SERVIDOR de propósito: relógio de navegador adiantado
+ * declararia falha cedo demais, e o erro seria invisível para quem depura.
+ */
+export function anexoPendenteVencido(createdAt: unknown): boolean {
+    const nascida = Date.parse(String(createdAt ?? ""));
+    if (!Number.isFinite(nascida)) return false;
+    return Date.now() - nascida > JANELA_ANEXO_PENDENTE_MIN * 60_000;
+}
+
 /** Extensões que o Gmail bloqueia de qualquer jeito — barrar antes de subir. */
 const EXTENSOES_BLOQUEADAS = new Set([
     "exe", "bat", "cmd", "com", "cpl", "dll", "scr", "pif", "msi", "msp", "msc",

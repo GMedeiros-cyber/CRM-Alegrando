@@ -118,6 +118,23 @@ export type EmailReplyRecord = {
      * não entra nessa conta.
      */
     attachmentsMissing: number;
+    /**
+     * Quantos anexos ainda estão sendo baixados e subidos, agora.
+     *
+     * O worker grava a resposta em duas etapas — texto primeiro, anexo depois —
+     * para o texto não esperar um PDF de 3 MB. Este campo é o que existe entre
+     * uma e outra. Não confundir com `attachmentsMissing`: aqui é **espera**,
+     * lá é **desistiu**.
+     */
+    attachmentsPending: number;
+    /**
+     * Os pendentes acima já passaram da janela de espera?
+     *
+     * Calculado no servidor (ver `anexoPendenteVencido`). Quando verdadeiro, a
+     * tela lê os pendentes como falha, e não como espera — senão a bolha giraria
+     * para sempre num anexo que nunca vem, se o worker tiver parado.
+     */
+    attachmentsPendingExpired: boolean;
 };
 
 /**
@@ -149,6 +166,10 @@ export type EmailThreadMessage = {
     links: LinkDoCorpo[];
     /** Só em recebidos: anexos que o Gmail tinha e não foram gravados. */
     attachmentsMissing: number;
+    /** Só em recebidos: anexos ainda a caminho (espera, não perda). */
+    attachmentsPending: number;
+    /** Só em recebidos: a espera acima já venceu, então é perda. */
+    attachmentsPendingExpired: boolean;
     /** Só em enviados. */
     status: EmailSendStatus | null;
     error: string | null;

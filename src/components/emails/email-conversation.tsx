@@ -332,6 +332,19 @@ function MensagemDaThread({ msg }: { msg: EmailThreadMessage }) {
     const [mostrarCitacao, setMostrarCitacao] = useState(false);
     const enviada = msg.direcao === "enviado";
 
+    // Pendente que venceu a janela deixa de ser espera e passa a contar como
+    // perda, no mesmo aviso âmbar. Sem isso a bolha giraria "carregando" para
+    // sempre se o worker tivesse parado — uma mentira no lugar do sumiço
+    // silencioso que a coluna existe para acabar. Quem venceu foi decidido no
+    // servidor: relógio de navegador não entra nessa conta.
+    const esperandoAnexo = msg.attachmentsPendingExpired ? 0 : msg.attachmentsPending;
+    const anexosPerdidos =
+        msg.attachmentsMissing > 0
+            ? msg.attachmentsMissing
+            : msg.attachmentsPendingExpired
+              ? msg.attachmentsPending
+              : 0;
+
     // O corpo recebido vem de fora — é a escola que escreve. Só texto: HTML de
     // terceiro renderizado no painel abriria uma porta de XSS.
     const { principal, citacao } = useMemo(() => {
@@ -456,15 +469,32 @@ function MensagemDaThread({ msg }: { msg: EmailThreadMessage }) {
                 </div>
             )}
 
+            {/* Espera, não perda. O worker grava o texto assim que monta a
+                mensagem e só depois baixa e sobe os anexos — sem este aviso, a
+                resposta apareceria "sem anexo" por alguns segundos e quem
+                estivesse lendo concluiria que a escola não mandou nada.
+
+                Cinza com spinner, deliberadamente longe do âmbar com triângulo
+                logo abaixo: um diz "está vindo", o outro diz "não veio". Se os
+                dois se parecessem, a bolha mentiria em metade dos casos. */}
+            {esperandoAnexo > 0 && (
+                <p className="mt-1 flex items-center gap-1 text-[10px] text-[#9B9A97] dark:text-[#64748b]">
+                    <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                    {esperandoAnexo === 1
+                        ? "Carregando 1 anexo…"
+                        : `Carregando ${esperandoAnexo} anexos…`}
+                </p>
+            )}
+
             {/* Sem isto, anexo que falhou some sem deixar rastro e quem lê a
                 conversa nem sabe que havia arquivo. Discreto de propósito: é
                 aviso, não alarme. */}
-            {msg.attachmentsMissing > 0 && (
+            {anexosPerdidos > 0 && (
                 <p className="mt-1 flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400">
                     <AlertTriangle className="h-3 w-3 shrink-0" />
-                    {msg.attachmentsMissing === 1
+                    {anexosPerdidos === 1
                         ? "1 anexo não pôde ser carregado"
-                        : `${msg.attachmentsMissing} anexos não puderam ser carregados`}
+                        : `${anexosPerdidos} anexos não puderam ser carregados`}
                 </p>
             )}
         </div>

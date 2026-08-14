@@ -14,7 +14,7 @@ import {
 } from "@/lib/email/format";
 import { cleanEditorHtml, isEditorEmpty, wrapEmailHtml } from "@/lib/email/editor";
 import { presignedPutUrl, r2PublicUrl } from "@/lib/whatsapp/r2-client";
-import { MAX_TOTAL_BYTES } from "@/lib/email/attachments";
+import { anexoPendenteVencido, MAX_TOTAL_BYTES } from "@/lib/email/attachments";
 import type {
     EmailAttachment,
     EmailConversation,
@@ -136,6 +136,10 @@ export async function listLeadsByLabels(labelIds: string[]): Promise<LeadEmailRo
 }
 
 const REPLY_COLUMNS_COMPLETO =
+    "id, from_email, from_name, subject, snippet, body_text, body_text_full, body_html, received_at, read_at, attachments, attachments_missing, attachments_pending, created_at";
+
+/** Sem a migração do anexo pendente (gravação em duas etapas). */
+const REPLY_COLUMNS_SEM_PENDENTE =
     "id, from_email, from_name, subject, snippet, body_text, body_text_full, body_html, received_at, read_at, attachments, attachments_missing";
 
 /** Sem a migração do contador de anexo faltando. */
@@ -151,6 +155,7 @@ function anexosDe(valor: unknown): EmailAttachment[] {
 }
 
 function mapReply(r: Record<string, unknown>): EmailReplyRecord {
+    const pendentes = Number(r.attachments_pending) || 0;
     return {
         id: String(r.id),
         fromEmail: String(r.from_email ?? ""),
@@ -164,6 +169,10 @@ function mapReply(r: Record<string, unknown>): EmailReplyRecord {
         readAt: (r.read_at as string) ?? null,
         attachments: anexosDe(r.attachments),
         attachmentsMissing: Number(r.attachments_missing) || 0,
+        attachmentsPending: pendentes,
+        // Calculado aqui, no servidor, e não no componente: o relógio de quem
+        // abre a tela não pode decidir se um anexo ainda está a caminho.
+        attachmentsPendingExpired: pendentes > 0 && anexoPendenteVencido(r.created_at),
     };
 }
 
@@ -237,6 +246,12 @@ export async function listLeadEmailConversations(
         `${COM_EXTRAS}, email_replies(${REPLY_COLUMNS_COMPLETO})`,
         true,
     );
+    if (semEstrutura(error?.code)) {
+        ({ data, error } = await query(
+            `${COM_EXTRAS}, email_replies(${REPLY_COLUMNS_SEM_PENDENTE})`,
+            true,
+        ));
+    }
     if (semEstrutura(error?.code)) {
         ({ data, error } = await query(`${COM_EXTRAS}, email_replies(${REPLY_COLUMNS})`, true));
     }
@@ -312,6 +327,8 @@ export async function listLeadEmailConversations(
                 attachments: envio.attachments,
                 links: linksEnvio,
                 attachmentsMissing: 0,
+                attachmentsPending: 0,
+                attachmentsPendingExpired: false,
                 status: envio.status,
                 error: envio.error,
                 readAt: null,
@@ -338,6 +355,8 @@ export async function listLeadEmailConversations(
                     attachments: resposta.attachments,
                     links: linksResposta,
                     attachmentsMissing: resposta.attachmentsMissing,
+                    attachmentsPending: resposta.attachmentsPending,
+                    attachmentsPendingExpired: resposta.attachmentsPendingExpired,
                     status: null,
                     error: null,
                     readAt: resposta.readAt,
