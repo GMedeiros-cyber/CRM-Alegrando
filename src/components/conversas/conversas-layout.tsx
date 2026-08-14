@@ -449,7 +449,12 @@ export function ConversasLayout() {
     const ajustarAlturaCaixa = useCallback((el: HTMLTextAreaElement | null) => {
         if (!el) return;
         el.style.height = "auto";
-        el.style.height = `${Math.min(el.scrollHeight, 132)}px`;
+        // `scrollHeight` conta conteúdo + padding, mas NÃO a borda — e o
+        // `box-sizing: border-box` do Tailwind faz o `height` incluir a borda.
+        // Sem somar os 2px de volta, a caixa nasce 2px curta demais e o
+        // navegador mostra barra de rolagem já na primeira linha.
+        const borda = el.offsetHeight - el.clientHeight;
+        el.style.height = `${Math.min(el.scrollHeight + borda, 132)}px`;
     }, []);
 
     /**
@@ -2177,7 +2182,13 @@ export function ConversasLayout() {
                                                         ? "Adicione legenda nos arquivos acima ou clique em enviar"
                                                         : "Digite uma mensagem..."
                                             }
-                                            className="rounded-xl flex-1 min-h-10 resize-none overflow-y-auto border px-3 py-2 text-sm leading-6 shadow-xs outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50 bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#94a3b8] focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20"
+                                            // Sem barra de rolagem visível: a
+                                            // caixa cresce até 5 linhas e, daí
+                                            // pra frente, rola pela roda do
+                                            // mouse. A barra ocupava espaço ao
+                                            // lado do botão de enviar e não
+                                            // acrescentava nada.
+                                            className="rounded-xl flex-1 min-h-10 resize-none overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border px-3 py-2 text-sm leading-6 shadow-xs outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50 bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#94a3b8] focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20"
                                             onKeyDown={(e) => {
                                                 if (e.key !== "Enter") return;
 
