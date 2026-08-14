@@ -108,10 +108,39 @@ continua sendo o arquivo `migration_*.sql` na raiz colado no SQL Editor. Não h�
 `psql` nem CLI do Supabase nesta máquina, e o `.env.local` não tem string de
 conexão.
 
-**O projeto antigo está `ACTIVE_HEALTHY`, não mais restrito** — e isso destrava
-uma frente que estava anotada como "pode não dar": as **560 mensagens do canal
-alegrando cuja mídia ainda aponta para lá** podem ser migradas por backfill.
-Não está feito; passou de inviável a viável.
+> ## ⛔ NÃO PAUSE NEM APAGUE O PROJETO `mtzlpogvcyhhjaagmlxn`
+>
+> Ele **parece** morto — está congelado desde 23/07/2026 e ninguém o mantém —
+> mas **ainda serve mídia que o CRM de produção exibe todo dia**. Se alguém
+> limpar aquele projeto "porque está sem uso", o histórico perde o conteúdo e
+> **não há de onde recuperar**.
+>
+> Pendurado nele hoje:
+>
+> | canal | mensagens com mídia lá |
+> |---|---|
+> | alegrando | **560** (299 áudio · 118 documento · 72 imagem · 46 sticker · 25 vídeo) |
+> | festas | **1.095** |
+> | — | mais **7 leads** com `foto_url` apontando pra lá |
+>
+> A trava só pode ser levantada quando a migração terminar e a conferência
+> mostrar zero URLs remanescentes nos dois canais. Enquanto isso não acontecer,
+> pausar o projeto é perda de dado irreversível — e o `ACTIVE_HEALTHY` de hoje
+> não é garantia: ele **já esteve restrito uma vez**.
+
+**Destino da migração — são DOIS destinos, não um.** A resposta não sai de
+memória; sai do código:
+
+- **Mídia de mensagem (áudio, documento, imagem, sticker, vídeo) → R2.**
+  `sendAudioMessage` já chama `putMediaDeduped` (R2, com dedup por hash), e o
+  bucket `audios` do Supabase sobrevive **apenas** no caminho de exclusão, como
+  limpeza de legado. Se alguma anotação disser que "áudio segue no Supabase",
+  está desatualizada: medido, 15 áudios já estão no R2 contra 75 no projeto
+  velho.
+- **Foto de perfil de lead → Storage do projeto NOVO, bucket `avatars`.**
+  `photo-storage.ts` tem `BUCKET = "avatars"` e usa o cliente de servidor, que
+  aponta pro banco vivo. São 230 avatares já lá. **Avatar não vai pro R2** —
+  mandar pra lá contraria a arquitetura vigente.
 
 Existem **dois** clientes Supabase, e confundi-los é a origem de falhas de
 segurança e de diagnósticos errados:
@@ -289,6 +318,32 @@ reverte um filtro em produção sem perceber.
 - **Áudio:** gravar OGG/Opus de verdade (opus-recorder) e mandar a **URL pública**
   ao provedor, não base64 — é o que faz aparecer a onda sonora nativa da nota de
   voz. Enviar WebM rotulado como ogg produz áudio de 00:00.
+
+**A Z-API NÃO guarda histórico de mensagens recebidas. Webhook perdido é dado
+perdido, ponto.** Medido em 14/08/2026, com a instância conectada:
+
+```
+GET /chat-messages/{phone}?amount=100
+{"error":"Does not work in multi device version"}   HTTP 400
+```
+
+O WhatsApp multi-device guarda o histórico **no aparelho**, criptografado; o
+provedor só repassa em tempo real. Não existe endpoint de replay, `/queue` é a
+fila de **saída** (volta `[]`), e não há histórico de webhooks. Consequências
+que mudam decisão de projeto:
+
+- **Backfill de mensagem recebida é impossível.** Não gaste tempo procurando o
+  endpoint certo — ele não existe. Foi verificado por três caminhos.
+- **Por isso o vigia por ausência não é luxo, é a única defesa.** Uma queda de
+  ingestão só é reparável enquanto está acontecendo. Em 12–14/08/2026 o webhook
+  ficou 44 h devolvendo 401 (a Z-API trocou o nome do header) e o prejuízo virou
+  permanente.
+- **O que ainda dá para recuperar é a LISTA de quem escreveu**, não o conteúdo:
+  `GET /chats` devolve `lastMessageTime` por conversa. Cruzando com o
+  `last_message_at` do banco, sai a relação de leads cuja última mensagem o CRM
+  nunca recebeu. Foi assim que os 14 leads da queda foram identificados. A
+  detecção só falha para quem voltou a escrever depois — nesse caso o
+  `lastMessageTime` já é o novo (na queda de agosto, 1 lead).
 
 ### O canal *festas* está DESATIVADO, não apagado
 
