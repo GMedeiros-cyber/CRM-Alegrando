@@ -1,54 +1,58 @@
 -- ===========================================================
 -- Conversas: barra de listas (Todas · Não lidas · Favoritos · E-mails)
 -- ===========================================================
--- Inclui o ADD COLUMN de `favorito` de propósito, para o arquivo ser
--- autossuficiente: se `migration_clientes_favorito.sql` já rodou, o
--- IF NOT EXISTS não faz nada; se não rodou, a função não quebra por falta da
--- coluna. Ordem garantida num paste só.
+-- SOBRECARGA, não substituição. A função de 5 argumentos que está em produção
+-- fica INTACTA; esta acrescenta uma segunda assinatura com `p_aba`.
 --
--- O que muda na RPC, e o que NÃO muda:
+-- Por que sobrecarga: DROP + CREATE abre uma janela em que a lista de conversas
+-- quebra se o deploy do front não subir junto — e o DROP ainda levaria os grants
+-- embora. Com as duas assinaturas vivas, a ordem entre migration e deploy deixa
+-- de importar: código velho continua chamando a de 5, código novo chama a de 6.
 --
---   PRESERVADO tal como está em produção — msg_agg, lead_labels_agg, o CASE do
---   unread_count (mensagem de `cliente` mais nova que last_seen_at; nulo = tudo
---   não lido), o filtro de labels com `&&`, a ordenação por
---   COALESCE(last_message_at, created_at) e o `SET search_path`.
+-- ATENÇÃO AO DEFAULT — é o detalhe que faz isto funcionar ou não:
+-- em Postgres, "todo parâmetro depois de um com DEFAULT também precisa de
+-- DEFAULT". Então NÃO dá para escrever `p_label_ids uuid[] DEFAULT NULL,
+-- p_aba text` — o CREATE falha na hora.
 --
---   ACRESCENTADO — `p_aba` para filtrar do lado do servidor, e três contagens
---   devolvidas junto da lista.
+-- E dar DEFAULT a `p_aba` seria pior, porque falha só na CHAMADA: uma chamada
+-- de 5 argumentos passaria a casar com as DUAS assinaturas e o Postgres
+-- devolveria `function ... is not unique`, derrubando a lista inteira.
+--
+-- Solução: esta assinatura de 6 não tem DEFAULT em NENHUM parâmetro. Aí a
+-- resolução é exata e sem ambiguidade — 5 argumentos só casam com a antiga,
+-- 6 só casam com esta.
+--
+-- O CORPO é cópia fiel do `pg_get_functiondef` do banco VIVO (msg_agg,
+-- lead_labels_agg, o CASE de unread_count, o filtro `&&` de labels, a ordenação
+-- por COALESCE(last_message_at, created_at) e o SET search_path), mais o filtro
+-- de aba e as três contagens. A versão do repositório NÃO foi usada como base:
+-- ela está velha e não tem `p_label_ids` — copiá-la mataria o filtro de Tags.
 --
 -- SEMÂNTICA DAS CONTAGENS (decisão de produto, não detalhe técnico):
--- elas são calculadas sobre a base JÁ filtrada por canal + busca + tags, mas
--- ANTES do filtro de aba. Então trocar de aba não muda os números — é o que
--- permite ver "57 não lidas" estando em "Todas". E elas NÃO refletem os filtros
--- de Grupos e IA ativa/manual, que hoje rodam no cliente sobre as páginas já
+-- são calculadas sobre a base já filtrada por canal + busca + tags, mas ANTES
+-- do filtro de aba. Por isso trocar de aba não muda os números — é o que
+-- permite ver "57 não lidas" estando em "Todas". Elas NÃO refletem os filtros
+-- de Grupos e IA ativa/manual, que rodam no cliente sobre as páginas já
 -- carregadas (ver §8.9 da skill).
---
--- DROP antes de CREATE porque o RETURNS TABLE muda: CREATE OR REPLACE não
--- altera tipo de retorno. Dentro da transação isso é atômico para as outras
--- sessões. As duas assinaturas antigas caem (a de 5 args, que é a de produção,
--- e a de 4, que é a versão velha do repositório).
 -- ===========================================================
 
 BEGIN;
 
--- A coluna e o índice já foram aplicados (índice `idx_clientes_whatsapp_favorito`
--- em `(canal, favorito) WHERE favorito`). O ADD COLUMN fica como rede de
--- segurança e não faz nada se já existe; o índice NÃO é recriado aqui de
--- propósito — com outro nome, o IF NOT EXISTS não impediria um segundo índice
--- equivalente.
+-- Rede de segurança: a coluna e o índice `idx_clientes_whatsapp_favorito`
+-- (em `(canal, favorito) WHERE favorito`) já foram aplicados. O ADD COLUMN não
+-- faz nada se já existe; o índice NÃO é recriado aqui de propósito — com outro
+-- nome, o IF NOT EXISTS não impediria um segundo índice equivalente.
 ALTER TABLE public."Clientes _WhatsApp"
     ADD COLUMN IF NOT EXISTS favorito boolean NOT NULL DEFAULT false;
 
-DROP FUNCTION IF EXISTS public.list_clientes_by_last_msg(text, text, integer, integer, uuid[]);
-DROP FUNCTION IF EXISTS public.list_clientes_by_last_msg(text, text, integer, integer);
-
+-- Sem DROP: a assinatura de 5 argumentos continua existindo e atendendo.
 CREATE OR REPLACE FUNCTION public.list_clientes_by_last_msg(
-    p_canal     text     DEFAULT NULL::text,
-    p_search    text     DEFAULT NULL::text,
-    p_offset    integer  DEFAULT 0,
-    p_limit     integer  DEFAULT 50,
-    p_label_ids uuid[]   DEFAULT NULL::uuid[],
-    p_aba       text     DEFAULT NULL::text
+    p_canal     text,
+    p_search    text,
+    p_offset    integer,
+    p_limit     integer,
+    p_label_ids uuid[],
+    p_aba       text
 )
 RETURNS TABLE(
     telefone           text,
@@ -190,24 +194,34 @@ AS $function$
     LIMIT  p_limit;
 $function$;
 
--- DROP leva os grants embora; devolver explicitamente em vez de contar com o
--- EXECUTE que o Postgres concede a PUBLIC por padrão.
 GRANT EXECUTE ON FUNCTION public.list_clientes_by_last_msg(text, text, integer, integer, uuid[], text)
     TO authenticated, service_role;
 
 COMMIT;
 
+-- O PostgREST guarda o schema em cache: sem isto a função nova só aparece no
+-- próximo reinício, e o front recebe PGRST202 achando que a migration falhou.
+NOTIFY pgrst, 'reload schema';
+
 -- ===========================================================
--- Conferência (esperado hoje: total 313, não lidas 57, favoritos 0, e-mails 1)
+-- Conferência
 -- ===========================================================
--- SELECT DISTINCT total_count, count_nao_lidas, count_favoritos, count_emails
--- FROM list_clientes_by_last_msg('alegrando', NULL, 0, 1, NULL, 'todas');
+-- 1) As DUAS assinaturas têm de existir (esperado: 2 linhas, 5 e 6 argumentos):
+-- SELECT p.oid::regprocedure AS assinatura, pronargs
+-- FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+-- WHERE n.nspname = 'public' AND p.proname = 'list_clientes_by_last_msg'
+-- ORDER BY pronargs;
 --
--- Aba de não lidas devolve só quem tem não lida:
--- SELECT count(*), min(unread_count)
--- FROM list_clientes_by_last_msg('alegrando', NULL, 0, 1000, NULL, 'nao_lidas');
---
--- E a chamada antiga, com 5 argumentos nomeados, tem de continuar funcionando:
+-- 2) A chamada ANTIGA de 5 argumentos continua resolvendo (não pode dar
+--    "function is not unique"):
 -- SELECT count(*) FROM list_clientes_by_last_msg(
 --     p_canal => 'alegrando', p_search => NULL,
 --     p_offset => 0, p_limit => 50, p_label_ids => NULL);
+--
+-- 3) Contagens (esperado hoje: 313 / 57 / 0 / 1):
+-- SELECT DISTINCT total_count, count_nao_lidas, count_favoritos, count_emails
+-- FROM list_clientes_by_last_msg('alegrando', NULL, 0, 1, NULL, 'todas');
+--
+-- 4) A aba de não lidas devolve só quem tem não lida (min tem de ser >= 1):
+-- SELECT count(*), min(unread_count)
+-- FROM list_clientes_by_last_msg('alegrando', NULL, 0, 1000, NULL, 'nao_lidas');
