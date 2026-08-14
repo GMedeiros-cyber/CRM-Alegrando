@@ -156,7 +156,11 @@ const LeadListItemInner = function LeadListItem({
                     </p>
                 </div>
             </div>
-            <div className="mt-2 flex flex-wrap justify-end gap-1.5 min-h-[20px]">
+            {/* `pl-8` reserva a quina inferior esquerda para a estrela, que é
+                irmã deste botão e flutua por cima. Sem a reserva, um lead com
+                três tags + "Grupo" + "Manual" enche a linha, quebra pra
+                esquerda e passa por baixo do ícone. */}
+            <div className="mt-2 flex flex-wrap justify-end gap-1.5 min-h-[20px] pl-8">
                 {item.statusAtendimento === "novo" && isRecentlyCreated(item.createdAt) && (
                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40">
                         NOVO
@@ -187,8 +191,13 @@ const LeadListItemInner = function LeadListItem({
             </div>
         </button>
 
-        {/* Logo abaixo do avatar. O deslocamento acompanha o padding do card
-            (py-3 = 12px) mais a altura da foto (36px). */}
+        {/* Ancorada na BASE do card, não a uma distância fixa do topo.
+            O `top-[50px]` de antes era medido a partir do avatar e não sabia
+            onde o card terminava: num lead sem tag nenhuma o card tem 88px e a
+            estrela ia parar depois da borda, encostando no card seguinte — era
+            o "cortado". Preso ao rodapé, ela fica dentro do card em qualquer
+            altura, e cai na faixa das tags, que é alinhada à direita e tem a
+            quina esquerda livre (reservada com `pl-8` acima). */}
         <button
             type="button"
             onClick={onToggleFavorito}
@@ -200,7 +209,7 @@ const LeadListItemInner = function LeadListItem({
             }
             title={item.favorito ? "Remover dos favoritos" : "Marcar como favorito"}
             className={cn(
-                "absolute left-2 top-[50px] flex h-7 w-7 items-center justify-center rounded-full transition-colors",
+                "absolute bottom-2.5 left-2.5 flex h-6 w-6 items-center justify-center rounded-full transition-colors",
                 "hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50",
                 item.favorito
                     ? "text-amber-500"
