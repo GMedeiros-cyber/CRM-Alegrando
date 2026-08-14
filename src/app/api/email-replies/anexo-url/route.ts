@@ -21,23 +21,44 @@ function conferirSegredo(recebido: string, esperado: string): boolean {
  * ter vários MB — o corpo de uma route handler na Vercel para em 4,5MB. É o
  * mesmo motivo pelo qual o envio já usa URL assinada.
  *
- * Autentica pela service key do Supabase porque é o único segredo que os dois
- * lados JÁ têm: o n8n a carrega na credencial que usa pra gravar as respostas.
- * Escolher CRON_SECRET obrigaria a copiar mais um segredo pra dentro do n8n, e
- * quem tem a service key já tem acesso total ao banco de qualquer forma — não
- * amplia exposição nenhuma.
+ * AUTENTICAÇÃO — migração em duas fases, em andamento.
+ *
+ * Historicamente esta rota conferia o bearer contra a própria
+ * `SUPABASE_SERVICE_ROLE_KEY`, porque era o único segredo que os dois lados já
+ * tinham. Funciona, mas o raio de estrago é péssimo: para pedir uma URL de
+ * upload, o n8n precisa guardar a chave que lê, escreve e apaga o banco inteiro.
+ * Se ela vazar de um log ou de um histórico de execução, o prêmio é o banco.
+ *
+ * **Fase A (aqui):** aceita `ANEXO_URL_SECRET` **ou** a service key. Nada quebra
+ * enquanto o n8n ainda manda a chave antiga. Fase única abriria uma janela em
+ * que anexo de resposta falha CALADO — a classe de bug mais cara deste projeto.
+ *
+ * **Fase B:** remover a aceitação da service key. O gatilho para avançar não é
+ * palpite: o log abaixo diz qual credencial cada chamada usou, então dá para
+ * confirmar que o n8n já migrou antes de cortar.
  */
 export async function POST(req: Request) {
-    const esperado = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!esperado) {
-        console.error("[anexo-url] SUPABASE_SERVICE_ROLE_KEY não configurada");
+    const dedicado = process.env.ANEXO_URL_SECRET;
+    const servico = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!dedicado && !servico) {
+        console.error("[anexo-url] nenhum segredo configurado (ANEXO_URL_SECRET ou SUPABASE_SERVICE_ROLE_KEY)");
         return NextResponse.json({ error: "Servidor mal configurado" }, { status: 500 });
     }
 
     const recebido = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-    if (!recebido || !conferirSegredo(recebido, esperado)) {
+
+    // Sem curto-circuito: as duas comparações rodam sempre, em tempo constante.
+    const bateDedicado = Boolean(dedicado) && conferirSegredo(recebido, dedicado!);
+    const bateServico = Boolean(servico) && conferirSegredo(recebido, servico!);
+
+    if (!recebido || (!bateDedicado && !bateServico)) {
         return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+
+    // É este log que autoriza a Fase B: enquanto aparecer "service-key", o n8n
+    // ainda não migrou e cortar o antigo quebraria a ingestão de anexo.
+    console.log(`[anexo-url] autenticado por: ${bateDedicado ? "segredo-dedicado" : "service-key"}`);
 
     let corpo: { filename?: unknown; mimeType?: unknown; size?: unknown };
     try {

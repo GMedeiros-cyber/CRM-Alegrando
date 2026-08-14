@@ -387,6 +387,33 @@ Resolvidos, não repita a investigação:
   à allowlist do Clerk indisponível no plano (402), qualquer um que achasse o
   endereço criava conta e entrava. Nenhuma conta indevida chegou a existir.
 
+- **O interruptor de desligar autenticação de webhook não existe mais.** O
+  branch `WEBHOOK_AUTH_DISABLE === "true"` saiu do `webhook-auth.ts`. O risco
+  nunca foi o uso legítimo: era alguém achar a variável, supor que é depuração e
+  ligá-la — os webhooks passariam a aceitar qualquer chamada, sem nada na tela.
+  **Não reintroduza.** Se um dia for mesmo necessário, o caminho é um deploy,
+  que é visível e revertível, e não uma variável de ambiente.
+
+#### `/api/email-replies/anexo-url` — segredo dedicado, em duas fases
+
+A rota conferia o bearer contra a própria `SUPABASE_SERVICE_ROLE_KEY`. Funciona,
+mas o raio de estrago é péssimo: para pedir uma URL de upload de anexo, o n8n
+guarda a chave que lê, escreve e apaga o banco inteiro. Vazou de um log ou de um
+histórico de execução, o prêmio é o banco — não um upload.
+
+A migração é **em duas fases de propósito**. Trocar de uma vez abre uma janela
+entre o deploy e a atualização do header no n8n em que o anexo de resposta falha
+**calado** — a classe de bug mais cara deste projeto, e justamente nesta rota.
+
+- **Fase A:** a rota aceita `ANEXO_URL_SECRET` **ou** a service key. Nada quebra
+  enquanto o n8n ainda manda a antiga.
+- **O gatilho da Fase B não é palpite.** A rota loga
+  `[anexo-url] autenticado por: segredo-dedicado | service-key`. Enquanto
+  aparecer `service-key`, o n8n não migrou e cortar quebraria a ingestão.
+- **Fase B:** só depois de um teste com anexo real passando (resposta com PDF →
+  `email_replies.attachments` com URL do R2 e `attachments_missing` em 0),
+  remover a aceitação da service key e tirá-la do n8n.
+
 Em aberto, decisão tomada de não fazer agora:
 
 - **Sem rate limiting.** A conta é **Hobby** e a config do firewall está vazia
