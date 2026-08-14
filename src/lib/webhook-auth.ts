@@ -43,32 +43,75 @@ function safeCompare(a: string | null | undefined, b: string | null | undefined)
 const HEADERS_TOKEN_ZAPI = ["client-token", "z-api-token"] as const;
 
 /**
+ * ⚠️ TEMPORÁRIO — REDUZIR A UMA SÓ ASSIM QUE O LOG DISSER QUAL É.
+ *
+ * A Z-API manda no header um valor de 24 caracteres começando com `FF7E`, que
+ * NÃO é o Client-Token da conta (34 caracteres, começa com `Fdf`). O painel
+ * deles não mostra qual credencial vai no webhook, e inspeção manual não
+ * convergiu em três tentativas.
+ *
+ * Então o código descobre em vez de perguntar: aceita qualquer uma das três
+ * credenciais que já temos e **registra qual casou**. Uma rodada depois disso,
+ * esta lista some e fica só a certa, com nome próprio.
+ *
+ * Não afrouxa a segurança de forma relevante — as três são segredos que só a
+ * Z-API e nós conhecemos, e tudo fora da lista continua levando 401. É
+ * estritamente melhor que hoje, com a ingestão morta.
+ */
+const CREDENCIAIS_ZAPI = [
+    { nome: "client-token", env: "ZAPI_CLIENT_TOKEN" },
+    { nome: "instance-token", env: "ZAPI_TOKEN" },
+    { nome: "instance-id", env: "ZAPI_INSTANCE" },
+] as const;
+
+/**
  * Valida o token enviado pela Z-API nos webhooks.
- * Confronta com ZAPI_CLIENT_TOKEN do ambiente.
  *
  * Retorna { ok: true } se válido, ou { ok: false, status, message } com a resposta a ser devolvida.
  */
 export function verifyZapiWebhook(req: Request): { ok: true } | { ok: false; status: number; message: string } {
-    const expected = process.env.ZAPI_CLIENT_TOKEN;
-    if (!expected) {
-        console.error("[webhook-auth] ZAPI_CLIENT_TOKEN não configurado — rejeitando todos os webhooks Z-API");
+    const candidatas: { nome: string; valor: string }[] = [];
+    for (const c of CREDENCIAIS_ZAPI) {
+        const valor = process.env[c.env]?.trim();
+        if (valor) candidatas.push({ nome: c.nome, valor });
+    }
+
+    if (candidatas.length === 0) {
+        console.error(
+            "[webhook-auth] nenhuma credencial Z-API configurada (ZAPI_CLIENT_TOKEN, ZAPI_TOKEN, ZAPI_INSTANCE) — rejeitando todos os webhooks",
+        );
         return { ok: false, status: 500, message: "Webhook auth não configurado" };
     }
+
     const got = HEADERS_TOKEN_ZAPI.reduce<string | null>(
         (achado, nome) => achado ?? req.headers.get(nome),
         null,
     );
-    if (!safeCompare(got?.trim() ?? null, expected.trim())) {
-        // Sem `prefix_esperado`: imprimir os 4 primeiros caracteres do segredo
-        // que NÓS guardamos entrega meio caminho a quem lê o log. O prefixo do
-        // RECEBIDO fica, porque é dado de quem chamou e é o que responde a
-        // pergunta útil na depuração — "veio token errado ou token nenhum?".
-        console.warn(
-            `[webhook-auth] ZAPI 401 | header_presente=${got !== null} | len_recebido=${got?.length ?? 0} | len_esperado=${expected.length} | prefix_recebido='${got?.slice(0,4) ?? "(none)"}' | headers_keys=${Array.from(req.headers.keys()).join(",")}`
-        );
-        return { ok: false, status: 401, message: "Token inválido" };
+    const recebido = got?.trim() ?? null;
+
+    // Percorre TODAS mesmo depois de achar: sair no primeiro acerto faria o
+    // tempo de resposta variar conforme a posição da credencial na lista, que é
+    // exatamente o que a comparação de tempo constante existe para evitar.
+    const casou = candidatas.reduce<string | null>(
+        (achado, c) => (safeCompare(recebido, c.valor) ? c.nome : achado),
+        null,
+    );
+
+    if (casou) {
+        // É este log que fecha a investigação — diz qual credencial a Z-API
+        // resolveu usar, sem imprimir segredo nenhum.
+        console.log(`[webhook-auth] ZAPI ok | credencial=${casou}`);
+        return { ok: true };
     }
-    return { ok: true };
+
+    // Sem `prefix_esperado`: imprimir os 4 primeiros caracteres do segredo
+    // que NÓS guardamos entrega meio caminho a quem lê o log. O prefixo do
+    // RECEBIDO fica, porque é dado de quem chamou e é o que responde a
+    // pergunta útil na depuração — "veio token errado ou token nenhum?".
+    console.warn(
+        `[webhook-auth] ZAPI 401 | header_presente=${got !== null} | len_recebido=${recebido?.length ?? 0} | len_esperado=${candidatas.map((c) => `${c.nome}:${c.valor.length}`).join("/")} | prefix_recebido='${recebido?.slice(0, 4) ?? "(none)"}' | headers_keys=${Array.from(req.headers.keys()).join(",")}`,
+    );
+    return { ok: false, status: 401, message: "Token inválido" };
 }
 
 /** Mesmo padrão do Z-API: uma lista, sem variante de caixa. */
