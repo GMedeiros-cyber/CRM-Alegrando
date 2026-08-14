@@ -9,6 +9,7 @@ import { ChatWindow } from "./chat-window";
 import { EmojiPickerInput } from "./emoji-picker-input";
 import { NovoLeadModal } from "./novo-lead-modal";
 import { LeadListItem, isGroupTelefone } from "./lead-list-item";
+import { ListasTabBar } from "./listas-tab-bar";
 import { LeadListSkeleton } from "./lead-list-skeleton";
 import { AttachmentPreview } from "./attachment-preview";
 import { AudioPlayer } from "./audio-player";
@@ -29,6 +30,7 @@ import {
     deleteCliente,
     clearClienteMessages,
     createCliente,
+    toggleFavorito,
 } from "@/lib/actions/leads";
 import type { PasseioHistorico } from "@/lib/actions/leads";
 import { sendMessage, sendFileMessage, sendAudioMessage, createSignedUploadUrl, sendUploadedFileMessage } from "@/lib/actions/messages";
@@ -45,6 +47,8 @@ import type { AgendamentoEvent } from "@/lib/actions/agenda";
 import type {
     ClienteListItem,
     ClienteDetail,
+    ContagensAbas,
+    ListaAba,
 } from "@/lib/actions/leads";
 import {
     Search,
@@ -277,6 +281,7 @@ type ClienteDetailCacheEntry = {
 type ClientesListCacheEntry = {
     data: ClienteListItem[];
     total: number;
+    contagens: ContagensAbas;
     ts: number;
 };
 
@@ -359,6 +364,9 @@ export function ConversasLayout() {
     const canalFiltro = CANAL_ATIVO;
     const [iaFiltro, setIaFiltro] = useState<"todos" | "ia_ativa" | "manual">("todos");
     const [tipoFiltro, setTipoFiltro] = useState<"todos" | "grupos">("todos");
+    const [aba, setAba] = useState<ListaAba>("todas");
+    const [contagens, setContagens] = useState<ContagensAbas>({ todas: 0, naoLidas: 0, favoritos: 0, emails: 0 });
+
     const [labelFiltro, setLabelFiltro] = useState<string[]>([]);
     const [availableLabels, setAvailableLabels] = useState<Label[]>([]);
     const [emailBlastOpen, setEmailBlastOpen] = useState(false);
@@ -401,6 +409,52 @@ export function ConversasLayout() {
     const [totalClientes, setTotalClientes] = useState(0);
     const [loadingMore, setLoadingMore] = useState(false);
     const CLIENTES_LIMIT = 50;
+
+    /**
+     * Total da aba ativa — e não o da base.
+     *
+     * `totalClientes` conta a base inteira (canal + busca + tags). Com uma aba
+     * ligada a lista mostra menos que isso, e o gatilho de "carregar mais"
+     * ficaria pedindo página pra sempre.
+     */
+    const totalEfetivo =
+        aba === "todas"
+            ? totalClientes
+            : aba === "nao_lidas"
+              ? contagens.naoLidas
+              : aba === "favoritos"
+                ? contagens.favoritos
+                : contagens.emails;
+
+    /**
+     * Estrela: pinta na hora e desfaz se o servidor recusar.
+     *
+     * Na aba Favoritos, desfavoritar NÃO tira o card da lista na hora — ele sai
+     * no próximo carregamento. É deliberado: a linha sumindo sob o cursor logo
+     * depois do clique tira a chance de desfazer um toque errado.
+     */
+    async function favoritar(item: ClienteListItem) {
+        const novo = !item.favorito;
+        const mesmo = (c: ClienteListItem) =>
+            String(c.telefone) === String(item.telefone) && c.canal === item.canal;
+
+        markOptimisticChange();
+        setClientesList((prev) => prev.map((c) => (mesmo(c) ? { ...c, favorito: novo } : c)));
+        setContagens((prev) => ({
+            ...prev,
+            favoritos: Math.max(0, prev.favoritos + (novo ? 1 : -1)),
+        }));
+
+        const res = await toggleFavorito(String(item.telefone), item.canal, novo);
+        if (!res.ok) {
+            setClientesList((prev) => prev.map((c) => (mesmo(c) ? { ...c, favorito: !novo } : c)));
+            setContagens((prev) => ({
+                ...prev,
+                favoritos: Math.max(0, prev.favoritos + (novo ? -1 : 1)),
+            }));
+            setToast({ type: "error", text: res.error });
+        }
+    }
 
     // Mobile responsiveness
     const [mobileView, setMobileView] = useState<"list" | "chat">("list");
@@ -504,7 +558,7 @@ export function ConversasLayout() {
     // recente) mostra a lista cacheada instantaneamente e revalida em background.
     const loadList = useCallback(async () => {
         const version = ++loadListVersionRef.current;
-        const cacheKey = `${searchTerm || ""}|${canalFiltro}|${[...labelFiltro].sort().join(",")}`;
+        const cacheKey = `${searchTerm || ""}|${canalFiltro}|${[...labelFiltro].sort().join(",")}|${aba}`;
         const cached = clientesListCache.current.get(cacheKey);
         const hasFreshCache = cached && Date.now() - cached.ts < CLIENTES_LIST_TTL;
 
@@ -519,6 +573,7 @@ export function ConversasLayout() {
             setClientesList(cached.data);
             loadedCountRef.current = cached.data.length;
             setTotalClientes(cached.total);
+            setContagens(cached.contagens);
             setLoading(false);
             setShowFilterSkeleton(false);
         } else if (cached && !keyChanged) {
@@ -526,6 +581,7 @@ export function ConversasLayout() {
             setClientesList(cached.data);
             loadedCountRef.current = cached.data.length;
             setTotalClientes(cached.total);
+            setContagens(cached.contagens);
             setLoading(false);
             setShowFilterSkeleton(false);
         } else if (keyChanged) {
@@ -547,6 +603,7 @@ export function ConversasLayout() {
                 limit: CLIENTES_LIMIT,
                 canal: canalFiltro,
                 labelIds: labelFiltro,
+                aba,
             });
             // Descarta respostas obsoletas — resolve a race condition em
             // sequências rápidas de troca de canal/filtro.
@@ -562,9 +619,11 @@ export function ConversasLayout() {
             setClientesList(unique);
             loadedCountRef.current = unique.length;
             setTotalClientes(result.total);
+            setContagens(result.contagens);
             clientesListCache.current.set(cacheKey, {
                 data: unique,
                 total: result.total,
+                contagens: result.contagens,
                 ts: Date.now(),
             });
             lastFetchedKeyRef.current = cacheKey;
@@ -577,7 +636,7 @@ export function ConversasLayout() {
                 setShowFilterSkeleton(false);
             }
         }
-    }, [searchTerm, canalFiltro, labelFiltro]);
+    }, [searchTerm, canalFiltro, labelFiltro, aba]);
 
     // Load more clientes (next page)
     const loadMore = useCallback(async () => {
@@ -590,6 +649,7 @@ export function ConversasLayout() {
                 limit: CLIENTES_LIMIT,
                 canal: canalFiltro,
                 labelIds: labelFiltro,
+                aba,
             });
             setClientesList(prev => {
                 const existentes = new Set(prev.map(c => String(c.telefone)));
@@ -604,7 +664,7 @@ export function ConversasLayout() {
         } finally {
             setLoadingMore(false);
         }
-    }, [searchTerm, canalFiltro, labelFiltro]);
+    }, [searchTerm, canalFiltro, labelFiltro, aba]);
 
     useEffect(() => {
         loadList();
@@ -619,7 +679,7 @@ export function ConversasLayout() {
                 if (
                     entries[0].isIntersecting &&
                     !loadingMore &&
-                    clientesList.length < totalClientes
+                    clientesList.length < totalEfetivo
                 ) {
                     loadMoreFnRef.current();
                 }
@@ -632,7 +692,7 @@ export function ConversasLayout() {
         );
         observer.observe(loadMoreRef.current);
         return () => observer.disconnect();
-    }, [loadingMore, clientesList.length, totalClientes]);
+    }, [loadingMore, clientesList.length, totalEfetivo]);
 
     // Realtime: atualiza apenas o lead afetado em vez de rebuscar tudo.
     // Usa ref para selectedTelefone — assim trocar de lead não recria o canal
@@ -1750,6 +1810,14 @@ export function ConversasLayout() {
                         </div>
                     </div>
 
+                    {/* Barra de listas: compoe com ORDENAR POR, Tags, busca e canal.
+                        As contagens vem da mesma consulta da lista. */}
+                    <ListasTabBar
+                        aba={aba}
+                        onChange={setAba}
+                        contagens={contagens}
+                        carregando={loading || showFilterSkeleton}
+                    />
 
                     {/* IA filter — quick row to clear current filter when active */}
                     {iaFiltro !== "todos" && (
@@ -1808,9 +1876,10 @@ export function ConversasLayout() {
                                     isSelected={selectedTelefone === item.telefone.toString() && selectedCanal === item.canal}
                                     onClick={() => handleSelectCliente(item.telefone.toString(), item.canal)}
                                     tick={tick}
+                                    onToggleFavorito={() => void favoritar(item)}
                                 />
                             ))}
-                            {clientesList.length < totalClientes && (
+                            {clientesList.length < totalEfetivo && (
                                 <div ref={loadMoreRef} className="flex justify-center py-4">
                                     {loadingMore && (
                                         <span className="flex items-center gap-1.5 text-xs text-[#6366F1] dark:text-[#94a3b8]">

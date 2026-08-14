@@ -97,6 +97,37 @@ export type ClienteListItem = {
     labels: LeadLabel[];
     /** Respostas de e-mail não lidas — badge separado do WhatsApp. */
     emailUnreadCount: number;
+    /** Estrela na lista. Compartilhado entre usuários, igual a `last_seen_at`. */
+    favorito: boolean;
+    /** Já trocou e-mail (envio ou resposta) — alimenta a aba "E-mails". */
+    temEmail: boolean;
+};
+
+/** Abas da barra de listas em Conversas. */
+export type ListaAba = "todas" | "nao_lidas" | "favoritos" | "emails";
+
+/**
+ * Contagens da barra de abas.
+ *
+ * Saem da MESMA consulta que traz a lista (janela sobre a CTE `base` da RPC),
+ * calculadas depois de canal/busca/tags e **antes** do filtro de aba — é o que
+ * mantém os quatro números estáveis ao trocar de aba, sem uma consulta por aba.
+ *
+ * Elas não refletem os filtros de Grupos e IA, que rodam no cliente sobre as
+ * páginas já carregadas. Dívida conhecida e aceita; ver §8.9 da skill.
+ */
+export type ContagensAbas = {
+    todas: number;
+    naoLidas: number;
+    favoritos: number;
+    emails: number;
+};
+
+const CONTAGENS_ZERADAS: ContagensAbas = {
+    todas: 0,
+    naoLidas: 0,
+    favoritos: 0,
+    emails: 0,
 };
 
 /** Detalhe completo do cliente selecionado */
@@ -189,7 +220,8 @@ export async function listClientes(params?: {
     limit?: number;
     canal?: string;
     labelIds?: string[];
-}): Promise<{ data: ClienteListItem[]; total: number }> {
+    aba?: ListaAba;
+}): Promise<{ data: ClienteListItem[]; total: number; contagens: ContagensAbas }> {
     await requireAuth();
     const supabase = createServerSupabaseClient();
     const search = params?.search?.trim();
@@ -200,18 +232,33 @@ export async function listClientes(params?: {
     // junto. Era exatamente isso que o filtro "Todos" fazia, e ele saiu da tela.
     const canal = canalDaConsulta(params?.canal);
     const labelIds = params?.labelIds && params.labelIds.length > 0 ? params.labelIds : null;
+    const aba: ListaAba = params?.aba ?? "todas";
 
-    const { data, error } = await supabase.rpc("list_clientes_by_last_msg", {
+    const argsBase = {
         p_canal: canal,
         p_search: search || null,
         p_offset: offset,
         p_limit: limit,
         p_label_ids: labelIds,
+    };
+
+    let { data, error } = await supabase.rpc("list_clientes_by_last_msg", {
+        ...argsBase,
+        p_aba: aba,
     });
+
+    // PGRST202 = a RPC ainda não tem `p_aba` (migration das abas não aplicada).
+    // Cai pra assinatura antiga em vez de deixar a lista inteira vazia — é a
+    // mesma cascata de tolerância que o resto do projeto usa entre um deploy e
+    // a migration correspondente.
+    if (error?.code === "PGRST202") {
+        console.warn("[listClientes] RPC sem p_aba — migration das abas ainda não aplicada.");
+        ({ data, error } = await supabase.rpc("list_clientes_by_last_msg", argsBase));
+    }
 
     if (error) {
         console.error("[listClientes] Erro RPC:", error.message);
-        return { data: [], total: 0 };
+        return { data: [], total: 0, contagens: CONTAGENS_ZERADAS };
     }
 
     const rows = (data || []) as Array<{
@@ -229,9 +276,24 @@ export async function listClientes(params?: {
         unread_count: number | string | null;
         total_count: number | string | null;
         labels: Array<{ id: string; name: string; color: string }> | null;
+        // Ausentes enquanto a migration das abas não estiver aplicada.
+        favorito?: boolean | null;
+        tem_email?: boolean | null;
+        count_nao_lidas?: number | string | null;
+        count_favoritos?: number | string | null;
+        count_emails?: number | string | null;
     }>;
 
     const total = rows.length > 0 ? Number(rows[0].total_count || 0) : 0;
+
+    // Vêm iguais em toda linha (janela sobre a base), então a primeira basta.
+    const primeira = rows[0];
+    const contagens: ContagensAbas = {
+        todas: total,
+        naoLidas: Number(primeira?.count_nao_lidas || 0),
+        favoritos: Number(primeira?.count_favoritos || 0),
+        emails: Number(primeira?.count_emails || 0),
+    };
 
     type LinhaRpc = (typeof rows)[number];
 
@@ -259,15 +321,19 @@ export async function listClientes(params?: {
                 color: l.color as LabelColor,
             })),
             emailUnreadCount: naoLidas.get(chave(telefone, canalLead))?.count ?? 0,
+            favorito: r.favorito === true,
+            temEmail: r.tem_email === true,
         };
     };
 
     const mapped = rows.map(mapear);
 
     // Sem resposta pendente, ou com o usuário filtrando de propósito, a lista
-    // fica exatamente como sempre foi.
-    const podeIcar = naoLidas.size > 0 && page === 1 && !search && !labelIds;
-    if (!podeIcar) return { data: mapped, total };
+    // fica exatamente como sempre foi. Aba diferente de "todas" também conta
+    // como filtro: içar um lead que a aba exclui contradiria a própria aba.
+    const podeIcar =
+        naoLidas.size > 0 && page === 1 && !search && !labelIds && aba === "todas";
+    if (!podeIcar) return { data: mapped, total, contagens };
 
     const icados = await icarLeadsComEmail({
         supabase,
@@ -277,7 +343,7 @@ export async function listClientes(params?: {
         mapear,
     });
 
-    if (icados.length === 0) return { data: mapped, total };
+    if (icados.length === 0) return { data: mapped, total, contagens };
 
     // Quem respondeu por e-mail vai pro topo, do mais recente pro mais antigo.
     icados.sort((a, b) => {
@@ -290,7 +356,40 @@ export async function listClientes(params?: {
     return {
         data: [...icados, ...mapped.filter((c) => !içadosChaves.has(chave(c.telefone, c.canal)))],
         total,
+        contagens,
     };
+}
+
+/**
+ * Liga/desliga a estrela de um lead.
+ *
+ * Vai por telefone + canal porque a RPC da lista não devolve `id` — e a tela
+ * inteira é chaveada assim. Devolve o estado gravado para o cliente reconciliar
+ * caso o palpite otimista tenha errado.
+ */
+export async function toggleFavorito(
+    telefone: string,
+    canal: string,
+    favorito: boolean,
+): Promise<{ ok: true; favorito: boolean } | { ok: false; error: string }> {
+    await requireAuth();
+    const supabase = createServerSupabaseClient();
+
+    const { data, error } = await supabase
+        .from("Clientes _WhatsApp")
+        .update({ favorito })
+        .eq("telefone", telefone)
+        .eq("canal", canal)
+        .select("favorito");
+
+    if (error) {
+        console.error("[toggleFavorito]", error.message);
+        return { ok: false, error: "Não foi possível salvar o favorito." };
+    }
+    if (!data || data.length === 0) {
+        return { ok: false, error: "Lead não encontrado." };
+    }
+    return { ok: true, favorito: data[0].favorito === true };
 }
 
 /** Teto de leads içados por resposta de e-mail numa página. */
