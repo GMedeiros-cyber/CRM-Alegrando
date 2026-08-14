@@ -80,12 +80,33 @@ teste de um segundo: **`email_replies` existe? Então é o banco vivo.** É o
 anti-padrão "medir o cliente errado" (§8.2) na variante mais cara: medir o
 **banco** errado, com números plausíveis.
 
-**Migration no banco vivo é pelo painel, não por ferramenta.** A sessão do
-Claude Code recebe `You do not have permission` no projeto vivo e enxerga só o
-antigo — então `apply_migration` por MCP, se alguém insistir passando um `ref`,
-aplica DDL **no banco congelado** e reporta sucesso. O caminho certo é o
-arquivo `migration_*.sql` na raiz do repo, colado no SQL Editor. Não há `psql`
-nem CLI do Supabase nesta máquina, e o `.env.local` não tem string de conexão.
+**O servidor MCP chamado `alegrando` aponta para o `project_ref` CONGELADO**
+(`mtzlpogvcyhhjaagmlxn`). É uma armadilha de nome: quem procurar "o banco da
+alegrando" pega o banco morto e recebe números plausíveis. O `.mcp.json`
+(gitignored, não versionado) ganhou um servidor `supabase` apontado para
+`aymdpooolgwfeczzepmq`, o vivo. **Confira o `project_ref` do servidor antes de
+confiar em qualquer SQL** — o nome não é garantia de nada.
+
+Cuidado para não repetir o erro que este parágrafo já teve numa versão: **isso
+NÃO é a explicação do `You do not have permission`.** Aquele erro vinha do
+conector `claude.ai Supabase` (que aparece `Connected` e **não** tem
+`project_ref` na URL), e a causa segue desconhecida — provavelmente restrição do
+próprio conector. Ligar o achado do `alegrando` a esse sintoma foi uma causa
+inventada em cima de duas observações verdadeiras: exatamente o §8.2/§8.8 na
+forma mais sedutora, porque a peça encontrada é real e parece encaixar.
+
+Para saber o que está de fato disponível, `claude mcp list` mostra o estado de
+cada servidor (`Connected`, `Needs authentication`, `Pending approval`). Servidor
+de escopo de projeto exige **aprovação** ao abrir o `claude` no diretório, antes
+de qualquer OAuth — são dois portões, não um.
+
+**Antes de aplicar DDL por MCP, faça o teste de um segundo mesmo assim**
+(`email_replies` existe?). Historicamente a sessão recebia
+`You do not have permission` no projeto vivo, e `apply_migration` com um `ref`
+insistido aplicava **no congelado** reportando sucesso. O caminho garantido
+continua sendo o arquivo `migration_*.sql` na raiz colado no SQL Editor. Não há
+`psql` nem CLI do Supabase nesta máquina, e o `.env.local` não tem string de
+conexão.
 
 **O projeto antigo está `ACTIVE_HEALTHY`, não mais restrito** — e isso destrava
 uma frente que estava anotada como "pode não dar": as **560 mensagens do canal
@@ -222,6 +243,28 @@ que não são óbvias:
 
 **`"Clientes _WhatsApp"` tem um espaço antes do underscore.** Não é erro de
 digitação, é o nome real — escrever `"Clientes_WhatsApp"` falha em runtime.
+
+#### Convenções de valor que já enganaram (confirme antes de assumir)
+
+- **`messages.sender_type` vale `cliente` ou `equipe`.** Só esses dois. Medido:
+  10.090 e 13.841 linhas. `user` e `bot` devolvem **zero**. Filtrar por `'user'`
+  não dá erro — devolve lista vazia, e a conclusão que se tira dela é
+  "o mecanismo não existe". Foi exatamente isso que levou alguém a afirmar que
+  não havia controle de não-lidas no CRM, quando havia. Ver §8.9.
+- **Grupo de WhatsApp é identificado pelo sufixo `-group` no `telefone`**, não
+  por `@g.us`. Exemplo real: `120363403370100527-group`. São 5 grupos no canal
+  alegrando. O helper canônico é `isGroupTelefone` em `lead-list-item.tsx`, que
+  também cobre os IDs gravados como numeric antes da migração para TEXT — use
+  ele em vez de comparar sufixo na mão.
+- **Não-lida não é coluna: é comparação.** Mensagem de `cliente` mais nova que
+  o `last_seen_at` do lead (nulo = tudo não lido). Quem calcula é a RPC
+  `list_clientes_by_last_msg`, que devolve `unread_count` por lead — hoje 57 dos
+  313 leads de alegrando. **Reaproveite essa fonte**; uma segunda regra de
+  não-lida divergiria do badge do card.
+- **`last_seen_at` é compartilhado entre os usuários**, não por pessoa. Qualquer
+  semântica nova de "estado da conversa" (favorito, arquivado) deve seguir a
+  mesma escolha, sob pena de a barra de filtros misturar o que é de todos com o
+  que é de cada um.
 
 RPCs: `get_dashboard_stats` e `list_clientes_by_last_msg` (a ordenação da lista).
 **A versão de `list_clientes_by_last_msg` no repositório está desatualizada em
@@ -775,6 +818,36 @@ convertendo base64 — não uma chamada de rede.
    que "o Realtime dessas tabelas não chega ao navegador" ficou meses ao lado da
    assinatura que funciona — e é justamente o diagnóstico errado do §1. Ao
    corrigir um mecanismo, corrija o comentário que o explicava errado.
+8. **Zero silencioso: filtrar por um valor que não existe.** `sender_type = 'user'`
+   não falha, devolve `[]` — e uma lista vazia é lida como "a feature não
+   existe", não como "meu filtro está errado". É o §8.2 sem troca de cliente: a
+   consulta certa, no banco certo, com um **valor** inventado. Antes de concluir
+   qualquer coisa de um resultado vazio, liste os valores distintos da coluna. Um
+   `select distinct` de dois segundos evita uma conclusão errada que vira
+   decisão de produto.
+9. **Filtro server-side e client-side na mesma barra.** Em Conversas, `search`,
+   `canal` e `labelIds` vão à RPC (paginados, com
+   `total_count` correto); `grupos`, `IA ativa/manual` e a ordenação são
+   aplicados em `sortedLeads` sobre o que **já foi carregado** (50 por página).
+   Então "Grupos" mostra os grupos das páginas carregadas, não os 5 do banco, e
+   "A-Z" ordena a fatia, não o conjunto. Ao acrescentar filtro, escolha o lado
+   consciente e **diga qual é a semântica** — misturar os dois sem avisar produz
+   uma tela que parece filtrar e não filtra.
+
+   **A barra de listas (Todas · Não lidas · Favoritos · E-mails) NÃO está em
+   produção.** Ela vive no branch `feat/conversas-abas`, parada à espera da
+   migration que acrescenta `p_aba` e as três contagens à RPC. Enquanto isso, o
+   parágrafo abaixo descreve o que valerá quando ela subir — não o que a tela
+   faz hoje.
+
+   **Dívida aceita conscientemente, com gatilho.** Combinar uma aba com
+   Grupos/IA filtra só dentro da página carregada, então pode mostrar menos do
+   que existe. Hoje quase não morde: 57 não lidas cabem em duas páginas, e os 5
+   grupos são conversas ativas que ficam no topo da primeira. **Hora de mover
+   Grupos/IA/ordenação para o servidor:** quando as não lidas passarem de ~100,
+   **ou** quando alguém relatar conversa que "sumiu" ao combinar filtros. É
+   rodada própria — a ordenação continuaria torta mesmo consertando só os
+   filtros, então o conserto completo não cabe de carona em outra tarefa.
 
 ---
 

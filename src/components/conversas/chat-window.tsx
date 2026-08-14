@@ -11,6 +11,7 @@ import { ReactionPicker } from "./reaction-picker";
 import { AudioPlayer } from "./audio-player";
 import { reactToMessage, deleteMessage, pinMessage } from "@/lib/actions/messages";
 import { isGroupTelefone } from "./lead-list-item";
+import { ImageLightbox } from "@/components/ui/image-lightbox";
 
 // Hash simples → cor estável por participante (paleta 8 tons no estilo do tema)
 const PARTICIPANT_COLORS = [
@@ -151,7 +152,28 @@ function parseMediaContent(content: string): { url: string; caption: string } {
     return { url: content, caption: "" };
 }
 
-function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; isSelf: boolean; highlight?: string }) {
+/**
+ * Nome de arquivo para uma mídia do chat, que não tem `filename` guardado.
+ *
+ * A legenda vem primeiro por ser o que a pessoa reconhece; o último segmento da
+ * URL é o resto (`1784817608414-1784817608414.jpg`) — feio, mas com extensão,
+ * que é o que faz o sistema operacional abrir o arquivo certo depois de baixar.
+ */
+function nomeDaMidia(url: string, caption: string, padrao: string): string {
+    if (caption.trim()) return caption.trim();
+    try {
+        const bruto = new URL(url).pathname.split("/").pop();
+        if (bruto) return decodeURIComponent(bruto);
+    } catch { /* blob:, ou URL torta — cai no padrão */ }
+    return padrao;
+}
+
+function MessageContent({ message, isSelf, highlight, onAbrirImagem }: {
+    message: LeadMessage;
+    isSelf: boolean;
+    highlight?: string;
+    onAbrirImagem?: (preview: { url: string; name: string }) => void;
+}) {
     // Mensagem apagada para todos
     if (message.content === "__DELETED_FOR_ALL__") {
         return (
@@ -182,14 +204,15 @@ function MessageContent({ message, isSelf, highlight }: { message: LeadMessage; 
         if (url.startsWith("http") || url.startsWith("blob:")) {
             return (
                 <div>
-                    <img src={url} alt="imagem" className="max-w-[260px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => {
-                        try {
-                            const parsed = new URL(url);
-                            if (parsed.protocol === "https:" || parsed.protocol === "http:") {
-                                window.open(url, "_blank", "noopener,noreferrer");
-                            }
-                        } catch {}
-                    }} />
+                    {/* Abre no modal, como no e-mail. Nova aba tirava a pessoa
+                        da conversa e não oferecia "Baixar" — a mídia mora em
+                        outro domínio (R2), onde `<a download>` é ignorado. */}
+                    <img
+                        src={url}
+                        alt={caption || "imagem"}
+                        className="max-w-[260px] rounded-xl object-cover cursor-zoom-in hover:opacity-90 transition-opacity"
+                        onClick={() => onAbrirImagem?.({ url, name: nomeDaMidia(url, caption, "imagem") })}
+                    />
                     {caption && <p className="text-xs mt-1.5 text-[#191918] dark:text-white/70 leading-relaxed">{caption}</p>}
                 </div>
             );
@@ -452,6 +475,9 @@ export function ChatWindow({ telefone, canal, leadName, onReady, onReply, onRetr
 
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
+    // Um lightbox só, aqui em cima, e não um por bolha: são centenas de
+    // mensagens na lista, e cada Dialog do Radix monta portal e trava de foco.
+    const [imagemAberta, setImagemAberta] = useState<{ url: string; name: string } | null>(null);
     const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
 
     // Modal states
@@ -828,7 +854,7 @@ export function ChatWindow({ telefone, canal, leadName, onReady, onReply, onRetr
                                             )}
 
                                             <SenderLabel message={msg} isClient={isClient} canal={canal} leadName={leadName} isGroup={isGroup} />
-                                            <MessageContent message={msg} isSelf={isSelf} highlight={searchTerm || undefined} />
+                                            <MessageContent message={msg} isSelf={isSelf} highlight={searchTerm || undefined} onAbrirImagem={setImagemAberta} />
                                             <p className={cn("text-[10px] mt-1 text-right flex items-center justify-end gap-1", isClient ? "text-[#667781] dark:text-[#8696a0]" : "text-[#111b21]/50 dark:text-white/50")}>
                                                 {isFailed && <AlertTriangle className="w-3 h-3 text-rose-500 shrink-0" />}
                                                 {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}
@@ -898,6 +924,8 @@ export function ChatWindow({ telefone, canal, leadName, onReady, onReply, onRetr
                 })}
                 <div ref={chatEndRef} />
             </div>
+
+            <ImageLightbox preview={imagemAberta} onClose={() => setImagemAberta(null)} />
         </div>
     );
 }

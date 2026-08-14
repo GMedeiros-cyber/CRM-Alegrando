@@ -12,7 +12,7 @@ import {
     X,
 } from "lucide-react";
 import { useState } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { cn } from "@/lib/utils";
 import {
     MAX_TOTAL_BYTES,
@@ -54,42 +54,6 @@ export interface AttachmentTrayProps {
      * O teto só faz sentido enquanto se está montando a mensagem.
      */
     somenteLeitura?: boolean;
-}
-
-/**
- * Imagem ampliada pra conferir se foi a foto certa que entrou.
- *
- * Dialog do Radix ANINHADO no da composição, de propósito: ele entra na pilha
- * de camadas, então fechar aqui fecha só o lightbox — e não a composição
- * junto, que é o que aconteceria com um portal solto no body.
- */
-function Lightbox({
-    preview,
-    onClose,
-}: {
-    preview: { url: string; name: string } | null;
-    onClose: () => void;
-}) {
-    return (
-        <Dialog open={preview !== null} onOpenChange={(aberto) => { if (!aberto) onClose(); }}>
-            <DialogContent className="sm:max-w-3xl bg-transparent border-0 shadow-none p-0">
-                <DialogTitle className="sr-only">{preview?.name ?? "Anexo"}</DialogTitle>
-                {preview && (
-                    <div className="flex flex-col items-center gap-2">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                            src={preview.url}
-                            alt={preview.name}
-                            className="max-h-[75vh] w-auto max-w-full rounded-lg object-contain shadow-2xl"
-                        />
-                        <span className="rounded-md bg-black/60 px-2 py-1 text-xs text-white">
-                            {preview.name}
-                        </span>
-                    </div>
-                )}
-            </DialogContent>
-        </Dialog>
-    );
 }
 
 /**
@@ -159,7 +123,7 @@ export function AttachmentTray({
                 </div>
             )}
 
-            <Lightbox preview={preview} onClose={() => setPreview(null)} />
+            <ImageLightbox preview={preview} onClose={() => setPreview(null)} />
         </div>
     );
 }
