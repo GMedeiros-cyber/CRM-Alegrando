@@ -1,6 +1,19 @@
 import { timingSafeEqual } from "crypto";
 
 /**
+ * Verificação de segredo dos webhooks.
+ *
+ * **Não existe interruptor para desligar isto.** Havia um
+ * (`WEBHOOK_AUTH_DISABLE === "true"`), pensado como válvula de emergência, e ele
+ * foi removido: ficou 94 dias parado em produção e o risco real nunca foi o uso
+ * legítimo — era alguém encontrar a variável, achar que é depuração e ligá-la,
+ * deixando os webhooks aceitarem qualquer chamada sem nada na tela avisando.
+ * São quatro pessoas e o webhook quase nunca é depurado; a válvula custava mais
+ * do que valia. Se um dia for preciso mesmo, o caminho é um deploy — visível e
+ * revertível — e não uma variável de ambiente.
+ */
+
+/**
  * Compara duas strings em tempo constante para evitar timing attacks.
  * Retorna false se algum input for null/undefined ou tamanhos diferentes.
  */
@@ -20,10 +33,6 @@ function safeCompare(a: string | null | undefined, b: string | null | undefined)
  * Retorna { ok: true } se válido, ou { ok: false, status, message } com a resposta a ser devolvida.
  */
 export function verifyZapiWebhook(req: Request): { ok: true } | { ok: false; status: number; message: string } {
-    if (process.env.WEBHOOK_AUTH_DISABLE === "true") {
-        console.warn("[webhook-auth] AUTH Z-API DESATIVADA via WEBHOOK_AUTH_DISABLE (emergência)");
-        return { ok: true };
-    }
     const expected = process.env.ZAPI_CLIENT_TOKEN;
     if (!expected) {
         console.error("[webhook-auth] ZAPI_CLIENT_TOKEN não configurado — rejeitando todos os webhooks Z-API");
@@ -48,10 +57,6 @@ export function verifyZapiWebhook(req: Request): { ok: true } | { ok: false; sta
  * Confronta com EVOLUTION_API_KEY do ambiente.
  */
 export function verifyEvolutionWebhook(req: Request): { ok: true } | { ok: false; status: number; message: string } {
-    if (process.env.WEBHOOK_AUTH_DISABLE === "true") {
-        console.warn("[webhook-auth] AUTH EVOLUTION DESATIVADA via WEBHOOK_AUTH_DISABLE (emergência)");
-        return { ok: true };
-    }
     const expected = process.env.EVOLUTION_API_KEY;
     if (!expected) {
         console.error("[webhook-auth] EVOLUTION_API_KEY não configurado — rejeitando todos os webhooks Evolution");
