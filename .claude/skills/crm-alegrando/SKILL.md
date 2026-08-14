@@ -71,11 +71,19 @@ responde a qualquer consulta com uma foto convincente e velha. As tabelas de
 e-mail **nem existem** lá — é o teste mais rápido para saber em qual banco você
 caiu.
 
-**O conector Supabase do Claude enxerga só o projeto antigo** (é o único da
-organização conectada), então `execute_sql` por MCP mede o banco morto sem
-avisar. Para consultar produção, vá pelo PostgREST com as chaves do
-`.env.local`. É o anti-padrão "medir o cliente errado" (§8.2) na variante mais
-cara: medir o **banco** errado, com números que parecem plausíveis.
+**Confirme o `ref` antes de concluir qualquer coisa a partir de um SQL.** Não é
+preciso ferramenta errada para se enganar: basta um ref velho copiado de uma
+anotação — foi assim que uma sessão inteira mediu o banco congelado, e só
+percebeu quando `email_replies` não existia. Some-se a isso que consultas podem
+vir de contas ou conectores diferentes, cada um apontado para um projeto. O
+teste de um segundo: **`email_replies` existe? Então é o banco vivo.** É o
+anti-padrão "medir o cliente errado" (§8.2) na variante mais cara: medir o
+**banco** errado, com números plausíveis.
+
+**O projeto antigo está `ACTIVE_HEALTHY`, não mais restrito** — e isso destrava
+uma frente que estava anotada como "pode não dar": as **560 mensagens do canal
+alegrando cuja mídia ainda aponta para lá** podem ser migradas por backfill.
+Não está feito; passou de inviável a viável.
 
 Existem **dois** clientes Supabase, e confundi-los é a origem de falhas de
 segurança e de diagnósticos errados:
