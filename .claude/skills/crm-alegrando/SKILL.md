@@ -62,6 +62,21 @@ continua valendo.
 
 ### Acesso a dados — a regra mais importante
 
+**Antes de tudo: existem dois projetos Supabase, e o antigo continua de pé.** O
+banco vivo é `aymdpooolgwfeczzepmq` — é o do `.env.local`, e é onde
+`email_sends`/`email_replies` respondem. O `mtzlpogvcyhhjaagmlxn`
+("Alegrando IA") está **congelado desde 23/07/2026** (última mensagem gravada
+nessa data), mas segue `ACTIVE_HEALTHY` com 706 leads e 22.636 mensagens: ele
+responde a qualquer consulta com uma foto convincente e velha. As tabelas de
+e-mail **nem existem** lá — é o teste mais rápido para saber em qual banco você
+caiu.
+
+**O conector Supabase do Claude enxerga só o projeto antigo** (é o único da
+organização conectada), então `execute_sql` por MCP mede o banco morto sem
+avisar. Para consultar produção, vá pelo PostgREST com as chaves do
+`.env.local`. É o anti-padrão "medir o cliente errado" (§8.2) na variante mais
+cara: medir o **banco** errado, com números que parecem plausíveis.
+
 Existem **dois** clientes Supabase, e confundi-los é a origem de falhas de
 segurança e de diagnósticos errados:
 
@@ -665,6 +680,36 @@ enquanto se investigava JWT, policy e publicação.
   (`$('Nome do nó')`) e pareie por **linhagem** (`itemMatching()`), não por
   índice. Pareamento posicional já causou dois bugs.
 
+### Quanto tempo uma resposta demora a aparecer — medido, não estimado
+
+Da hora do Gmail (`received_at`) até a linha existir no banco (`created_at`):
+**19 a 31 segundos**. Um "~2 s" que já circulou media outra coisa — a chegada do
+push e o disparo da execução, não a gravação — e é um número que faz parar de
+investigar cedo demais.
+
+Decomposição do caso `19ffe04bf16a0d16` (2 anexos, 3,3 MB, 31,5 s no total),
+execução `90179` do worker `NOAIuHJmIUh6Fdne`, modo **webhook** — foi o push que
+gravou, não o schedule:
+
+| trecho | tempo |
+|---|---|
+| Gmail → o push chegar no n8n | **20,6 s** |
+| execução do worker | 11,0 s |
+
+Dentro da execução, os 15 nós: `Preparar arquivo` **6,54 s**, `Subir no R2`
+1,37 s, `Pedir URL no CRM` 1,11 s, `Baixar anexo` 0,92 s, e os outros onze
+somados 1,03 s — `Listar recebidos` 306 ms, `Buscar mensagem` 300 ms **mesmo com
+3,3 MB**, `Envios e respostas conhecidas` 70 ms para 6 itens, `Gravar resposta`
+61 ms.
+
+**A soma dos nós fecha com a duração total com 17 ms de diferença.** Isso
+descarta com aritmética, e não com opinião: fila da instância, `retryOnFail` com
+espera, e qualquer bloco de tempo escondido fora dos nós.
+
+Duas consequências para quem for otimizar: **dois terços do atraso acontecem
+antes do n8n** (a entrega do Pub/Sub do Gmail), e o maior nó é um Code node
+convertendo base64 — não uma chamada de rede.
+
 ---
 
 ## 7. Migrations e deploy
@@ -718,4 +763,7 @@ enquanto se investigava JWT, policy e publicação.
       abrir/baixar anexo, cartão de link do Drive.
 - [ ] Se mexi em workflow do n8n: religuei `availableInMCP` e conferi que nada
       mais mudou junto.
-- [ ] Se depende de deploy, avisei — **commitar não publica** (§1).
+- [ ] Se depende de migration, apliquei **antes** do push — `git push origin
+      main` publica sozinho (§1). A linha antiga daqui dizia "commitar não
+      publica" e sobreviveu à correção do §1; é o anti-padrão nº7 acontecendo
+      dentro do próprio documento.
