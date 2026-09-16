@@ -68,3 +68,7 @@ relatorio-jade-testes.md
 e2e/__screenshots__/
 test-results/
 playwright-report/
+
+# Claude Code: config local da maquina (permissoes, caminhos, as vezes tokens)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

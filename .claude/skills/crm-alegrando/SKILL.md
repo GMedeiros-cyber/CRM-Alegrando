@@ -889,11 +889,29 @@ convertendo base64 — não uma chamada de rede.
    consciente e **diga qual é a semântica** — misturar os dois sem avisar produz
    uma tela que parece filtrar e não filtra.
 
-   **A barra de listas (Todas · Não lidas · Favoritos · E-mails) NÃO está em
-   produção.** Ela vive no branch `feat/conversas-abas`, parada à espera da
-   migration que acrescenta `p_aba` e as três contagens à RPC. Enquanto isso, o
-   parágrafo abaixo descreve o que valerá quando ela subir — não o que a tela
-   faz hoje.
+   **A barra de listas ESTÁ em produção desde 14/08/2026**, e são **três**
+   pílulas, não quatro: **Não lidas · Favoritos · E-mails**. "Todas" saiu em
+   `10292f7` — não era filtro, era a *ausência* de filtro, e gastava um quarto
+   da barra para dizer "nada selecionado"; voltar para todas é clicar de novo
+   na pílula já ligada. Subiu no merge `9ca4325`, com `7f4d41f`, `e0474a9` e
+   `10292f7` por cima. A migration que acrescenta `p_aba` e as contagens à RPC
+   **foi aplicada e conferida** (`migration_conversas_abas.sql`), e o branch
+   `feat/conversas-abas` é **histórico, não pendência**. A linha antiga daqui
+   dizia que a barra esperava a migration: é o anti-padrão nº7 de novo, dentro
+   do próprio documento.
+
+   **"E-mails" é resposta RECEBIDA e ainda NÃO LIDA** — não "já trocou e-mail
+   alguma vez". O critério antigo (`tem_email` da RPC) prendia na aba um lead a
+   quem **nós** escrevemos, que na tela lia como "chegou e-mail deste lead", e
+   era falso. A contagem vem de `naoLidasPorLead()`, não da RPC: a RPC não
+   conhece `email_replies.read_at`.
+
+   **As contagens descrevem a BASE (canal + busca + tags), não a aba.** Elas
+   viajam nas linhas por window function, então uma aba sem resultado não
+   devolve linha e zerava as quatro — daí a rechamada com `p_aba => 'todas'` e
+   limite 1 (`7f4d41f`). Pelo mesmo motivo a barra **não pode esconder os selos
+   enquanto `loading` estiver ligado**: trocar de aba não invalida número
+   nenhum, e esconder produzia um pisca a cada clique.
 
    **Dívida aceita conscientemente, com gatilho.** Combinar uma aba com
    Grupos/IA filtra só dentro da página carregada, então pode mostrar menos do
@@ -921,3 +939,10 @@ convertendo base64 — não uma chamada de rede.
       main` publica sozinho (§1). A linha antiga daqui dizia "commitar não
       publica" e sobreviveu à correção do §1; é o anti-padrão nº7 acontecendo
       dentro do próprio documento.
+- [ ] **Sessão longa: rodei `/handoff` como último passo.** A skill é
+      invocada **pelo usuário** (`disable-model-invocation: true` no arquivo de
+      origem, que é de terceiro e não editamos), então ela não dispara
+      sozinha: se ninguém digitar, o contexto da rodada morre com a sessão e a
+      próxima começa do zero. Mora em `~/.claude/skills/handoff` (nível de
+      usuário, fora deste repositório) e escreve o documento no temp do SO,
+      nunca no working tree.
