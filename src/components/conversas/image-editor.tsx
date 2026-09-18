@@ -55,6 +55,20 @@ export interface ImageEditorProps {
 const JPEG_Q = 0.92;
 const PNG_Q = 1.0;
 
+/** Tipo real pelos primeiros bytes, para a mensagem de erro não mentir junto com a extensão. */
+export async function lerBytesMagicos(file: File): Promise<string> {
+    const b = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    const asc = String.fromCharCode(...b.map((x) => (x >= 32 && x < 127 ? x : 46)));
+    if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "jpeg";
+    if (b[0] === 0x89 && asc.startsWith(".PNG")) return "png";
+    if (asc.startsWith("GIF8")) return "gif";
+    if (asc.startsWith("RIFF") && asc.slice(8, 12) === "WEBP") return "webp";
+    if (asc.slice(4, 8) === "ftyp") return `${asc.slice(8, 12).trim()} (heic/heif/avif)`;
+    if (asc.startsWith("<?xm") || asc.startsWith("<svg")) return "svg";
+    if (asc.startsWith("%PDF")) return "pdf";
+    return `desconhecido (${Array.from(b.slice(0, 4), (x) => x.toString(16).padStart(2, "0")).join(" ")})`;
+}
+
 const CORES = ["#EF4444", "#F59E0B", "#22C55E", "#6366F1", "#191918", "#FFFFFF"];
 const ESPESSURAS = [3, 6, 12];
 
@@ -85,12 +99,23 @@ export function ImageEditor({
 
     // ---- carregar a imagem uma vez ----
     useEffect(() => {
+        // `vivo` é guard de instância: sob StrictMode (dev) o efeito roda duas
+        // vezes e o cleanup do primeiro revoga a URL antes do <img> carregar —
+        // o onerror ÓRFÃO escrevia `erro` e a tela mostrava erro com a imagem
+        // válida já carregada pelo segundo. Medido em 18/09/2026.
+        let vivo = true;
         const url = URL.createObjectURL(file);
         const img = new Image();
-        img.onload = () => { imgRef.current = img; setPronto(true); };
-        img.onerror = () => setErro("Não deu para abrir esta imagem.");
+        img.onload = () => { if (!vivo) return; imgRef.current = img; setPronto(true); };
+        img.onerror = async () => {
+            if (!vivo) return;
+            // Tipo REAL pelos bytes, não pela extensão: HEIC de iPhone chega
+            // como .jpg e não decodifica em canvas na maioria dos navegadores.
+            const tipoReal = await lerBytesMagicos(file);
+            if (vivo) setErro(`Não deu para abrir esta imagem (${file.type || "sem tipo"}, conteúdo: ${tipoReal}).`);
+        };
         img.src = url;
-        return () => URL.revokeObjectURL(url);
+        return () => { vivo = false; URL.revokeObjectURL(url); };
     }, [file]);
 
     /** Desenha a imagem na camada de baixo, aplicando rotação e corte. */

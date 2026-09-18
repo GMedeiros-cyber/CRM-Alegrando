@@ -1093,6 +1093,33 @@ convertendo base64 — não uma chamada de rede.
    **ou** quando alguém relatar conversa que "sumiu" ao combinar filtros. É
    rodada própria — a ordenação continuaria torta mesmo consertando só os
    filtros, então o conserto completo não cabe de carona em outra tarefa.
+10. **Handler assíncrono de efeito sem guard de instância.** Efeito que cria
+    `objectURL`, põe num `<img>` e revoga no cleanup dispara `onerror` da
+    **instância antiga** sob StrictMode: em dev o React roda efeito → cleanup →
+    efeito de novo, o cleanup do primeiro revoga a URL antes do `<img>` carregar,
+    e o Chromium responde `ERR_FILE_NOT_FOUND`. Se o `onerror` escreve estado de
+    erro, a tela mostra erro **com a imagem válida já carregada** pelo segundo
+    `<img>`. Foi o "Não deu para abrir esta imagem" do editor
+    (`image-editor.tsx`, 18/09/2026) — JPEG e PNG válidos, toda vez, só em dev.
+
+    Regra: **guard de instância (`let vivo = true` … `return () => { vivo =
+    false }`) em TODO handler assíncrono de efeito** — `onload`, `onerror`,
+    `.then`, callback de `fetch`, timer. Cada um checa `vivo` antes de escrever
+    estado. Vale além do editor: qualquer efeito com callback que sobrevive ao
+    cleanup tem esse buraco, e StrictMode é só quem o expõe primeiro.
+
+    **NÃO desligue o StrictMode** (`reactStrictMode: false` no `next.config.ts`).
+    O double-invoke é dev-only e existe **para** expor cleanup mal feito — em
+    produção o mesmo callback órfão dispara quando o usuário fecha o editor no
+    meio do carregamento, sem StrictMode nenhum. Desligar troca um sintoma
+    visível por uma classe de bug silenciosa. O `next.config.ts` não define a
+    opção de propósito: App Router liga por padrão
+    (`__NEXT_STRICT_MODE_APP`), e é assim que deve ficar.
+
+    Corolário de diagnóstico: mensagem de erro de imagem diz o **tipo real pelos
+    bytes** (`lerBytesMagicos`), não só o `file.type` — HEIC de iPhone chega
+    como `.jpg` e não decodifica em canvas na maioria dos navegadores; o texto
+    genérico não distingue isso de URL revogada nem de CORS.
 
 ---
 
