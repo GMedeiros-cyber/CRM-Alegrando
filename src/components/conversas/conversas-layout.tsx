@@ -11,7 +11,8 @@ import { NovoLeadModal } from "./novo-lead-modal";
 import { LeadListItem, isGroupTelefone } from "./lead-list-item";
 import { ListasTabBar } from "./listas-tab-bar";
 import { LeadListSkeleton } from "./lead-list-skeleton";
-import { AttachmentPreview } from "./attachment-preview";
+import { AttachmentPreview, mimeDe, type ChatAttachment } from "./attachment-preview";
+import { DrivePickerButton } from "@/components/emails/drive-picker-button";
 import { AudioPlayer } from "./audio-player";
 import { AudioRecorder } from "./audio-recorder";
 import { ClienteDetailPanel, INITIAL_FORM } from "./cliente-detail-panel";
@@ -500,13 +501,9 @@ export function ConversasLayout() {
     // New lead modal
     const [showNewLeadModal, setShowNewLeadModal] = useState(false);
 
-    // File attachments (preview before send)
-    const [attachments, setAttachments] = useState<Array<{
-        file: File;
-        preview: string | null;
-        caption: string;
-        id: string;
-    }>>([]);
+    // File attachments (preview before send).
+    // União local|remote: o item do Drive chega sem File (já está no R2).
+    const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -1436,7 +1433,8 @@ export function ConversasLayout() {
                 return;
             }
         }
-        const newAttachments = files.map(file => ({
+        const newAttachments: ChatAttachment[] = files.map(file => ({
+            kind: "local" as const,
             file,
             preview: file.type.startsWith("image/") || file.type.startsWith("video/")
                 ? URL.createObjectURL(file)
@@ -1556,13 +1554,51 @@ export function ConversasLayout() {
     // body na server action). O path >10MB exige CORS de PUT no bucket R2.
     const DIRECT_UPLOAD_THRESHOLD = 10 * 1024 * 1024;
 
-    async function sendAttachment(att: { file: File; preview: string | null; caption: string; id: string }) {
+    async function sendAttachment(att: ChatAttachment) {
         if (!cliente?.telefone) return;
         const senderName = "Alegrando";
-        const isVideo = att.file.type.startsWith("video/");
-        const isImage = att.file.type.startsWith("image/");
+        const mime = mimeDe(att);
+        const isVideo = mime.startsWith("video/");
+        const isImage = mime.startsWith("image/");
         const mediaType: "image" | "video" | "document" = isImage ? "image" : isVideo ? "video" : "document";
         const caption = att.caption.trim();
+
+        // Item do Drive: já está no R2, no prefixo chat-<canal>/<telefone>/ que a
+        // guarda de sendUploadedFileMessage exige. Não há upload a refazer —
+        // baixar e re-subir seria queimar banda duas vezes pelo mesmo arquivo.
+        if (att.kind === "remote") {
+            const optimisticContent = mediaType === "document"
+                ? `${att.url}|||${att.name}`
+                : (caption ? `${att.url}|||${caption}` : att.url);
+            const optId = addOptimisticRef.current?.(optimisticContent, senderName, mediaType) ?? null;
+            try {
+                const res = await sendUploadedFileMessage({
+                    path: att.path,
+                    telefone: cliente.telefone,
+                    canal: cliente.canal ?? "alegrando",
+                    caption: att.caption,
+                    mediaType,
+                    fileName: att.name,
+                    mimeType: att.mime,
+                    senderName,
+                });
+                if (res.success) {
+                    if (optId && res.content) {
+                        updateOptimisticRef.current?.(optId, { content: res.content, _optimistic: false });
+                    } else if (optId) {
+                        removeOptimisticRef.current?.(optId);
+                    }
+                } else if (optId) {
+                    markSendFailed(optId, () => { void sendAttachment(att); });
+                } else {
+                    setToast({ type: "error", text: res.error || "Erro ao enviar arquivo." });
+                }
+            } catch (err) {
+                if (optId) markSendFailed(optId, () => { void sendAttachment(att); });
+                else setToast({ type: "error", text: `Erro ao enviar arquivo: ${err}` });
+            }
+            return;
+        }
 
         // Bolha OTIMISTA pra TODO tipo (imagem/vídeo/documento): aparece na hora
         // usando o arquivo local — mata o delay percebido (upload R2 + envio +
@@ -2198,6 +2234,7 @@ export function ConversasLayout() {
                             />
                         )}
 
+
                         {/* Reply preview */}
                         {replyTo && (
                             <div className="px-5 py-2 border-t border-border/50 bg-[#F7F7F5] dark:bg-[#0f1829]/60 flex items-center gap-2">
@@ -2251,6 +2288,36 @@ export function ConversasLayout() {
                                     >
                                         <Paperclip className="w-4 h-4" />
                                     </button>
+                                )}
+                                {/* Drive: cai na MESMA bandeja do clipe, como item `remote`
+                                    (o arquivo já foi republicado no R2 pelo attachDriveFile). */}
+                                {!isRecordingAudio && !cliente.iaAtiva && (
+                                    <DrivePickerButton
+                                        destino={{
+                                            tipo: "chat",
+                                            telefone: cliente.telefone,
+                                            canal: cliente.canal ?? "alegrando",
+                                        }}
+                                        onError={(m) => setToast({ type: "error", text: m })}
+                                        onAttach={(a) => {
+                                            const mime = a.mimeType ?? "application/octet-stream";
+                                            setAttachments((prev) => [...prev, {
+                                                kind: "remote",
+                                                id: Date.now().toString() + Math.random().toString(36).slice(2),
+                                                caption: "",
+                                                // O bucket é público e manda CORS, então a URL do R2
+                                                // serve direto como preview — sem baixar de novo.
+                                                preview: mime.startsWith("image/") || mime.startsWith("video/")
+                                                    ? a.url : null,
+                                                path: a.path,
+                                                url: a.url,
+                                                name: a.filename,
+                                                mime,
+                                                size: a.size ?? 0,
+                                            }]);
+                                            setTimeout(() => firstCaptionRef.current?.focus(), 50);
+                                        }}
+                                    />
                                 )}
                                 <AudioRecorder
                                     disabled={cliente.iaAtiva || !!audioAttachment}
