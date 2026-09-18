@@ -333,6 +333,27 @@ reverte um filtro em produção sem perceber.
 - **Áudio:** gravar OGG/Opus de verdade (opus-recorder) e mandar a **URL pública**
   ao provedor, não base64 — é o que faz aparecer a onda sonora nativa da nota de
   voz. Enviar WebM rotulado como ogg produz áudio de 00:00.
+- **Tamanho: o teto é do WhatsApp, não do CRM — 100MB para vídeo e documento**
+  (doc da Z-API). Os 10MB/16MB que o CRM aplicava eram invenção nossa e foram
+  removidos em 18/09/2026; o mesmo número vale para clipe, Ctrl+V e Drive
+  (`adicionarArquivos` e `attachDriveFile` destino chat). A mensagem de erro
+  diz o limite real e de quem ele é — vídeo 4K do celular estoura sempre, e a
+  pessoa precisa entender que não é defeito do sistema.
+- **Vídeo: a Z-API recomenda H.264. iPhone grava HEVC (H.265) por padrão.**
+  HEVC cai na conversão interna do provedor, que pode **falhar de forma
+  intermitente** ou **aumentar** o tamanho do arquivo — e aí um vídeo que cabia
+  no teto deixa de caber depois de convertido. "Vídeo às vezes não vai" com
+  arquivo de iPhone: olhar o codec antes de olhar código. Compressão/transcode
+  no navegador é rodada própria, em andamento por outro agente — não embutir
+  em outra tarefa.
+- **Limites menores no caminho de upload, medidos em 18/09/2026:** o caminho
+  direto browser→R2 (acima de 10MB, presigned PUT) aguenta 100MB — o R2 aceita
+  até 5GB num PUT e o `fetch` do browser não tem timeout. A assinatura vale
+  **300s**, conferida no **início** do PUT, não no fim. Já o caminho do **Drive**
+  (`attachDriveFile`) é server-side: baixa o arquivo inteiro para memória e sobe
+  ao R2 com `fetchWithTimeout` de **60s**, dentro de uma server action **sem
+  `maxDuration` configurado** — esse é o gargalo real para 100MB por esse
+  caminho, e não foi ajustado.
 
 **A Z-API NÃO guarda histórico de mensagens recebidas. Webhook perdido é dado
 perdido, ponto.** Medido em 14/08/2026, com a instância conectada:

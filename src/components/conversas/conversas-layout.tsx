@@ -1426,13 +1426,19 @@ export function ConversasLayout() {
      */
     function adicionarArquivos(files: File[]) {
         if (files.length === 0) return;
-        const FILE_MAX = 10 * 1024 * 1024;
-        const VIDEO_MAX = 16 * 1024 * 1024;
+        // Teto do WhatsApp (doc da Z-API): 100MB para vídeo e documento. Não é
+        // limite nosso — os 10/16MB antigos eram invenção do CRM. Mesma regra
+        // para clipe, Ctrl+V e Drive (attachDriveFile, destino chat).
+        const WHATSAPP_MAX = 100 * 1024 * 1024;
         for (const file of files) {
-            const isVideo = file.type.startsWith("video/");
-            const limit = isVideo ? VIDEO_MAX : FILE_MAX;
-            if (file.size > limit) {
-                setToast({ type: "error", text: `"${file.name}" é muito grande. Máximo ${limit / 1024 / 1024}MB.` });
+            if (file.size > WHATSAPP_MAX) {
+                const mb = (file.size / 1024 / 1024).toFixed(0);
+                const isVideo = file.type.startsWith("video/");
+                setToast({
+                    type: "error",
+                    text: `"${file.name}" tem ${mb}MB. O WhatsApp aceita até 100MB` +
+                        (isVideo ? " — vídeo 4K do celular costuma passar disso; grave em 1080p ou corte o trecho." : "."),
+                });
                 return;
             }
         }
