@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { attachDriveFile, getDrivePickerToken } from "@/lib/actions/emails";
+import { attachDriveFile, getDrivePickerToken, type DriveDestino } from "@/lib/actions/emails";
 import type { EmailAttachment } from "@/lib/types/email";
 import { GoogleDriveIcon } from "./google-drive-icon";
 
@@ -113,8 +113,14 @@ function loadPickerModule(): Promise<GooglePickerNamespace> {
 }
 
 export interface DrivePickerButtonProps {
-    onAttach: (attachment: EmailAttachment) => void;
+    onAttach: (attachment: EmailAttachment & { path: string }) => void;
     onError: (message: string) => void;
+    /**
+     * Para onde o arquivo vai no R2. O default mantém o comportamento de
+     * e-mail (`email-anexos/`); o chat precisa de `chat-<canal>/<telefone>/`,
+     * que é o prefixo exigido pela guarda de `sendUploadedFileMessage`.
+     */
+    destino?: DriveDestino;
 }
 
 /**
@@ -124,7 +130,7 @@ export interface DrivePickerButtonProps {
  * no Google e nunca vê o Drive pessoal dela. O arquivo escolhido segue pelo
  * mesmo caminho de sempre: `attachDriveFile` baixa e republica no R2.
  */
-export function DrivePickerButton({ onAttach, onError }: DrivePickerButtonProps) {
+export function DrivePickerButton({ onAttach, onError, destino }: DrivePickerButtonProps) {
     const [busy, setBusy] = useState(false);
     // Reaproveita o token enquanto ele vale, em vez de bater no servidor a
     // cada abertura do Picker.
@@ -202,7 +208,7 @@ export function DrivePickerButton({ onAttach, onError }: DrivePickerButtonProps)
                     // Toda a validação (Docs nativo, tamanho) continua no
                     // servidor: o Picker lista tudo e não dá pra excluir tipo
                     // por lá, só incluir.
-                    const res = await attachDriveFile(doc.id);
+                    const res = await attachDriveFile(doc.id, destino);
                     if (res.ok) onAttach(res.attachment);
                     else falhas.push(res.error);
                 } catch (err) {
