@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import type { RefObject } from "react";
-import { FileText, X } from "lucide-react";
+import { FileText, Pencil, X } from "lucide-react";
 import type { EditState } from "./image-editor";
 
 /**
@@ -52,6 +52,8 @@ interface AttachmentPreviewProps {
     onRemove: (id: string) => void;
     onCaptionChange: (id: string, caption: string) => void;
     onSend: () => void;
+    /** Abre o editor de imagem. Só aparece em item de imagem. */
+    onEdit: (id: string) => void;
 }
 
 const AttachmentPreviewInner = function AttachmentPreview({
@@ -60,6 +62,7 @@ const AttachmentPreviewInner = function AttachmentPreview({
     onRemove,
     onCaptionChange,
     onSend,
+    onEdit,
 }: AttachmentPreviewProps) {
     return (
         <div className="px-5 py-3 border-t border-border/50 bg-[#F7F7F5] dark:bg-[#0f1829]/80">
@@ -73,6 +76,20 @@ const AttachmentPreviewInner = function AttachmentPreview({
                             className="absolute top-1.5 right-1.5 z-10 w-5 h-5 rounded-full bg-[#191918]/30 text-[#191918] dark:text-white flex items-center justify-center hover:bg-black/80 transition-colors">
                             <X className="w-3 h-3" />
                         </button>
+
+                        {/* Lápis: visível por padrão no mobile, onde hover não existe.
+                            Esconder com opacity-0 puro deixaria um alvo invisível e clicável. */}
+                        {ehImagem(att) && (
+                            <button
+                                onClick={() => onEdit(att.id)}
+                                title="Editar imagem"
+                                aria-label={`Editar ${nomeDe(att)}`}
+                                className="absolute top-1.5 left-1.5 z-10 w-8 h-8 rounded-lg bg-[#191918]/50 text-white flex items-center justify-center
+                                           opacity-100 md:opacity-0 md:group-hover/att:opacity-100 md:focus-visible:opacity-100
+                                           hover:bg-[#191918]/80 transition-opacity">
+                                <Pencil className="w-4 h-4" />
+                            </button>
+                        )}
 
                         {att.preview && ehImagem(att) ? (
                             // eslint-disable-next-line @next/next/no-img-element

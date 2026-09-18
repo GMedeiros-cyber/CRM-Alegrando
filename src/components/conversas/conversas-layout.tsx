@@ -12,6 +12,7 @@ import { LeadListItem, isGroupTelefone } from "./lead-list-item";
 import { ListasTabBar } from "./listas-tab-bar";
 import { LeadListSkeleton } from "./lead-list-skeleton";
 import { AttachmentPreview, mimeDe, type ChatAttachment } from "./attachment-preview";
+import { ImageEditor, type EditState } from "./image-editor";
 import { DrivePickerButton } from "@/components/emails/drive-picker-button";
 import { AudioPlayer } from "./audio-player";
 import { AudioRecorder } from "./audio-recorder";
@@ -504,6 +505,8 @@ export function ConversasLayout() {
     // File attachments (preview before send).
     // União local|remote: o item do Drive chega sem File (já está no R2).
     const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+    // Editor de imagem aberto sobre um item da bandeja (null = fechado).
+    const [editandoAnexoId, setEditandoAnexoId] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -1688,6 +1691,47 @@ export function ConversasLayout() {
         }
     }
 
+    /**
+     * Editor de imagem sobre um item da bandeja.
+     *
+     * Item `remote` (Drive) não tem `File`, mas o bucket R2 manda CORS para
+     * localhost:3000 e para crm.alegrando.cloud — medido —, então dá pra buscar
+     * os bytes direto, sem passar por proxy. Editado, o item VIRA `local` e
+     * segue o caminho normal de upload.
+     */
+    async function abrirEditor(id: string) {
+        const att = attachments.find(a => a.id === id);
+        if (!att) return;
+        if (att.kind === "local") { setEditandoAnexoId(id); return; }
+        try {
+            const r = await fetch(att.url);
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const file = new File([await r.blob()], att.name, { type: att.mime });
+            setAttachments(prev => prev.map(a => a.id === id
+                ? { kind: "local", id: a.id, caption: a.caption, preview: att.url, file }
+                : a));
+            setEditandoAnexoId(id);
+        } catch (err) {
+            // Falha aqui não pode ser silenciosa: o lápis some sem explicação.
+            setToast({ type: "error", text: `Não deu para abrir a imagem para edição: ${err}` });
+        }
+    }
+
+    function salvarEdicao(id: string, r: { file: File; legenda: string; estado: EditState }) {
+        setAttachments(prev => prev.map(a => {
+            if (a.id !== id || a.kind !== "local") return a;
+            // Guarda o ORIGINAL na primeira edição: reabrir parte sempre dele,
+            // então editar duas vezes não empilha perda de qualidade.
+            const original = a.original ?? a.file;
+            if (a.preview?.startsWith("blob:")) URL.revokeObjectURL(a.preview);
+            return {
+                ...a, file: r.file, original, edits: r.estado,
+                caption: r.legenda, preview: URL.createObjectURL(r.file),
+            };
+        }));
+        setEditandoAnexoId(null);
+    }
+
     function handleSendAttachments() {
         if (!cliente?.telefone || attachments.length === 0) return;
         if (isSendingFile) return; // guard contra duplo-clique
@@ -2231,9 +2275,26 @@ export function ConversasLayout() {
                                     prev.map(a => a.id === id ? { ...a, caption } : a)
                                 )}
                                 onSend={handleSendAttachments}
+                                onEdit={(id) => { void abrirEditor(id); }}
                             />
                         )}
 
+                        {/* Editor de imagem — overlay sobre a tela inteira.
+                            Só monta com item local (o remote vira local em abrirEditor). */}
+                        {(() => {
+                            const alvo = attachments.find(a => a.id === editandoAnexoId);
+                            if (!alvo || alvo.kind !== "local") return null;
+                            return (
+                                <ImageEditor
+                                    key={alvo.id}
+                                    file={alvo.original ?? alvo.file}
+                                    legendaInicial={alvo.caption}
+                                    estadoInicial={alvo.edits ?? null}
+                                    onCancelar={() => setEditandoAnexoId(null)}
+                                    onSalvar={(r) => salvarEdicao(alvo.id, r)}
+                                />
+                            );
+                        })()}
 
                         {/* Reply preview */}
                         {replyTo && (
