@@ -101,6 +101,19 @@ function mapRowToLabel(row: Record<string, unknown>): Label {
 // =============================================
 // STATUS STYLES
 // =============================================
+/**
+ * Envoltório ÚNICO dos quatro botões do rodapé do chat (emoji, clipe, Drive,
+ * microfone): mesmo alvo de 40px, mesma borda, mesmo hover. Antes cada um
+ * tinha o seu — clipe e microfone com borda, emoji e Drive sem, tamanhos
+ * diferentes. O microfone (audio-recorder.tsx) já usa exatamente estas classes.
+ * Nenhuma ação aqui é só-no-hover: o hover muda cor, não visibilidade (§3).
+ */
+const BOTAO_RODAPE =
+    "flex items-center justify-center w-10 h-10 rounded-xl transition-colors shrink-0 border "
+    + "hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]/50 "
+    + "text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white "
+    + "disabled:opacity-30 disabled:cursor-not-allowed";
+
 const statusStyles: Record<string, string> = {
     ativo: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
     inativo: "bg-[#C7D2FE]/20 text-[#37352F] dark:text-[#cbd5e1] border-[#A5B4FC] dark:border-[#4a5568]/40",
@@ -2331,6 +2344,7 @@ export function ConversasLayout() {
                                 {/* Emoji picker */}
                                 <EmojiPickerInput
                                     onEmojiSelect={(emoji) => setChatMessage((prev) => prev + emoji)}
+                                    triggerClassName={BOTAO_RODAPE}
                                 />
                                 {/* File attachment */}
                                 <input
@@ -2346,10 +2360,8 @@ export function ConversasLayout() {
                                         onClick={() => fileInputRef.current?.click()}
                                         disabled={cliente.iaAtiva}
                                         className={cn(
-                                            "flex items-center justify-center w-10 h-10 rounded-xl transition-colors shrink-0 border",
-                                            attachments.length > 0
-                                                ? "bg-brand-500/20 border-brand-500/50 text-brand-400"
-                                                : "hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]/50 text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white disabled:opacity-30"
+                                            BOTAO_RODAPE,
+                                            attachments.length > 0 && "bg-brand-500/20 border-brand-500/50 text-brand-400"
                                         )}
                                         title="Anexar arquivo"
                                     >
@@ -2360,6 +2372,7 @@ export function ConversasLayout() {
                                     (o arquivo já foi republicado no R2 pelo attachDriveFile). */}
                                 {!isRecordingAudio && !cliente.iaAtiva && (
                                     <DrivePickerButton
+                                        className={BOTAO_RODAPE}
                                         destino={{
                                             tipo: "chat",
                                             telefone: cliente.telefone,
