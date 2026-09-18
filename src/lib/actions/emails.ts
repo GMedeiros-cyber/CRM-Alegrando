@@ -1041,10 +1041,10 @@ export type DriveDestino =
     | { tipo: "email" }
     | { tipo: "chat"; telefone: string; canal: string };
 
-// Mesmos limites do clipe (conversas-layout.tsx, `adicionarArquivos`). Um número
-// diferente aqui faria o mesmo arquivo passar por um caminho e falhar pelo outro.
-const CHAT_FILE_MAX = 10 * 1024 * 1024;
-const CHAT_VIDEO_MAX = 16 * 1024 * 1024; // limite do WhatsApp para vídeo
+// Teto do WhatsApp (doc da Z-API): 100MB para vídeo e documento. Mesmo número
+// do clipe em `adicionarArquivos` (conversas-layout.tsx) — um valor diferente
+// aqui faria o mesmo arquivo passar por um caminho e falhar pelo outro.
+const CHAT_WHATSAPP_MAX = 100 * 1024 * 1024;
 
 export async function attachDriveFile(
     fileId: string,
@@ -1079,15 +1079,16 @@ export async function attachDriveFile(
         // O teto é conferido ANTES do download: passar disso daqui significa
         // baixar do Drive e subir pro R2 um arquivo que o destino vai recusar.
         const ehVideo = (meta.data.mimeType || "").startsWith("video/");
-        const teto = destino.tipo === "chat"
-            ? (ehVideo ? CHAT_VIDEO_MAX : CHAT_FILE_MAX)
-            : MAX_TOTAL_BYTES;
+        const teto = destino.tipo === "chat" ? CHAT_WHATSAPP_MAX : MAX_TOTAL_BYTES;
         const declaredSize = meta.data.size ? Number(meta.data.size) : 0;
         if (declaredSize > teto) {
-            return {
-                ok: false,
-                error: `"${meta.data.name}" tem ${(declaredSize / 1024 / 1024).toFixed(1)}MB — acima do limite de ${teto / 1024 / 1024}MB.`,
-            };
+            const mb = (declaredSize / 1024 / 1024).toFixed(0);
+            // O limite é de quem recebe, não do CRM — a mensagem diz de quem é.
+            const dono = destino.tipo === "chat" ? "O WhatsApp aceita até 100MB" : "O Gmail aceita até 25MB";
+            const dica = destino.tipo === "chat" && ehVideo
+                ? " — vídeo 4K do celular costuma passar disso; grave em 1080p ou corte o trecho."
+                : ".";
+            return { ok: false, error: `"${meta.data.name}" tem ${mb}MB. ${dono}${dica}` };
         }
 
         const download = await drive.files.get(
