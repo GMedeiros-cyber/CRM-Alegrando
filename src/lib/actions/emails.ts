@@ -1032,9 +1032,27 @@ function getDriveClient() {
  * credencial de Drive no caminho do envio, e o arquivo não precisa ser
  * tornado público em momento nenhum.
  */
+/**
+ * Destino do arquivo do Drive. O prefixo no R2 muda com ele, e no chat precisa
+ * bater com `chat-<canal>/<telefone>/`, que é o que `sendUploadedFileMessage`
+ * exige — ver a guarda em `lib/actions/messages.ts`.
+ */
+export type DriveDestino =
+    | { tipo: "email" }
+    | { tipo: "chat"; telefone: string; canal: string };
+
+// Mesmos limites do clipe (conversas-layout.tsx, `adicionarArquivos`). Um número
+// diferente aqui faria o mesmo arquivo passar por um caminho e falhar pelo outro.
+const CHAT_FILE_MAX = 10 * 1024 * 1024;
+const CHAT_VIDEO_MAX = 16 * 1024 * 1024; // limite do WhatsApp para vídeo
+
 export async function attachDriveFile(
     fileId: string,
-): Promise<{ ok: true; attachment: EmailAttachment } | { ok: false; error: string }> {
+    destino: DriveDestino = { tipo: "email" },
+): Promise<
+    | { ok: true; attachment: EmailAttachment & { path: string } }
+    | { ok: false; error: string }
+> {
     await requireAuth();
     if (!process.env.GOOGLE_DRIVE_REFRESH_TOKEN) {
         return { ok: false, error: "Integração com o Drive não configurada." };
@@ -1058,11 +1076,17 @@ export async function attachDriveFile(
             };
         }
 
+        // O teto é conferido ANTES do download: passar disso daqui significa
+        // baixar do Drive e subir pro R2 um arquivo que o destino vai recusar.
+        const ehVideo = (meta.data.mimeType || "").startsWith("video/");
+        const teto = destino.tipo === "chat"
+            ? (ehVideo ? CHAT_VIDEO_MAX : CHAT_FILE_MAX)
+            : MAX_TOTAL_BYTES;
         const declaredSize = meta.data.size ? Number(meta.data.size) : 0;
-        if (declaredSize > MAX_TOTAL_BYTES) {
+        if (declaredSize > teto) {
             return {
                 ok: false,
-                error: `"${meta.data.name}" tem ${(declaredSize / 1024 / 1024).toFixed(1)}MB — acima do limite de 25MB do Gmail.`,
+                error: `"${meta.data.name}" tem ${(declaredSize / 1024 / 1024).toFixed(1)}MB — acima do limite de ${teto / 1024 / 1024}MB.`,
             };
         }
 
@@ -1075,7 +1099,14 @@ export async function attachDriveFile(
         const name = meta.data.name || "arquivo";
         const mimeType = meta.data.mimeType || "application/octet-stream";
         const safeName = name.replace(/[^0-9A-Za-z._-]/g, "_").slice(-120);
-        const path = `email-anexos/drive-${Date.now()}-${safeName}`;
+        // Mesmo formato do createSignedUploadUrl — é o que a guarda de
+        // sendUploadedFileMessage exige. Mudar aqui sem mudar a guarda junto
+        // faz o envio falhar com "Path inválido".
+        const path = destino.tipo === "chat"
+            ? `chat-${destino.canal === "festas" ? "festas" : "alegrando"}/`
+              + `${String(destino.telefone).replace(/[^0-9A-Za-z-]/g, "")}/`
+              + `${Date.now()}-${safeName}`
+            : `email-anexos/drive-${Date.now()}-${safeName}`;
 
         const signedUrl = await presignedPutUrl(path, mimeType);
         const put = await fetchWithTimeout(
@@ -1098,6 +1129,9 @@ export async function attachDriveFile(
                 mimeType,
                 source: "drive",
                 driveFileId: fileId,
+                // O chat precisa do path (não só da URL) para chamar
+                // sendUploadedFileMessage sem re-subir o arquivo.
+                path,
             },
         };
     } catch (err) {
