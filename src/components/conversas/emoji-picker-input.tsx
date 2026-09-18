@@ -24,9 +24,18 @@ const EMOJI_CATEGORIES: { label: string; emojis: string[] }[] = [
 
 interface EmojiPickerInputProps {
     onEmojiSelect: (emoji: string) => void;
+    /**
+     * Classe do botão que abre o seletor. O default é o visual histórico
+     * (usado no editor de imagem); o rodapé do chat passa o envoltório
+     * padronizado dos quatro botões, sem mudar os outros consumidores.
+     */
+    triggerClassName?: string;
 }
 
-export function EmojiPickerInput({ onEmojiSelect }: EmojiPickerInputProps) {
+const TRIGGER_PADRAO =
+    "p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors";
+
+export function EmojiPickerInput({ onEmojiSelect, triggerClassName }: EmojiPickerInputProps) {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
 
@@ -47,8 +56,9 @@ export function EmojiPickerInput({ onEmojiSelect }: EmojiPickerInputProps) {
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                className={triggerClassName ?? TRIGGER_PADRAO}
                 title="Emoji"
+                aria-label="Emoji"
             >
                 <Smile className="h-5 w-5" />
             </button>

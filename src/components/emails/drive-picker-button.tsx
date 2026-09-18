@@ -121,7 +121,14 @@ export interface DrivePickerButtonProps {
      * que é o prefixo exigido pela guarda de `sendUploadedFileMessage`.
      */
     destino?: DriveDestino;
+    /**
+     * Classe do botão. O default é o visual do compositor de e-mail; o
+     * rodapé do chat passa o envoltório padronizado dos quatro botões.
+     */
+    className?: string;
 }
+
+const CLASSE_PADRAO = "p-1.5 rounded hover:bg-muted transition-colors disabled:opacity-50";
 
 /**
  * Abre a janela NATIVA do Google Picker, já apontada pro Drive da Alegrando.
@@ -130,7 +137,7 @@ export interface DrivePickerButtonProps {
  * no Google e nunca vê o Drive pessoal dela. O arquivo escolhido segue pelo
  * mesmo caminho de sempre: `attachDriveFile` baixa e republica no R2.
  */
-export function DrivePickerButton({ onAttach, onError, destino }: DrivePickerButtonProps) {
+export function DrivePickerButton({ onAttach, onError, destino, className }: DrivePickerButtonProps) {
     const [busy, setBusy] = useState(false);
     // Reaproveita o token enquanto ele vale, em vez de bater no servidor a
     // cada abertura do Picker.
@@ -233,7 +240,7 @@ export function DrivePickerButton({ onAttach, onError, destino }: DrivePickerBut
             disabled={busy}
             title="Inserir arquivo do Drive"
             aria-label="Inserir arquivo do Drive"
-            className="p-1.5 rounded hover:bg-muted transition-colors disabled:opacity-50"
+            className={className ?? CLASSE_PADRAO}
         >
             {busy ? (
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
