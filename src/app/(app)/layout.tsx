@@ -6,6 +6,22 @@ import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Duração máxima de TODA página autenticada — e, por tabela, de toda server
+ * action que elas invocam. Server action roda dentro da lambda da página que
+ * a chamou, então o teto dela é o da página, não do arquivo onde está escrita.
+ *
+ * Declarado no repo porque o default da Vercel NÃO é legível: a API do projeto
+ * não expõe maxDuration nem o estado do Fluid Compute. Depender do default é
+ * depender de um número que ninguém consegue conferir.
+ *
+ * 60s = o que o Hobby aceita com folga, e ~5x o pior caso medido do caminho
+ * mais longo (attachDriveFile: 129MB do Drive → R2 em 10,8s, medido da máquina
+ * local, que é MAIS lenta que o gru1). Não pedir 300: se o plano não suportar,
+ * o deploy falha. Ver SKILL §1, "caminho de upload".
+ */
+export const maxDuration = 60;
+
 export default async function AppLayout({
     children,
 }: {
