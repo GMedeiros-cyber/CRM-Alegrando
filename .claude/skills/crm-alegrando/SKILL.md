@@ -308,6 +308,21 @@ reverte um filtro em produção sem perceber.
   Webhooks continuam em `api/webhooks/zapi` (776 linhas) e
   `api/webhooks/evolution` (o segundo agora só responde "canal desativado").
 - `src/lib/whatsapp/sender.ts` (670 linhas) concentra o envio.
+- **`fromApi=true` ⇒ "já salvo" é SUPOSIÇÃO, não fato.** O handler
+  (`api/webhooks/zapi`) ignora todo evento com `fromMe=true, fromApi=true`,
+  partindo do princípio de que a server action do CRM já gravou. Medido em
+  16/09/2026: duas mensagens enviadas à Z-API por um script de diagnóstico
+  chegaram no aparelho e **nunca existiram no banco** — o webhook as descartou,
+  e nenhuma action as havia gravado. Qualquer caminho que fale com a Z-API sem
+  gravar no `messages` produz conversa que o cliente vê e o CRM desconhece.
+- **O handler descarta edição em silêncio, por dois caminhos.**
+  `MESSAGE_EVENT_TYPES` só aceita `ReceivedCallback`, `SentCallback` e
+  `ReactionCallback` — qualquer outro `type` sai em
+  `{status:"skipped", reason:"non-message event"}`, **sem log**. E mesmo passando
+  o filtro, o bloco que salva exige `!isFromApi`, então edição disparada pelo
+  CRM cai fora de novo. **Não há log cru de payload da Z-API** (`webhook_events`
+  é usada só pelo webhook do Clerk), então o formato do evento de edição **não
+  é conhecível a partir do repositório** — tem de ser capturado em execução.
 - **Mídia vai toda para o R2 com dedup global por hash de conteúdo**
   (`media-storage.ts`), inclusive áudio. Isso não é otimização: reenviar o mesmo
   vídeo institucional para 16 telefones criava 16 cópias e estourou a cota de
@@ -344,6 +359,42 @@ que mudam decisão de projeto:
   nunca recebeu. Foi assim que os 14 leads da queda foram identificados. A
   detecção só falha para quem voltou a escrever depois — nesse caso o
   `lastMessageTime` já é o novo (na queda de agosto, 1 lead).
+
+### ⚠️ PENDÊNCIA DE PRODUTO: existe caminho em que o cliente recebe e o CRM não registra
+
+**Descoberto em 16/09/2026, e ele existe independente de qualquer feature.** É a
+mesma família do incidente de 12–14/08 (webhook 401 por 44 h): mensagem real,
+cliente afetado, **nenhum erro em lugar nenhum**. A diferença é que aquele foi
+ingestão de entrada, e este é de **saída**.
+
+**O mecanismo.** `api/webhooks/zapi` descarta todo evento com
+`fromMe=true, fromApi=true`, partindo do princípio de que "foi o CRM que mandou,
+então a server action já gravou". Isso é **suposição, não fato**. Medido: duas
+mensagens enviadas à Z-API por um script de diagnóstico chegaram no aparelho do
+destinatário e **nunca existiram no `messages`** — o webhook as descartou e
+nenhuma action as havia gravado. O CRM mostra a conversa sem elas, para sempre.
+
+**Por que importa mesmo sem script nenhum.** Qualquer caminho que fale com a
+Z-API sem gravar cai no mesmo buraco: um workflow novo do n8n, uma automação,
+uma retentativa que reenvia sem persistir, um teste feito à mão. E o
+`sendMessage` com `iaAtiva` já depende do n8n gravar por conta própria (§1) — se
+ele falhar **depois** de enviar, o resultado é exatamente este.
+
+**Dois descartes silenciosos, nenhum com log:**
+
+1. `MESSAGE_EVENT_TYPES` aceita só `ReceivedCallback`, `SentCallback` e
+   `ReactionCallback`. Qualquer outro `type` sai em
+   `{status:"skipped", reason:"non-message event"}`.
+2. O bloco que salva exige `!isFromApi`.
+
+**Não há log cru de payload da Z-API** — `webhook_events` é usada só pelo
+webhook do Clerk. Então nem dá para saber **o que** se está perdendo, nem o
+formato de eventos que o handler não reconhece (edição, por exemplo).
+
+**O conserto tem duas metades, e a primeira não é código de feature:**
+persistir o que hoje é descartado (com PII redigida e retenção curta), para
+**parar de ser cego**; e depois decidir a reconciliação. A captura serve ao F3,
+mas **o buraco existe sem o F3** e não deve ser tratado como sub-etapa dele.
 
 ### O canal *festas* está DESATIVADO, não apagado
 
@@ -393,15 +444,30 @@ SHA-256 e URL assinada de PUT. Duas propriedades que mudam decisão de projeto:
 - **O bucket é público** (`R2_PUBLIC_URL`, um host `pub-….r2.dev`), então a URL
   gravada no banco é servível direto no `<img src>` — não precisa assinar para
   **ler**.
-- **A credencial do R2 só é comprovadamente usada para escrever.** O próprio
-  `objectExistsInR2` trata `403` de "token write-only" como caso esperado. Não
-  construa nada em cima de URL assinada de **GET** sem antes confirmar que o
-  token tem permissão de leitura — inclusive o truque de
-  `response-content-disposition` para forçar download, que depende disso.
-- **As variáveis `R2_*` não estão no `.env.local`** (só na Vercel). Em
-  desenvolvimento, portanto, anexo não sobe nem baixa: quem depende do R2 falha
-  com "não configurado". Não gaste tempo depurando isso como bug de código — ou
-  copie as chaves do painel da Cloudflare para o `.env.local`.
+- **⚠️ O bucket é servido pela Public Development URL do R2 (`pub-….r2.dev`) e
+  NÃO há domínio customizado.** Essa URL é **rate-limited pela Cloudflare** — é
+  feita para desenvolvimento, não para produção, e é exatamente o que o CRM usa
+  para servir mídia hoje. **Quando alguém disser que imagem "às vezes não
+  carrega", este é o primeiro suspeito**, antes de olhar código, cache ou rede:
+  o sintoma é intermitente por desenho, piora com volume, e não aparece em teste
+  de um arquivo só. A saída definitiva é pôr um domínio customizado no bucket.
+- **A credencial do R2 lê, escreve e apaga — não é write-only.** Medido em
+  16/09/2026 pelo próprio `r2-client.ts`: `presignedPutUrl` assina, o `PUT`
+  devolve 200, **`objectExistsInR2` devolve `true`** (HeadObject autorizado),
+  o `GET` público devolve os bytes idênticos e `deleteFromR2` remove. Uma versão
+  anterior deste documento dizia que a credencial "só é comprovadamente usada
+  para escrever" e mandava não construir nada em cima de GET assinado. **Isso
+  deixou de valer**: o truque de `response-content-disposition` para forçar
+  download é viável. O `403` que `objectExistsInR2` trata como esperado é
+  defesa histórica, não o comportamento atual.
+- **As `R2_*` PRECISAM estar no `.env.local` para desenvolver anexo.** Ficaram
+  ausentes por muito tempo (só na Vercel), e nesse estado quem depende do R2
+  falha com "não configurado" — que **não é bug de código**. São cinco:
+  `R2_ACCOUNT_ID`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL`, `R2_ACCESS_KEY_ID`,
+  `R2_SECRET_ACCESS_KEY`. Ao diagnosticar, **separe os dois modos de falha**:
+  falta de variável dá "não configurado"; chave errada dá
+  `SignatureDoesNotMatch`/`InvalidAccessKeyId` no corpo do `PUT`. São problemas
+  diferentes e confundi-los faz procurar no lugar errado.
 - **`<a download>` é ignorado quando a URL é de outra origem.** Como o R2 é
   outro host, um "Baixar" apontado direto para lá só abre em nova aba. Quem
   resolve é `/api/anexos/download`, que faz proxy do arquivo e devolve
@@ -491,6 +557,28 @@ banco velho.
    rede interna da Vercel. O padrão do projeto está em
    `src/app/api/anexos/download/route.ts` — só aceita URL que comece com
    `R2_PUBLIC_URL`.
+8. **Credencial nunca vai para a saída da sessão — nem em diagnóstico.**
+   Vale para terminal, log, transcript de sessão e mensagem de erro. Não há
+   exceção de "é só pra depurar": a saída de uma sessão é copiada, colada e
+   arquivada em lugares que ninguém controla depois.
+
+   O caso que gerou a regra (16/09/2026): um probe de diagnóstico imprimiu o
+   corpo cru de `GET /me` da Z-API, e **esse endpoint devolve o `token` da
+   instância em claro** junto da configuração de webhook. Ninguém pediu o token,
+   ninguém esperava que ele viesse, e o probe só queria dois campos.
+
+   A regra prática que evita isso: **imprima campos nomeados, nunca o corpo
+   inteiro.** `console.log(JSON.stringify(resposta))` num endpoint de terceiro
+   é um vazamento esperando o endpoint mudar. Vale também para
+   `vercel env pull`, `printenv`, `cat .env.local` e `git show` de arquivo de
+   configuração — se o objetivo é saber se a variável existe, imprima o
+   **nome e o tamanho**, não o valor.
+
+   Corolário de resposta a incidente: **vazou, a decisão de rotacionar é de quem
+   opera**, e depende do raio. Um segredo que já vivia na mesma máquina, exposto
+   no log dela, não aumentou exposição — e rotacionar o token da Z-API arrasta
+   `.env.local`, Vercel e os nós do n8n que a chamam. Reporte o vazamento, diga
+   o raio, e deixe a decisão com o operador.
 
 ### Estado da segurança (auditado em 13/08/2026)
 
@@ -860,6 +948,21 @@ convertendo base64 — não uma chamada de rede.
 2. **Medir o cliente errado.** Ver §1.
 3. **Pareamento por índice** entre listas de origens diferentes. Ver §6.
 4. **Confiar no retorno da escrita** em vez de reler o estado persistido.
+   **Corolário medido em 16/09/2026: comparar `messageId` NÃO detecta
+   duplicata de edição na Z-API — daria falso positivo em TODA edição bem
+   sucedida.** No protocolo do WhatsApp a edição **não reescreve** a mensagem
+   original: ela viaja como mensagem própria (`protocolMessage` /
+   `MESSAGE_EDIT`) carregando a chave da original como referência, e **é o
+   aparelho que colapsa as duas na tela**. Medido: `POST /send-text` normal
+   devolveu `39F8D7DAFEED5EAECA69`; o mesmo endpoint com `editMessageId`
+   devolveu `3EB0DCA3EC4EE21A9C1EC2` — id diferente, formatos diferentes, e no
+   aparelho **uma única mensagem**, com o selo "Editada".
+
+   A lição geral, que vale além da Z-API: **id de resposta diferente não prova
+   que houve duplicação.** Antes de construir detector em cima de comparação de
+   identificador, confirme no destino real o que aconteceu — aqui, o aparelho.
+   Um detector desses teria acusado erro em 100% dos casos de sucesso e levado
+   a "consertar" o que funcionava.
 5. **Conflacionar mecanismos parecidos.** "Ver mensagem completa" (revela a
    citação do Gmail) e "recolher texto longo" são coisas diferentes; rótulos
    parecidos em botões vizinhos confundem em uma semana de uso. Corolário: um
@@ -880,6 +983,54 @@ convertendo base64 — não uma chamada de rede.
    qualquer coisa de um resultado vazio, liste os valores distintos da coluna. Um
    `select distinct` de dois segundos evita uma conclusão errada que vira
    decisão de produto.
+
+   **A mesma armadilha sem filtro nenhum: o request chegou como `anon`.** Em
+   dev, os leads aparecem e as mensagens **não** — sem erro, sem log, sem nada
+   na tela. Medido em 16/09/2026 na consulta exata de `useLeadMessages.ts:259`:
+   com a chave `anon`, **0 linhas e `erro: nenhum`**; com a service key, **18**.
+   A conversa tinha 18 mensagens e a tela dizia "Nenhuma mensagem ainda".
+
+   A causa **não é** RLS, nem consulta, nem banco errado: é o **emissor do
+   Clerk**. O `.env.local` usa a instância de desenvolvimento (`pk_test_`,
+   `equipped-lark-92.clerk.accounts.dev`) e o Third-Party Auth do Supabase só
+   confiava na de produção (`clerk.alegrando.cloud`). Token recusado → o browser
+   cai para `anon` → a policy nega → lista vazia. Os leads seguem aparecendo
+   porque vêm de server action, que usa service key e não passa por RLS.
+   **Esse contraste — leads sim, mensagens não — é a assinatura do problema**:
+   quando ele aparecer, confira o emissor antes de qualquer outra coisa.
+   **São DOIS passos, com o mesmo sintoma e causas diferentes — e o segundo é
+   invisível para quem para no primeiro.** Medido em 16/09/2026 nos `edge_logs`:
+
+   1. **401 → 200.** Faltava a integração Clerk de dev no Third-Party Auth do
+      Supabase. Último 401 às 08:03:32; primeiro 200 às 08:06:51, referer
+      `http://localhost:3000/`. Acrescentar a instância de dev resolve **este**.
+   2. **200 com zero linhas e nenhum erro.** Faltava a claim
+      `"role": "authenticated"` no session token do Clerk de dev. Sem ela o
+      PostgREST trata a requisição como `anon`, a policy `realtime_messages`
+      (role `authenticated`) não se aplica, e a resposta é **200 vazio**.
+      Corrigido no painel do Clerk, personalizando o token da sessão.
+
+   O passo 1 muda o **código de status**; o passo 2 não muda nada que se veja
+   sem olhar o corpo. Quem comemora o 200 para exatamente antes do problema que
+   restava. **Ao depurar isto, o critério de sucesso é a contagem de linhas, nunca
+   o status.**
+
+   **Isto já estava escrito em `src/lib/supabase/client.ts:20-31`**, com todas as
+   letras, inclusive a frase "não é banco errado nem credencial errada de
+   Supabase: é o emissor do Clerk". Uma sessão inteira foi gasta medindo o banco
+   antes de alguém abrir o arquivo. O comentário certo existia; faltou lê-lo.
+   Ao investigar qualquer coisa de Supabase no browser, **leia `client.ts`
+   primeiro** — são trinta segundos contra horas.
+
+   **E o que isso revela sobre a segurança de `messages`:** a policy é
+   `realtime_messages`, role `authenticated`, **`qual: true`** — ela não filtra
+   nada. O banco devolve as **12.143** mensagens do canal alegrando para
+   qualquer requisição que chegue como `authenticated`. A fronteira inteira da
+   tabela é o Clerk, não o Postgres. Consequência direta: **cada emissor
+   acrescentado ao Third-Party Auth dá acesso a todas as mensagens**. Somar um
+   emissor é decisão de segurança, não conveniência de ambiente — e a instância
+   de dev, cujo cadastro é mais frouxo que o de produção, passa a ser uma porta
+   com a mesma chave. Ver também §2.2.
 9. **Filtro server-side e client-side na mesma barra.** Em Conversas, `search`,
    `canal` e `labelIds` vão à RPC (paginados, com
    `total_count` correto); `grupos`, `IA ativa/manual` e a ordenação são
