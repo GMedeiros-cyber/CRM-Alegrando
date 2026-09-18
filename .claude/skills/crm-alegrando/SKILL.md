@@ -346,14 +346,66 @@ reverte um filtro em produção sem perceber.
   arquivo de iPhone: olhar o codec antes de olhar código. Compressão/transcode
   no navegador é rodada própria, em andamento por outro agente — não embutir
   em outra tarefa.
-- **Limites menores no caminho de upload, medidos em 18/09/2026:** o caminho
-  direto browser→R2 (acima de 10MB, presigned PUT) aguenta 100MB — o R2 aceita
-  até 5GB num PUT e o `fetch` do browser não tem timeout. A assinatura vale
-  **300s**, conferida no **início** do PUT, não no fim. Já o caminho do **Drive**
-  (`attachDriveFile`) é server-side: baixa o arquivo inteiro para memória e sobe
-  ao R2 com `fetchWithTimeout` de **60s**, dentro de uma server action **sem
-  `maxDuration` configurado** — esse é o gargalo real para 100MB por esse
-  caminho, e não foi ajustado.
+- **O caminho de upload, ponto a ponto (medido em 18/09/2026):**
+  - **Clipe e Ctrl+V** acima de 10MB vão **direto browser→R2** por presigned
+    PUT: o R2 aceita até 5GB num PUT, o `fetch` do browser não tem timeout, e a
+    assinatura de **300s** é conferida no **início** do PUT. Aguentam 100MB.
+  - **Drive** (`attachDriveFile`) é **server-side**: baixa o arquivo inteiro para
+    memória e sobe ao R2 (`fetchWithTimeout` de 60s). **Medido pelo mesmo
+    código, da máquina de dev:** 5MB em 2,8s · 15MB em 5,0s · 29MB em 8,8s ·
+    57MB em 8,0s · 79MB em 9–11s · **129MB em 10,8s**. Download do Drive a
+    4–27 MB/s, PUT no R2 a 6–21 MB/s. **Nada falhou e nada chegou perto dos
+    60s.** Uma versão anterior deste documento chamava esse caminho de "gargalo
+    real para 100MB" — era inferência, não medição, e estava **errada**.
+  - **⚠️ Esses números são da MÁQUINA LOCAL, pela conexão doméstica do Gabriel.**
+    A função roda em `gru1`, com banda de datacenter para o Google e para o R2.
+    Os 11s são **teto pessimista**, não otimista: em produção a tendência é
+    menor. Quem reler achando que são tempos de produção vai superestimar o
+    risco. E a prova final é só uma: arquivo grande de verdade pelo Drive, em
+    produção, depois do deploy — até lá tudo isto é inferência, inclusive esta.
+  - **Conclusão (18/09/2026): o Drive NÃO tem teto próprio.** Nenhuma faixa
+    falhou; inventar um número seria repetir o erro dos 10/16MB. O que entrou
+    no lugar foi declarar a duração.
+
+### Duração de função: SEMPRE declarada no repo, nunca no default
+
+**O default de `maxDuration` da Vercel não é legível.** A API do projeto
+(`/v9/projects/…`) **não expõe** `maxDuration` nem o estado do Fluid Compute —
+medido em 18/09/2026 — e o painel não é confiável para isso. Depender do
+default é depender de um número que ninguém consegue conferir, e que muda com
+o plano. Neste projeto, portanto, **a duração é declarada em código**:
+
+```ts
+// src/app/(app)/layout.tsx
+export const maxDuration = 60;
+```
+
+**Por que no layout, e não na action nem no `vercel.json`:**
+
+- Server action **não tem rota própria**. O cliente faz `POST` na URL da página
+  em que está (header `Next-Action`) e a action roda **dentro da lambda dessa
+  página**. `export const maxDuration` em `lib/actions/*.ts` não vale nada —
+  route segment config só existe em `layout`, `page` e `route`.
+- `attachDriveFile` é invocável de mais de uma página (`/conversas` e qualquer
+  uma que abra o compositor de e-mail). Declarar página por página é lista que
+  envelhece. **Config de layout se propaga aos segmentos filhos** — provado
+  pelo build: `.next/server/functions-config-manifest.json` sai com
+  `{"maxDuration": 60}` nas **9 rotas** sob `(app)` a partir de uma declaração.
+- `functions` no `vercel.json` **não serve para Next.js App Router**: o glob
+  casa com funções que a Vercel empacota direto (`api/`, Build Output API); o
+  build do Next é opaco para ele, e o deploy acusa
+  "pattern doesn't match any Serverless Functions".
+- `/api/*` fica **fora** do `(app)/layout` e não herda. Route handler que
+  precisar de mais tempo declara o próprio `maxDuration` no `route.ts`.
+
+**Por que 60:** é o que o Hobby aceita com folga, e ~5× o pior caso medido
+(11s). **Não pedir 300**: se o plano não suportar, o deploy falha — e falha
+no push para `main`, que é produção.
+
+**Linha de base medida (18/09/2026, máquina local, ver ressalva acima):**
+5MB 2,8s · 15MB 5,0s · 29MB 8,8s · 57MB 8,0s · 79MB 9–11s · 129MB 10,8s. Se
+algum dia um arquivo dessas faixas passar de 40s pelo Drive, **alguma coisa
+mudou** — rede, API do Google, R2 — e o número acima diz o quanto.
 
 **A Z-API NÃO guarda histórico de mensagens recebidas. Webhook perdido é dado
 perdido, ponto.** Medido em 14/08/2026, com a instância conectada:
