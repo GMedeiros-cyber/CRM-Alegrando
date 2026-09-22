@@ -10,8 +10,14 @@
  *     - Se phone é um LID, resolve o telefone real via chat_lid do lead.
  *     - Checa idempotência pelo messageId no campo metadata JSONB.
  *     - Salva no banco com sender_type='equipe'.
- *  5. Se fromMe=true, fromApi=true (enviado pelo CRM via API): ignora (já salvo).
+ *  5. Se fromMe=true, fromApi=true (enviado pelo CRM via API): não salva em
+ *     `messages` (a action já salvou — SUPOSIÇÃO, ver SKILL §1 "PENDÊNCIA DE
+ *     PRODUTO") e registra o evento redigido em `zapi_eventos_descartados`.
  *  6. Repassa o payload original ao n8n de forma assíncrona (fire-and-forget).
+ *
+ * Todo evento que o handler descarta (tipo fora de MESSAGE_EVENT_TYPES, ou
+ * fromApi) vai para `zapi_eventos_descartados` com PII redigida e 7 dias de
+ * vida. É diagnóstico, não fila: existe para parar de ser cego ao que se perde.
  */
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -20,7 +26,7 @@ import { verifyZapiWebhook } from "@/lib/webhook-auth";
 import { fetchWithTimeout } from "@/lib/fetch-utils";
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { telefoneMascarado } from "@/lib/log-redact";
+import { redigirEstrutura, telefoneMascarado } from "@/lib/log-redact";
 
 // Tipos de evento que representam uma mensagem real chegando.
 // Callbacks de status (DeliveryCallback, ReadCallback, etc.) são ignorados.
@@ -318,6 +324,47 @@ async function processReaction(
   console.log(`[ZAPI-PROXY] Reação ${reactionEmoji} (${telefoneMascarado(reacterKey)}) salva em ${targetMsg.id}`);
 }
 
+/**
+ * Grava em `zapi_eventos_descartados` um evento que o handler NÃO vai
+ * processar, já redigido (lib/log-redact.ts): telefone mascarado, URL reduzida
+ * a host, texto substituído pelo tamanho. A coluna nunca recebe payload cru.
+ *
+ * Duas regras que se contradizem de propósito, resolvidas aqui:
+ * - diagnóstico nunca derruba ingestão → esta função NÃO lança; qualquer erro
+ *   fica dentro dela e o webhook segue;
+ * - erro engolido em silêncio é o anti-padrão nº 1 → a falha vai para o log
+ *   com os campos que identificam o evento (motivo, type, messageId), sem o
+ *   corpo.
+ *
+ * É aguardada (não fire-and-forget): a Vercel encerra a função ao responder e
+ * uma promise solta pode nunca completar.
+ */
+async function registrarEventoDescartado(
+  supabase: SupabaseClient,
+  motivo: "tipo_nao_reconhecido" | "from_api",
+  payload: ZApiWebhookPayload,
+): Promise<void> {
+  const eventType = payload.type ?? null;
+  const messageId = payload.messageId ?? null;
+  try {
+    const { error } = await supabase.from("zapi_eventos_descartados").insert({
+      motivo,
+      event_type: eventType,
+      message_id: messageId,
+      from_me: payload.fromMe ?? null,
+      from_api: payload.fromApi ?? null,
+      telefone_mask: payload.phone ? telefoneMascarado(payload.phone) : null,
+      payload: redigirEstrutura(payload),
+    });
+    if (error) throw new Error(error.message);
+  } catch (err) {
+    console.error(
+      `[ZAPI-PROXY] Falha ao registrar evento descartado (motivo=${motivo}, type=${eventType}, messageId=${messageId}):`,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const auth = verifyZapiWebhook(req);
   if (!auth.ok) {
@@ -338,18 +385,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Status callbacks (DeliveryCallback, ReadCallback, etc.) não vão para o n8n —
   // o agente IA não tem o que fazer com eles e cada forward gera execução desnecessária.
   const eventType = payload.type || "";
+  const supabase = createServerSupabaseClient();
+
   if (!MESSAGE_EVENT_TYPES.has(eventType)) {
+    // Descarte nº 1. Antes saía sem deixar rastro — agora fica registrado,
+    // redigido, para se conhecer o formato do que não se processa (edição, etc.).
+    await registrarEventoDescartado(supabase, "tipo_nao_reconhecido", payload);
     return NextResponse.json({ status: "skipped", reason: "non-message event" });
   }
 
   const rawPhone = payload.phone ?? "";
   const chatLid = payload.chatLid ?? (isLid(rawPhone) ? rawPhone : null);
   const isFromMe = payload.fromMe === true;
-  // fromApi=true = enviado pelo CRM via API → já salvo pela action, ignorar.
+  // fromApi=true = enviado pelo CRM via API → a action deve ter salvo. É
+  // suposição (SKILL §1): por isso o descarte nº 2 abaixo também é registrado.
   const isFromApi = payload.fromApi === true;
   const isGroup = isGroupChat(payload);
-
-  const supabase = createServerSupabaseClient();
 
   // --- 1.4. Mensagens de grupo: handler dedicado ---
   // Grupos têm phone com sufixo "-group" e payload.participantPhone com quem mandou.
@@ -660,6 +711,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         }
       }
     }
+  }
+
+  // --- 2.5. Descarte nº 2: fromMe && fromApi não entra em `messages` ---
+  // Registrado ANTES do bloco 3, que exige !isFromApi. Medido em 16/09/2026:
+  // mensagem chegou no aparelho do cliente e nunca existiu no CRM por este
+  // caminho. O fluxo normal (equipe pelo celular, cliente) não passa aqui.
+  if (isFromMe && isFromApi) {
+    await registrarEventoDescartado(supabase, "from_api", payload);
   }
 
   // --- 3. Mensagens da equipe (fromMe=true, fromApi=false): salvar no banco ---

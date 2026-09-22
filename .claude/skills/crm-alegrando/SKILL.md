@@ -469,6 +469,22 @@ persistir o que hoje é descartado (com PII redigida e retenção curta), para
 **parar de ser cego**; e depois decidir a reconciliação. A captura serve ao F3,
 mas **o buraco existe sem o F3** e não deve ser tratado como sub-etapa dele.
 
+**Primeira metade FEITA (22/09/2026, D1) — e ela tem prazo.** Os dois descartes
+agora gravam em `zapi_eventos_descartados` (payload redigido por
+`redigirEstrutura` em `lib/log-redact.ts`, TTL de 7 dias via pg_cron). A gravação
+é aguardada dentro do caminho quente do webhook e **não filtra `event_type` de
+propósito**: filtrar agora poderia excluir justamente o evento de edição, cujo
+formato ninguém conhece. Isso significa que todo `DeliveryCallback`/`ReadCallback`
+vira linha e paga um insert.
+
+**Isto é uma janela de captura de 48 h, não estado permanente.** Decisão com prazo
+(Gabriel, 22/09/2026): ao fim das 48 h ele lê a tabela pelo conector do Supabase
+e escolhe entre (a) apertar o filtro de `event_type` para o que interessa e
+(b) remover a captura. **Captura no caminho quente da ingestão não pode virar
+esquecimento** — quem encontrar este parágrafo depois de 24/09/2026 com a
+captura ainda ampla deve tratar como pendência vencida, não como desenho.
+Check da redação: `npx tsx scripts/check-log-redact.ts`.
+
 ### O canal *festas* está DESATIVADO, não apagado
 
 Encerrado em agosto/2026. **Os dados continuam inteiros no banco** — e são a

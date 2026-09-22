@@ -29,3 +29,49 @@ export function hostDe(url: string | null | undefined): string {
         return "(url inválida)";
     }
 }
+
+// Chaves cujo valor é telefone ou LID (identificador de pessoa no WhatsApp).
+const CHAVES_TELEFONE = /(^|_)(phone|lid|reactionBy|participant)$|Phone$|Lid$/i;
+// Chaves que podem ficar em claro: dizem O QUE o evento é, não o que foi dito.
+const CHAVES_ESTRUTURA = /^(type|status|messageId|mimeType|messageType|broadcast|isGroup|fromMe|fromApi|waitingMessage|isEdit|isNewsletter)$|MessageId$|Id$/;
+const CHAVES_LOCALIZACAO = /^(latitude|longitude)$/;
+const PROFUNDIDADE_MAX = 8;
+
+/**
+ * Redige um payload inteiro preservando a ESTRUTURA: mesmas chaves, mesmos
+ * tipos, mesmo aninhamento. Serve para descobrir o formato de um evento (ex.:
+ * edição na Z-API) sem guardar o que foi dito nem para quem.
+ *
+ * Regras, nesta ordem: telefone/LID → máscara; URL → só o host; identificador
+ * e enum (`type`, `status`, `*Id`) → em claro; qualquer outra string → só o
+ * tamanho; lat/long → apagados; número/booleano/null → em claro.
+ *
+ * Errar para o lado de redigir demais é barato (perde-se um campo legível);
+ * errar para o lado de menos é PII no banco. Por isso string desconhecida vira
+ * tamanho, e não o contrário.
+ */
+export function redigirEstrutura(valor: unknown, chave = "", profundidade = 0): unknown {
+    if (profundidade > PROFUNDIDADE_MAX) return "<profundo demais>";
+    if (valor === null || valor === undefined) return valor;
+    if (typeof valor === "string") {
+        if (CHAVES_TELEFONE.test(chave)) return telefoneMascarado(valor);
+        if (/^https?:\/\//i.test(valor)) return `<url ${hostDe(valor)}>`;
+        if (CHAVES_ESTRUTURA.test(chave)) return valor;
+        return `<${valor.length} chars>`;
+    }
+    if (typeof valor === "number") {
+        return CHAVES_LOCALIZACAO.test(chave) ? "<num>" : valor;
+    }
+    if (typeof valor === "boolean") return valor;
+    if (Array.isArray(valor)) {
+        return valor.map((v) => redigirEstrutura(v, chave, profundidade + 1));
+    }
+    if (typeof valor === "object") {
+        const saida: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(valor as Record<string, unknown>)) {
+            saida[k] = redigirEstrutura(v, k, profundidade + 1);
+        }
+        return saida;
+    }
+    return `<${typeof valor}>`;
+}
