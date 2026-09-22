@@ -2,7 +2,7 @@
 
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { LABEL_COLOR_CLASSES, type LabelColor } from "@/lib/types/labels";
+import { estiloTag, TAG_CLASSES, TAG_DOT_CLASSES, type LabelColor } from "@/lib/types/labels";
 
 interface LabelBadgeProps {
     name: string;
@@ -21,19 +21,22 @@ export function LabelBadge({
     className,
     title,
 }: LabelBadgeProps) {
-    const c = LABEL_COLOR_CLASSES[color];
+    // Cor livre (hex): fundo, texto, borda e ponto vêm de estiloTag como
+    // variáveis CSS para os dois temas; o texto já sai no contraste certo.
+    const estilo = estiloTag(color);
     const isSm = size === "sm";
     return (
         <span
             title={title ?? name}
+            style={estilo}
             className={cn(
                 "inline-flex items-center gap-1 font-semibold uppercase border rounded-full whitespace-nowrap",
+                TAG_CLASSES,
                 isSm ? "text-[9px] px-1.5 py-0.5" : "text-[10px] px-2 py-0.5",
-                c.bg, c.text, c.border,
                 className
             )}
         >
-            <span className={cn("rounded-full", isSm ? "w-1.5 h-1.5" : "w-2 h-2", c.dotBg)} />
+            <span className={cn("rounded-full", TAG_DOT_CLASSES, isSm ? "w-1.5 h-1.5" : "w-2 h-2")} />
             <span className="truncate max-w-[120px]">{name}</span>
             {onRemove && (
                 <button

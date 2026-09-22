@@ -3,7 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import type { Label, LabelColor } from "@/lib/types/labels";
+import { normalizarHex, type Label, type LabelColor } from "@/lib/types/labels";
 
 type LabelRow = {
     id: string;
@@ -45,11 +45,14 @@ export async function createLabel(params: {
     const name = params.name.trim();
     if (!name) return { ok: false, error: "Nome obrigatório" };
     if (name.length > 40) return { ok: false, error: "Nome muito longo (máx 40)" };
+    // Hex normalizado aqui; o CHECK do banco (labels_color_check) é a segunda linha.
+    const color = normalizarHex(params.color);
+    if (!color) return { ok: false, error: "Cor inválida — use um hex como #ffc9c9" };
 
     const supabase = createServerSupabaseClient();
     const { data, error } = await supabase
         .from("labels")
-        .insert({ name, color: params.color, created_by: userId, updated_by: userId })
+        .insert({ name, color, created_by: userId, updated_by: userId })
         .select("id, name, color, created_at, updated_at")
         .single();
 
@@ -75,7 +78,11 @@ export async function updateLabel(params: {
         if (trimmed.length > 40) return { ok: false, error: "Nome muito longo (máx 40)" };
         updates.name = trimmed;
     }
-    if (params.color !== undefined) updates.color = params.color;
+    if (params.color !== undefined) {
+        const color = normalizarHex(params.color);
+        if (!color) return { ok: false, error: "Cor inválida — use um hex como #ffc9c9" };
+        updates.color = color;
+    }
 
     const { error } = await supabase.from("labels").update(updates).eq("id", params.id);
     if (error) {

@@ -3,12 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Check, Pencil, Trash2, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-    LABEL_COLOR_CLASSES,
-    LABEL_COLORS,
-    type Label,
-    type LabelColor,
-} from "@/lib/types/labels";
+import { COR_TAG_PADRAO, type Label } from "@/lib/types/labels";
+import { ColorPicker } from "./color-picker";
 import {
     createLabel,
     updateLabel,
@@ -47,10 +43,10 @@ export function LabelPicker({
     const wrapperRef = useRef<HTMLDivElement>(null);
     const [creating, setCreating] = useState(false);
     const [newName, setNewName] = useState("");
-    const [newColor, setNewColor] = useState<LabelColor>("blue");
+    const [newColor, setNewColor] = useState<string>(COR_TAG_PADRAO);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState("");
-    const [editColor, setEditColor] = useState<LabelColor>("blue");
+    const [editColor, setEditColor] = useState<string>(COR_TAG_PADRAO);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
@@ -176,7 +172,6 @@ export function LabelPicker({
                 )}
                 {availableLabels.map((l) => {
                     const active = assignedIds.includes(l.id);
-                    const c = LABEL_COLOR_CLASSES[l.color];
                     const isEditing = editingId === l.id;
 
                     if (isEditing) {
@@ -193,21 +188,7 @@ export function LabelPicker({
                                     }}
                                     className="w-full px-2 py-1 rounded-md text-[12px] bg-[#F7F7F5] dark:bg-[#0f1829] border border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white"
                                 />
-                                <div className="flex flex-wrap gap-1">
-                                    {LABEL_COLORS.map((col) => (
-                                        <button
-                                            key={col}
-                                            type="button"
-                                            onClick={() => setEditColor(col)}
-                                            className={cn(
-                                                "w-5 h-5 rounded-full border-2 transition-transform",
-                                                LABEL_COLOR_CLASSES[col].dotBg,
-                                                editColor === col ? "border-foreground scale-110" : "border-transparent"
-                                            )}
-                                            aria-label={`Cor ${col}`}
-                                        />
-                                    ))}
-                                </div>
+                                <ColorPicker value={editColor} onChange={setEditColor} nomePrevia={editName} compact />
                                 <div className="flex gap-1">
                                     <button
                                         type="button"
@@ -245,7 +226,7 @@ export function LabelPicker({
                                 onClick={() => onToggle(l.id, active)}
                                 className="flex items-center gap-2 flex-1 min-w-0 text-left"
                             >
-                                <span className={cn("rounded-full w-2.5 h-2.5 shrink-0", c.dotBg)} />
+                                <span className="rounded-full w-2.5 h-2.5 shrink-0" style={{ backgroundColor: l.color }} />
                                 <span className={cn(
                                     "flex-1 truncate",
                                     active ? "text-brand-500 dark:text-brand-400 font-semibold" : "text-[#37352F] dark:text-[#cbd5e1]"
@@ -293,21 +274,7 @@ export function LabelPicker({
                             }}
                             className="w-full px-2 py-1 rounded-md text-[12px] bg-[#F7F7F5] dark:bg-[#0f1829] border border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#94a3b8]"
                         />
-                        <div className="flex flex-wrap gap-1">
-                            {LABEL_COLORS.map((col) => (
-                                <button
-                                    key={col}
-                                    type="button"
-                                    onClick={() => setNewColor(col)}
-                                    className={cn(
-                                        "w-5 h-5 rounded-full border-2 transition-transform",
-                                        LABEL_COLOR_CLASSES[col].dotBg,
-                                        newColor === col ? "border-foreground scale-110" : "border-transparent"
-                                    )}
-                                    aria-label={`Cor ${col}`}
-                                />
-                            ))}
-                        </div>
+                        <ColorPicker value={newColor} onChange={setNewColor} nomePrevia={newName} compact />
                         <div className="flex gap-1">
                             <button
                                 type="button"

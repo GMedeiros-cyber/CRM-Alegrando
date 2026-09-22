@@ -701,6 +701,17 @@ banco velho.
    `.env.local`, Vercel e os nós do n8n que a chamam. Reporte o vazamento, diga
    o raio, e deixe a decisão com o operador.
 
+   **Caso que confirma a regra (22/09/2026):** um script de verificação visual
+   fazia login por *sign-in token* do Clerk (`POST /v1/sign_in_tokens`,
+   instância de TESTE) e abria `/sign-in?__clerk_ticket=…` no Playwright. O
+   dev server recusou a conexão, e **o erro do Playwright imprimiu a URL de
+   navegação inteira — com o ticket.** Raio: token de uso único, 10 min, da
+   instância de teste, não consumido, já expirado. Nenhuma ação. A lição não
+   é "cuidado com o log": é que **ferramenta de terceiro põe a URL na mensagem
+   de erro**, e a URL é onde o segredo viaja. O script passou a capturar
+   `uncaughtException`/`unhandledRejection` e reduzir a mensagem à primeira
+   linha com `https?://\S+` trocado por `<url>` — antes de qualquer `goto`.
+
 ### Estado da segurança (auditado em 13/08/2026)
 
 Resolvidos, não repita a investigação:
@@ -937,6 +948,26 @@ Isso já gerou um "bug" que não existia.
   `aria-pressed`, `aria-selected`, `aria-busy` aparecem no código. Mantenha:
   controle que expande recebe `aria-expanded`; região que atualiza sozinha
   (Realtime) merece `aria-live`.
+- **Cor de tag é hex livre, e o texto é CALCULADO** (`estiloTag`/`corTextoSobre`
+  em `lib/types/labels.ts`; check em `scripts/check-cor-tag.ts`). Medido em
+  22/09/2026 ao trocar os 8 nomes por hex: **corte fixo de luminância** ("L >
+  0,45 → texto escuro, senão branco") **dava 2,1:1 em tons médios** — tag
+  ilegível. A regra certa é escolher preto ou branco pelo **maior contraste** e
+  só então tingir (12% da própria cor), mantendo ≥ 4,5:1. **O piso físico do
+  cubo RGB é 4,35:1, em cinza médio (`#9966aa` na varredura)** — ali nenhum
+  texto faz melhor, é o máximo que existe. Os presets pastéis ficam ≥ 7:1.
+  Corolário: contraste é propriedade do PAR fundo/texto, não da cor escolhida;
+  qualquer heurística por um valor só falha no meio da escala.
+  **E o tema escuro é outro par.** Medido no mesmo dia com as 16 tags reais
+  (7 delas `#ffd6a7`): hex pastel SÓLIDO no escuro vira bloco — a lista
+  ficou dominada por pêssego. A tinta antiga era `bg-<cor>-500/20` +
+  `text-<cor>-300`. `estiloTag` recompõe isso a partir do hex: matiz
+  saturado (HSL) a 20% de alfa no fundo, texto no mesmo matiz a L 0,82,
+  contraste conferido sobre a cor RESULTANTE da mistura, e cinza continua
+  cinza (só se satura o que tem `sat ≥ 0,4`). Tudo por variáveis CSS +
+  `dark:`, sem ler o tema em runtime. Regra: **toda cor de dado que vai para
+  a tela precisa ser olhada nos dois temas antes de aprovar** — o harness
+  de comparação (antes/depois/claro) foi o que decidiu, não a conta.
 - **Ponto fraco conhecido:** as cores são **hex literais espalhados nas
   classes** (`#6366F1`, `#191918`, `#9B9A97`, `dark:#94a3b8`…), não tokens. Ao
   criar algo novo, reutilize os hex já usados no mesmo contexto em vez de
@@ -1057,6 +1088,21 @@ convertendo base64 — não uma chamada de rede.
   o que o caminho de fallback descarta**: já houve um caso em que ele salvava a
   linha e jogava fora os anexos. Fallback deve mandar tudo que já existe hoje,
   deixando de fora apenas o campo novo.
+
+### Pendência aberta (22/09/2026): `useUser` fora do provider em dev
+
+`GET /conversas` responde **500 no stream** no `next dev` (Turbopack) e o
+overlay acusa `useUser can only be used within <ClerkProvider>` em
+`src/hooks/useTheme.ts:10` (a sidebar). A tela carrega normal em seguida.
+**Provado pré-existente por `git stash`**: mesma resposta, mesmo erro, na
+árvore de HEAD sem nenhuma alteração da rodada. `npm ls @clerk/shared` mostra
+uma versão só, e o `ClerkProvider` envolve o `<html>` inteiro no root layout.
+
+**"Dev-only" é INFERÊNCIA, não medição.** O que foi visto foi o dev server com
+sessão criada por sign-in token. Antes de fechar como cosmético: fazer um
+acesso real a `/conversas` em produção e ler o **runtime log da Vercel** dessa
+requisição — se houver 500 lá, não é dev-only, e a sessão inteira de quem usa
+o CRM está passando por um render que falha e se recupera.
 
 ---
 
