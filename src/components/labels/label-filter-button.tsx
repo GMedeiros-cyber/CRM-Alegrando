@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Tag, Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { LABEL_COLOR_CLASSES, type Label } from "@/lib/types/labels";
+import { type Label } from "@/lib/types/labels";
 
 interface LabelFilterButtonProps {
     selectedIds: string[];
@@ -53,10 +53,9 @@ export function LabelFilterButton({
     } else if (count === 1) {
         const single = availableLabels.find((l) => l.id === selectedIds[0]);
         if (single) {
-            const c = LABEL_COLOR_CLASSES[single.color];
             buttonLabel = (
                 <>
-                    <span className={cn("rounded-full w-2 h-2", c.dotBg)} />
+                    <span className="rounded-full w-2 h-2" style={{ backgroundColor: single.color }} />
                     <span className="font-semibold truncate max-w-[90px]">{single.name}</span>
                 </>
             );
@@ -99,7 +98,6 @@ export function LabelFilterButton({
                     <div className="max-h-64 overflow-y-auto">
                         {availableLabels.map((l) => {
                             const active = selectedIds.includes(l.id);
-                            const c = LABEL_COLOR_CLASSES[l.color];
                             return (
                                 <button
                                     key={l.id}
@@ -112,7 +110,7 @@ export function LabelFilterButton({
                                             : "text-[#37352F] dark:text-[#cbd5e1] hover:bg-[#C7D2FE]/40 dark:hover:bg-[#3d4a60]/50"
                                     )}
                                 >
-                                    <span className={cn("rounded-full w-2.5 h-2.5 shrink-0", c.dotBg)} />
+                                    <span className="rounded-full w-2.5 h-2.5 shrink-0" style={{ backgroundColor: l.color }} />
                                     <span className="flex-1 truncate">{l.name}</span>
                                     {active && <Check className="w-3.5 h-3.5 shrink-0" />}
                                 </button>

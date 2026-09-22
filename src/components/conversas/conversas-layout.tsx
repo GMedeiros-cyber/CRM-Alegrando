@@ -8,6 +8,11 @@ import { Switch } from "@/components/ui/switch";
 import { ChatWindow } from "./chat-window";
 import { EmojiPickerInput } from "./emoji-picker-input";
 import { NovoLeadModal } from "./novo-lead-modal";
+import { RespostasRapidasMenu, useRespostasRapidasMenu } from "./respostas-rapidas-menu";
+import { RespostasRapidasModal } from "./respostas-rapidas-modal";
+import { CriarTagModal } from "@/components/labels/criar-tag-modal";
+import { primeiroNome } from "@/lib/respostas-rapidas";
+import { useUser } from "@clerk/nextjs";
 import { LeadListItem, isGroupTelefone } from "./lead-list-item";
 import { ListasTabBar } from "./listas-tab-bar";
 import { LeadListSkeleton } from "./lead-list-skeleton";
@@ -66,6 +71,8 @@ import {
     PanelRightClose,
     Paperclip,
     UserPlus,
+    Tag,
+    Zap,
     X,
     ArrowUpDown,
     Check,
@@ -108,6 +115,9 @@ function mapRowToLabel(row: Record<string, unknown>): Label {
  * diferentes. O microfone (audio-recorder.tsx) já usa exatamente estas classes.
  * Nenhuma ação aqui é só-no-hover: o hover muda cor, não visibilidade (§3).
  */
+const BOTAO_CABECALHO =
+    "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-brand-500/20 text-brand-400 border border-brand-500/30 hover:bg-brand-500/30 transition-colors";
+
 const BOTAO_RODAPE =
     "flex items-center justify-center w-10 h-10 rounded-xl transition-colors shrink-0 border "
     + "hover:bg-[#EEF2FF] dark:hover:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]/50 "
@@ -519,6 +529,8 @@ export function ConversasLayout() {
 
     // New lead modal
     const [showNewLeadModal, setShowNewLeadModal] = useState(false);
+    const [showCriarTagModal, setShowCriarTagModal] = useState(false);
+    const [showRespostasModal, setShowRespostasModal] = useState(false);
 
     // File attachments (preview before send).
     // União local|remote: o item do Drive chega sem File (já está no R2).
@@ -561,6 +573,25 @@ export function ConversasLayout() {
     useEffect(() => {
         ajustarAlturaCaixa(chatInputRef.current);
     }, [chatMessage, ajustarAlturaCaixa]);
+
+    // ========= Respostas rápidas ("/" na caixa vazia) =========
+    // {atendente} = primeiro nome do Clerk de quem está mandando; {nome} = a
+    // primeira palavra do nome do lead. Sem valor, o placeholder fica literal.
+    const { user: usuarioClerk } = useUser();
+    const menuRespostas = useRespostasRapidasMenu({
+        texto: chatMessage,
+        valores: { nome: primeiroNome(cliente?.nome), atendente: usuarioClerk?.firstName },
+        onInserir: (conteudo) => {
+            // Entra NA CAIXA, para revisar — nunca envia direto.
+            setChatMessage(conteudo);
+            setTimeout(() => {
+                const el = chatInputRef.current;
+                if (!el) return;
+                el.focus();
+                el.setSelectionRange(el.value.length, el.value.length);
+            }, 0);
+        },
+    });
 
     // Audio attachment (preview before send)
     const [audioAttachment, setAudioAttachment] = useState<{ file: File; previewUrl: string } | null>(null);
@@ -2042,13 +2073,39 @@ export function ConversasLayout() {
                         <h2 className="font-display text-lg font-bold text-foreground tracking-tight">
                             Conversas
                         </h2>
-                        <button
-                            onClick={() => setShowNewLeadModal(true)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-brand-500/20 text-brand-400 border border-brand-500/30 hover:bg-brand-500/30 transition-colors"
-                        >
-                            <UserPlus className="w-3.5 h-3.5" />
-                            Novo Lead
-                        </button>
+                        {/* Três ações numa coluna de 350px (ou 320px no mobile). Nada de
+                            media query aqui: `min-[…]` mede a JANELA, e num monitor largo os
+                            rótulos apareciam e quem estourava era a COLUNA (a armadilha do
+                            SKILL §3, com outro nome). Só "Novo Lead" tem rótulo — é o mais
+                            usado; os outros dois são ícone com title/aria-label. Assimétrico
+                            de propósito: prioridade de uso, não simetria. */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                                onClick={() => setShowNewLeadModal(true)}
+                                title="Novo lead"
+                                aria-label="Novo lead"
+                                className={BOTAO_CABECALHO}
+                            >
+                                <UserPlus className="w-3.5 h-3.5" />
+                                Novo Lead
+                            </button>
+                            <button
+                                onClick={() => setShowCriarTagModal(true)}
+                                title="Criar tag"
+                                aria-label="Criar tag"
+                                className={BOTAO_CABECALHO}
+                            >
+                                <Tag className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                onClick={() => setShowRespostasModal(true)}
+                                title="Respostas rápidas"
+                                aria-label="Respostas rápidas"
+                                className={BOTAO_CABECALHO}
+                            >
+                                <Zap className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
                     </div>
                     <div className="relative mt-3">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6366F1] dark:text-[#94a3b8]" />
@@ -2421,7 +2478,9 @@ export function ConversasLayout() {
                                 cima ao quebrar linha, e os botões precisam ficar
                                 colados na base junto com a última linha. Em
                                 repouso tudo tem h-10, então o visual é o mesmo. */}
-                            <div className="flex gap-2 items-end">
+                            <div className="relative flex gap-2 items-end">
+                                {/* Menu da "/" — acima da caixa, sem roubar o foco. */}
+                                <RespostasRapidasMenu menu={menuRespostas} onGerenciar={() => setShowRespostasModal(true)} />
                                 {/* Emoji picker */}
                                 <EmojiPickerInput
                                     onEmojiSelect={(emoji) => setChatMessage((prev) => prev + emoji)}
@@ -2512,17 +2571,23 @@ export function ConversasLayout() {
                                             // acrescentava nada.
                                             className="rounded-xl flex-1 min-h-10 resize-none overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border px-3 py-2 text-sm leading-6 shadow-xs outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50 bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#94a3b8] focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20"
                                             onKeyDown={(e) => {
-                                                if (e.key === "Escape" && editandoMsg) { e.preventDefault(); cancelarEdicaoMensagem(); return; }
-                                                if (e.key !== "Enter") return;
-
                                                 // Acento morto e IME: enquanto a
-                                                // composição está aberta, o Enter é
-                                                // do teclado, não nosso. Sem esta
+                                                // composição está aberta, a tecla é
+                                                // do teclado, não nossa. Sem esta
                                                 // guarda, digitar "não" no ABNT2
                                                 // podia enviar no meio da palavra.
                                                 // `keyCode 229` cobre o Safari, que
                                                 // nem sempre popula `isComposing`.
+                                                // Vale para Enter E para o menu da
+                                                // "/", por isso vem antes de tudo.
                                                 if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+
+                                                // Menu da "/" aberto: ↑/↓/Enter/Esc
+                                                // são dele. `true` = consumiu.
+                                                if (menuRespostas.onKeyDown(e)) return;
+
+                                                if (e.key === "Escape" && editandoMsg) { e.preventDefault(); cancelarEdicaoMensagem(); return; }
+                                                if (e.key !== "Enter") return;
 
                                                 // Shift+Enter: o textarea já quebra
                                                 // linha sozinho. Deixar o default
@@ -2571,7 +2636,7 @@ export function ConversasLayout() {
                             <p className="text-[10px] text-[#9B9A97] dark:text-[#64748b] mt-1.5 text-center">
                                 {cliente.iaAtiva
                                     ? "IA ativa — pause para enviar mensagens manualmente"
-                                    : "Enter envia · Alt+Enter (ou Shift+Enter) quebra linha · 📎 ou Ctrl+V para anexar"}
+                                    : "Enter envia · Alt+Enter (ou Shift+Enter) quebra linha · 📎 ou Ctrl+V para anexar · / respostas rápidas"}
                             </p>
                         </div>
                     </>
@@ -2641,6 +2706,36 @@ export function ConversasLayout() {
                 <NovoLeadModal
                     onClose={() => { setShowNewLeadModal(false); }}
                     onCreated={(tel, canal) => { loadList(); handleSelectCliente(tel, canal); }}
+                    onToast={setToast}
+                />
+            )}
+
+            {showCriarTagModal && (
+                <CriarTagModal
+                    onClose={() => setShowCriarTagModal(false)}
+                    availableLabels={availableLabels}
+                    onUpdated={(labelId, updates) => {
+                        markOptimisticChange();
+                        setAvailableLabels((prev) =>
+                            prev.map((l) => (l.id === labelId ? { ...l, ...updates } : l)).sort((a, b) => a.name.localeCompare(b.name)),
+                        );
+                        clienteCache.current.delete(`${selectedTelefone}|${selectedCanal}`);
+                        clientesListCache.current.clear();
+                    }}
+                    onCreated={(label) => {
+                        markOptimisticChange();
+                        setAvailableLabels((prev) =>
+                            prev.some((l) => l.id === label.id) ? prev : [...prev, label].sort((a, b) => a.name.localeCompare(b.name)),
+                        );
+                    }}
+                    onToast={setToast}
+                />
+            )}
+
+            {showRespostasModal && (
+                <RespostasRapidasModal
+                    onClose={() => setShowRespostasModal(false)}
+                    onChanged={() => { void menuRespostas.recarregar(); }}
                     onToast={setToast}
                 />
             )}
