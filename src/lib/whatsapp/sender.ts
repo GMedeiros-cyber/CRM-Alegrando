@@ -456,6 +456,92 @@ export async function sendWhatsAppMessage(
 }
 
 /**
+ * Edita uma mensagem de TEXTO já enviada. Mesmo endpoint do envio, com
+ * `editMessageId` = id da mensagem original.
+ *
+ * Medido (16 e 22/09/2026): a Z-API devolve um `messageId` NOVO na edição — é
+ * o comportamento correto, não duplicata. No aparelho fica UMA mensagem, com
+ * o selo "Editada". Esse id novo chega no webhook como `editMessageId`, e o
+ * `messageId` do webhook continua sendo o da ORIGINAL (ver route.ts).
+ */
+export async function editWhatsAppMessage(
+  telefone: string,
+  zapiMessageId: string,
+  novoTexto: string,
+): Promise<{ success: boolean; idDaEdicao?: string; error?: string }> {
+  const instance = process.env.ZAPI_INSTANCE;
+  const token = process.env.ZAPI_TOKEN;
+  const clientToken = process.env.ZAPI_CLIENT_TOKEN;
+  if (!instance || !token || !clientToken) {
+    return { success: false, error: "Variáveis Z-Api não configuradas" };
+  }
+
+  const phone = formatPhoneZapi(telefone);
+  try {
+    const response = await fetchWithTimeout(`${zapiBase(instance, token)}/send-text`, {
+      method: "POST",
+      headers: buildZapiHeaders(clientToken),
+      body: JSON.stringify({ phone, message: novoTexto, editMessageId: zapiMessageId }),
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      console.error(`[ZAPI-EDIT] Erro ${response.status}:`, body);
+      return { success: false, error: `Z-Api edit ${response.status}: ${body}` };
+    }
+    let idDaEdicao: string | undefined;
+    try { idDaEdicao = (JSON.parse(body) as Record<string, unknown>).messageId as string | undefined; } catch { /* ignore */ }
+    return { success: true, idDaEdicao };
+  } catch (err) {
+    console.error("[ZAPI-EDIT] Exceção:", err);
+    return { success: false, error: String(err) };
+  }
+}
+
+let preflightCache: { valor: boolean | null; em: number } | null = null;
+const PREFLIGHT_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Pré-condição de CONFIGURAÇÃO para editar: a instância precisa mandar o
+ * callback das mensagens enviadas por ela mesma (`receiveCallbackSentByMe`)
+ * para um webhook não-vazio — é por esse callback que o `isEdit` chega e o
+ * CRM fica coerente com o aparelho. Não é detector de nada: só diz se a
+ * instância está configurada como o desenho exige.
+ *
+ * Devolve `null` (não `false`) quando não conseguiu perguntar: "não
+ * configurado" e "não sei" não são a mesma coisa. Quem chama trata os dois
+ * como indisponível.
+ *
+ * `GET /me` devolve o token da instância em claro no corpo (SKILL §2.8):
+ * daqui saem SÓ os dois campos lidos, nunca o corpo.
+ */
+export async function zapiWebhookAoEnviarConfigurado(): Promise<boolean | null> {
+  if (preflightCache && Date.now() - preflightCache.em < PREFLIGHT_TTL_MS) return preflightCache.valor;
+  const instance = process.env.ZAPI_INSTANCE;
+  const token = process.env.ZAPI_TOKEN;
+  const clientToken = process.env.ZAPI_CLIENT_TOKEN;
+  if (!instance || !token || !clientToken) return null;
+
+  let valor: boolean | null = null;
+  try {
+    const response = await fetchWithTimeout(`${zapiBase(instance, token)}/me`, {
+      headers: buildZapiHeaders(clientToken),
+    }, 10_000);
+    if (response.ok) {
+      const me = (await response.json()) as Record<string, unknown>;
+      const url = (me.receivedAndDeliveryCallbackUrl || me.receivedCallbackUrl) as string | undefined;
+      valor = me.receiveCallbackSentByMe === true && !!url;
+      if (!valor) console.warn(`[ZAPI-EDIT] pre-flight: receiveCallbackSentByMe=${String(me.receiveCallbackSentByMe)} callback=${url ? "definido" : "vazio"}`);
+    } else {
+      console.error(`[ZAPI-EDIT] pre-flight: GET /me respondeu ${response.status}`);
+    }
+  } catch (err) {
+    console.error("[ZAPI-EDIT] pre-flight: exceção:", err instanceof Error ? err.message : String(err));
+  }
+  // Só cacheia resposta conhecida: um `null` por falha de rede não deve virar 5 min de "indisponível".
+  if (valor !== null) preflightCache = { valor, em: Date.now() };
+  return valor;
+}
+/**
  * Busca a foto de perfil de um número via Z-API.
  * Retorna a URL da foto ou null se indisponível.
  */

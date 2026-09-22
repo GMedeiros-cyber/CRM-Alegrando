@@ -204,6 +204,8 @@ export type LeadMessage = {
      * OGG/Opus, que chega com `duration = Infinity` na maioria dos browsers.
      */
     audioSeconds?: number;
+    /** ISO da última edição (metadata.editedAt) — mostra o selo "editada". */
+    editedAt?: string | null;
     _optimistic?: boolean;
     /** Envio falhou — balão fica marcado com ⚠️ e clique reenvia. */
     _failed?: boolean;

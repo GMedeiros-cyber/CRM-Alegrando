@@ -14,6 +14,8 @@
  *     `messages` (a action já salvou — SUPOSIÇÃO, ver SKILL §1 "PENDÊNCIA DE
  *     PRODUTO") e registra o evento redigido em `zapi_eventos_descartados`.
  *  6. Repassa o payload original ao n8n de forma assíncrona (fire-and-forget).
+ *  Edição (`isEdit: true`, qualquer remetente) é UPDATE da linha original e
+ *  não passa pelos passos 3–6. Ver `aplicarEdicao`.
  *
  * Todo evento que o handler descarta (tipo fora de MESSAGE_EVENT_TYPES, ou
  * fromApi) vai para `zapi_eventos_descartados` com PII redigida e 7 dias de
@@ -149,6 +151,8 @@ interface ZApiWebhookPayload {
   senderName?: string;
   senderPhoto?: string;
   isGroup?: boolean;
+  isEdit?: boolean;
+  editMessageId?: string;
   participantPhone?: string;
   participantLid?: string;
   type?: string;
@@ -365,6 +369,64 @@ async function registrarEventoDescartado(
   }
 }
 
+/**
+ * Edição de mensagem (formato MEDIDO em 22/09/2026, via zapi_eventos_descartados):
+ * é um `ReceivedCallback` comum com `isEdit: true` — não existe type novo — e
+ * OS NOMES SÃO INVERTIDOS em relação ao que se esperaria:
+ *   payload.messageId     = id da mensagem ORIGINAL (a linha a atualizar)
+ *   payload.editMessageId = id NOVO, gerado pela edição
+ * O `messageId` que o POST /send-text devolve na edição é o que chega aqui
+ * como `editMessageId`. Quem assumir o contrário atualiza a linha errada.
+ *
+ * Reconciliação é UPDATE, não detector: `content` recebe o texto novo na linha
+ * cuja `metadata.messageId` é a original. Vale para os três remetentes
+ * (cliente, celular da equipe, CRM via API — a action já fez o mesmo update,
+ * e repetir é idempotente).
+ *
+ * Devolve `true` se atualizou. Se não achou a linha (ou não é texto), não
+ * inventa: registra com campos nomeados e devolve `false` para o fluxo
+ * normal seguir — a edição entra como mensagem, o que é melhor que sumir.
+ */
+async function aplicarEdicao(supabase: SupabaseClient, payload: ZApiWebhookPayload): Promise<boolean> {
+  const original = payload.messageId;
+  const novoTexto = payload.text?.message;
+  if (!original || !novoTexto) {
+    console.warn(`[ZAPI-PROXY] isEdit sem texto ou sem messageId (messageId=${original ?? "-"}, editMessageId=${payload.editMessageId ?? "-"}). Seguindo o fluxo normal.`);
+    return false;
+  }
+  try {
+    const { data: linha, error: readErr } = await supabase
+      .from("messages")
+      .select("id, content, media_type, metadata")
+      .eq("metadata->>messageId", original)
+      .limit(1)
+      .maybeSingle();
+    if (readErr) throw new Error(readErr.message);
+    if (!linha || linha.media_type !== "text" || linha.content === "__DELETED_FOR_ALL__") {
+      console.warn(`[ZAPI-PROXY] isEdit sem linha de texto para messageId=${original} (editMessageId=${payload.editMessageId ?? "-"}, fromMe=${String(payload.fromMe)}, fromApi=${String(payload.fromApi)}). Seguindo o fluxo normal.`);
+      return false;
+    }
+    const meta = (linha.metadata ?? {}) as Record<string, unknown>;
+    const { error } = await supabase
+      .from("messages")
+      .update({
+        content: novoTexto,
+        metadata: {
+          ...meta,
+          editedAt: new Date().toISOString(),
+          editMessageId: payload.editMessageId ?? meta.editMessageId ?? null,
+          textoAnterior: linha.content !== novoTexto ? linha.content : meta.textoAnterior ?? null,
+        },
+      })
+      .eq("id", linha.id);
+    if (error) throw new Error(error.message);
+    console.log(`[ZAPI-PROXY] Edição aplicada: messageId=${original} → editMessageId=${payload.editMessageId ?? "-"} (fromApi=${String(payload.fromApi)})`);
+    return true;
+  } catch (err) {
+    console.error(`[ZAPI-PROXY] Falha ao aplicar edição (messageId=${original}):`, err instanceof Error ? err.message : String(err));
+    return false;
+  }
+}
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const auth = verifyZapiWebhook(req);
   if (!auth.ok) {
@@ -402,6 +464,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const isFromApi = payload.fromApi === true;
   const isGroup = isGroupChat(payload);
 
+  // --- 1.3. Edição (isEdit): UPDATE da original, antes de qualquer insert ---
+  // Se atualizou, o evento está consumido: não vira mensagem nova (blocos 2 e
+  // 3 inseririam o texto editado como se fosse outra) e não vai ao n8n (a IA
+  // responderia de novo ao mesmo texto). Se não achou a linha, segue o fluxo.
+  if (payload.isEdit === true) {
+    const aplicada = await aplicarEdicao(supabase, payload);
+    if (aplicada) return NextResponse.json({ status: "ok", edit: true });
+  }
   // --- 1.4. Mensagens de grupo: handler dedicado ---
   // Grupos têm phone com sufixo "-group" e payload.participantPhone com quem mandou.
   // Tratamos grupos como contatos "alegrando" com canal_extra="grupo" — sem IA.

@@ -74,6 +74,7 @@ export function useLeadMessages(telefone: string, canal: string = "alegrando") {
                         })(),
                                         pinned: updated.pinned === true,
                                         zapiMessageId: (meta?.messageId as string) ?? m.zapiMessageId,
+                                        editedAt: (meta?.editedAt as string) ?? m.editedAt ?? null,
                                     }
                                     : m
                             )
@@ -121,6 +122,7 @@ export function useLeadMessages(telefone: string, canal: string = "alegrando") {
                         pinned: newMsg.pinned === true,
                         replyTo: (meta?.replyTo as { content: string; senderName: string | null }) ?? null,
                         audioSeconds: typeof meta?.audioSeconds === "number" ? (meta.audioSeconds as number) : undefined,
+                        editedAt: (meta?.editedAt as string) ?? null,
                     };
 
                     if (isMounted) {
@@ -247,6 +249,7 @@ function mapRows(rows: Record<string, unknown>[]): LeadMessage[] {
             pinned: row.pinned === true,
             replyTo: (meta?.replyTo as { content: string; senderName: string | null }) ?? null,
             audioSeconds: typeof meta?.audioSeconds === "number" ? (meta.audioSeconds as number) : undefined,
+            editedAt: (meta?.editedAt as string) ?? null,
         };
     });
 }

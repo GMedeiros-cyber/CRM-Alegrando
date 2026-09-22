@@ -2,13 +2,23 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
-import { Copy, Reply, Pin, PinOff, Trash2, SmilePlus, ChevronDown } from "lucide-react";
+import { Copy, Reply, Pin, PinOff, Trash2, SmilePlus, ChevronDown, Pencil } from "lucide-react";
 import { ReactionPicker } from "./reaction-picker";
 import type { LeadMessage } from "@/lib/actions/leads";
 
 const MENU_W = 176; // w-44 = 11rem = 176px
 const MENU_BASE_H = 170; // altura base sem botão Apagar
 const MENU_WITH_DELETE_H = 214;
+const ITEM_H = 36; // um item a mais (Editar) quando ele aparece
+
+/**
+ * O WhatsApp só aceita edição por ~15 min. Calculado quando o menu renderiza,
+ * que é quando a decisão importa.
+ */
+const LIMITE_EDICAO_MS = 15 * 60 * 1000;
+function podeEditarPorTempo(criadaEm: Date | null | undefined): boolean {
+    return !!criadaEm && Date.now() - new Date(criadaEm).getTime() < LIMITE_EDICAO_MS;
+}
 
 interface MessageContextMenuProps {
     message: LeadMessage;
@@ -17,6 +27,8 @@ interface MessageContextMenuProps {
     onPin: (msg: LeadMessage, pin: boolean) => void;
     onDelete: (msg: LeadMessage) => void;
     onReact: (msg: LeadMessage, emoji: string) => void;
+    /** Só chega quando o chat suporta edição; sem ela o item não existe. */
+    onEdit?: (msg: LeadMessage) => void;
     canal?: string;
     /** "right" = mensagem da equipe (chevron à esquerda da bolha); "left" = mensagem do cliente */
     align?: "left" | "right";
@@ -29,6 +41,7 @@ export function MessageContextMenu({
     onPin,
     onDelete,
     onReact,
+    onEdit,
     canal,
     align = "right",
 }: MessageContextMenuProps) {
@@ -41,7 +54,17 @@ export function MessageContextMenu({
     const menuRef = useRef<HTMLDivElement>(null);
 
     const isTeam = message.senderType === "equipe" || message.senderType === "ia" || message.senderType === "humano";
-    const menuH = isTeam ? MENU_WITH_DELETE_H : MENU_BASE_H;
+    // Editar: só TEXTO da equipe, com id da Z-API (sem ele não há o que editar),
+    // dentro da janela do WhatsApp, e não apagada. Legenda de mídia fica de fora:
+    // a Z-API não documenta edição de legenda.
+    const podeEditar = !!onEdit
+        && isTeam
+        && message.mediaType === "text"
+        && !!message.zapiMessageId
+        && message.content !== "__DELETED_FOR_ALL__"
+        && canal !== "festas"
+        && podeEditarPorTempo(message.createdAt);
+    const menuH = (isTeam ? MENU_WITH_DELETE_H : MENU_BASE_H) + (podeEditar ? ITEM_H : 0);
 
     // Calcula posição do menu via getBoundingClientRect
     useLayoutEffect(() => {
@@ -190,6 +213,16 @@ export function MessageContextMenu({
                     {isTeam && (
                         <>
                             <div className="my-1 mx-3 border-t border-[#C7D2FE] dark:border-[#3d4a60]/60" />
+                            {podeEditar && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setOpen(false); onEdit!(message); }}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#6366F1]/15 text-[#37352F] dark:text-[#cbd5e1] hover:text-[#4F46E5] dark:hover:text-[#A5B4FC] transition-colors text-sm group/item"
+                                >
+                                    <Pencil className="h-3.5 w-3.5 text-[#6366F1] group-hover/item:scale-110 transition-transform" />
+                                    Editar
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 onClick={() => { setOpen(false); onDelete(message); }}
