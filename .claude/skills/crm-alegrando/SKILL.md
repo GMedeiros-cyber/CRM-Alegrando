@@ -461,8 +461,40 @@ ele falhar **depois** de enviar, o resultado é exatamente este.
 2. O bloco que salva exige `!isFromApi`.
 
 **Não há log cru de payload da Z-API** — `webhook_events` é usada só pelo
-webhook do Clerk. Então nem dá para saber **o que** se está perdendo, nem o
-formato de eventos que o handler não reconhece (edição, por exemplo).
+webhook do Clerk. Então nem dava para saber **o que** se estava perdendo, nem o
+formato de eventos que o handler não reconhece.
+
+**Corrigido pela medição (22/09/2026): o descarte nº 1 nunca comeu a edição.**
+A edição **não tem `type` próprio** — é um `ReceivedCallback` comum com
+`isEdit: true`. Quem a engolia era o descarte nº 2 (`fromApi`) sozinho, para
+edições feitas pelo CRM; edição vinda do celular ou do cliente passava pelo
+filtro e virava mensagem NOVA. Uma versão anterior deste documento atribuía o
+sumiço ao filtro de `MESSAGE_EVENT_TYPES` — era inferência, e estava errada.
+
+### ⚠️ Edição na Z-API: OS NOMES SÃO INVERTIDOS
+
+Medido em 22/09/2026 com `zapi_eventos_descartados` (probe A → edição B):
+
+```
+payload.messageId     = id da mensagem ORIGINAL   (a linha a atualizar)
+payload.editMessageId = id NOVO, gerado pela edição
+```
+
+O `messageId` que o `POST /send-text` devolve na chamada **de edição** é o que
+chega no webhook como `editMessageId`. **Quem assumir o contrário atualiza a
+linha errada ou nenhuma.** A reconciliação é um UPDATE, não um detector:
+
+```
+isEdit === true  →  UPDATE messages SET content = <texto novo>
+                    WHERE metadata->>'messageId' = payload.messageId
+```
+
+Implementado em `aplicarEdicao` (route.ts), antes de qualquer insert: aplicou →
+responde e não repassa ao n8n; não achou a linha → loga com campos nomeados e
+segue o fluxo normal. Vale para os três remetentes (cliente, celular, CRM). A
+action `editMessage` faz o mesmo UPDATE antes — o webhook repete, idempotente.
+Duplicata de verdade (Z-API ignorando `editMessageId`) chegaria como mensagem
+**nova**, `isEdit false`, id inédito — distinguível sem heurística. Ver §8.4.
 
 **O conserto tem duas metades, e a primeira não é código de feature:**
 persistir o que hoje é descartado (com PII redigida e retenção curta), para

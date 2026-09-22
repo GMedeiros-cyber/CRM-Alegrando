@@ -12,6 +12,8 @@ import {
     sendWhatsAppReply,
     pinWhatsAppMessage,
     deleteWhatsAppMessage,
+    editWhatsAppMessage,
+    zapiWebhookAoEnviarConfigurado,
     sendEvolutionReaction,
     sendEvolutionReply,
     sendEvolutionAudio,
@@ -731,6 +733,96 @@ export async function replyToMessage(payload: {
  * owner=true  → "apagar para todos": chama Z-API + marca no CRM como deletada (conteúdo vira sentinel)
  * owner=false → "apagar para mim":   só remove do banco do CRM, WhatsApp fica intacto
  */
+/** Janela do WhatsApp para editar. O mesmo valor vive em message-context-menu.tsx (só esconde o item). */
+const LIMITE_EDICAO_MS = 15 * 60 * 1000;
+
+const editMessageSchema = z.object({
+    dbMessageId: z.string().uuid(),
+    zapiMessageId: z.string().min(1).max(64),
+    telefone: z.string().min(8).max(32),
+    novoTexto: z.string().trim().min(1).max(5000),
+    canal: z.string().optional(),
+});
+
+/**
+ * Edita uma mensagem de TEXTO da equipe no WhatsApp e no CRM.
+ *
+ * Ordem: pre-flight de configuração → Z-API → UPDATE da linha. O webhook
+ * (`isEdit`, `fromApi`) chega logo depois e faz o MESMO update pela
+ * `metadata.messageId` — idempotente por desenho, e é o que mantém o CRM
+ * coerente também quando a edição vem do celular.
+ *
+ * Sem detector de duplicata: id novo na resposta é a edição CERTA (SKILL §8.4).
+ */
+export async function editMessage(payload: {
+    dbMessageId: string;
+    zapiMessageId: string;
+    telefone: string;
+    novoTexto: string;
+    canal?: string;
+}): Promise<{ success: boolean; error?: string }> {
+    await requireAuth();
+    const parsed = editMessageSchema.safeParse(payload);
+    if (!parsed.success) return { success: false, error: "Dados inválidos para edição." };
+    const { dbMessageId, zapiMessageId, telefone, novoTexto, canal } = parsed.data;
+
+    if ((canal ?? "alegrando") === "festas") {
+        return { success: false, error: "Canal festas está desativado." };
+    }
+
+    // Pré-condição de configuração, não detector: sem o callback "ao enviar"
+    // o CRM nunca receberia o isEdit e ficaria incoerente com o aparelho.
+    if ((await zapiWebhookAoEnviarConfigurado()) !== true) {
+        return {
+            success: false,
+            error: "Edição indisponível: no painel da Z-API, ative o webhook \"ao enviar\" (receber callback das mensagens enviadas) apontando para o CRM. Sem ele, o CRM não fica coerente com o WhatsApp.",
+        };
+    }
+
+    const supabase = createServerSupabaseClient();
+    const { data: atual, error: readErr } = await supabase
+        .from("messages")
+        .select("content, media_type, sender_type, metadata, created_at")
+        .eq("id", dbMessageId)
+        .single();
+    if (readErr || !atual) return { success: false, error: "Mensagem não encontrada." };
+    if (atual.media_type !== "text" || atual.content === "__DELETED_FOR_ALL__") {
+        return { success: false, error: "Só mensagem de texto pode ser editada." };
+    }
+    // A janela é conferida AQUI, não só no menu: o menu foi renderizado quando
+    // ainda valia; quem se distrai e aperta Enter 20 min depois chegaria com a
+    // janela vencida — e não se sabe se a Z-API então manda mensagem NOVA. É
+    // a duplicação silenciosa que este desenho existe para evitar.
+    const criadaEm = atual.created_at ? new Date(atual.created_at as string).getTime() : 0;
+    if (!criadaEm || Date.now() - criadaEm > LIMITE_EDICAO_MS) {
+        return { success: false, error: "Passou de 15 minutos — o WhatsApp não permite mais editar esta mensagem." };
+    }
+
+    const r = await editWhatsAppMessage(telefone, zapiMessageId, novoTexto);
+    if (!r.success) return { success: false, error: r.error };
+
+    const meta = (atual.metadata ?? {}) as Record<string, unknown>;
+    const { error } = await supabase
+        .from("messages")
+        .update({
+            content: novoTexto,
+            metadata: {
+                ...meta,
+                editedAt: new Date().toISOString(),
+                // Id que a Z-API gerou para a edição (chega no webhook como editMessageId).
+                editMessageId: r.idDaEdicao ?? null,
+                textoAnterior: atual.content,
+            },
+        })
+        .eq("id", dbMessageId);
+    if (error) {
+        // O WhatsApp já mudou; o CRM não. Não é silencioso: o webhook isEdit
+        // ainda pode corrigir, e o log diz o que ficou inconsistente.
+        console.error(`[editMessage] Z-API editou mas o UPDATE falhou (id=${dbMessageId}):`, error.message);
+        return { success: false, error: "Editado no WhatsApp, mas o CRM não atualizou. Recarregue a conversa." };
+    }
+    return { success: true };
+}
 export async function deleteMessage(payload: {
     dbMessageId: string;
     zapiMessageId: string | null;

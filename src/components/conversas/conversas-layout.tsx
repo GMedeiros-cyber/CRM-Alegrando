@@ -35,7 +35,7 @@ import {
     toggleFavorito,
 } from "@/lib/actions/leads";
 import type { PasseioHistorico } from "@/lib/actions/leads";
-import { sendMessage, sendFileMessage, sendAudioMessage, createSignedUploadUrl, sendUploadedFileMessage } from "@/lib/actions/messages";
+import { sendMessage, sendFileMessage, sendAudioMessage, createSignedUploadUrl, sendUploadedFileMessage, editMessage } from "@/lib/actions/messages";
 import {
     getKanbanColumns,
     getLeadTasks,
@@ -361,6 +361,11 @@ export function ConversasLayout() {
         }, 500);
     }
     const [replyTo, setReplyTo] = useState<import("@/lib/actions/leads").LeadMessage | null>(null);
+    // Modo edição: a caixa de texto vira o editor da mensagem escolhida. O
+    // rascunho que estava na caixa é guardado e volta ao cancelar/salvar —
+    // perder texto digitado é o que o portal-guards existe para impedir (§4).
+    const [editandoMsg, setEditandoMsg] = useState<import("@/lib/actions/leads").LeadMessage | null>(null);
+    const rascunhoAntesDaEdicao = useRef("");
 
     // Tasks
     const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -1097,6 +1102,7 @@ export function ConversasLayout() {
             setSelectedCanal(canal);
             setMobileView("chat");
             setReplyTo(null);
+            setEditandoMsg(null);
 
             // `history.pushState` em vez de `router.push`: a URL existe só para
             // o lead selecionado sobreviver a um F5 e poder ser compartilhado —
@@ -1291,12 +1297,67 @@ export function ConversasLayout() {
     }
 
     function handleSendMessage() {
+        if (editandoMsg) { void salvarEdicaoMensagem(); return; }
         if (!cliente?.telefone || !chatMessage.trim()) return;
         const text = chatMessage.trim();
         const currentReply = replyTo;
         setChatMessage("");
         setReplyTo(null);
         sendTextMessage(text, currentReply);
+    }
+
+    // ========= Edição de mensagem (Z-API, só texto da equipe) =========
+    function iniciarEdicaoMensagem(msg: import("@/lib/actions/leads").LeadMessage) {
+        if (!editandoMsg) rascunhoAntesDaEdicao.current = chatMessage;
+        setReplyTo(null);
+        setEditandoMsg(msg);
+        setChatMessage(msg.content);
+        setTimeout(() => {
+            const el = chatInputRef.current;
+            if (!el) return;
+            el.focus();
+            el.setSelectionRange(el.value.length, el.value.length);
+        }, 0);
+    }
+
+    function cancelarEdicaoMensagem() {
+        setEditandoMsg(null);
+        setChatMessage(rascunhoAntesDaEdicao.current);
+        rascunhoAntesDaEdicao.current = "";
+    }
+
+    async function salvarEdicaoMensagem() {
+        const msg = editandoMsg;
+        const novoTexto = chatMessage.trim();
+        if (!msg || !cliente?.telefone) return;
+        if (!novoTexto || novoTexto === msg.content) { cancelarEdicaoMensagem(); return; }
+        if (!msg.zapiMessageId) {
+            setToast({ type: "error", text: "Esta mensagem não tem id do WhatsApp — não dá para editar." });
+            cancelarEdicaoMensagem();
+            return;
+        }
+
+        // Otimista: a bolha muda na hora; o UPDATE do Realtime confirma com o
+        // mesmo conteúdo. Falha = volta o texto e avisa (nunca silencioso).
+        const anterior = { content: msg.content, editedAt: msg.editedAt ?? null };
+        updateOptimisticRef.current?.(msg.id, { content: novoTexto, editedAt: new Date().toISOString() });
+        cancelarEdicaoMensagem();
+        try {
+            const res = await editMessage({
+                dbMessageId: msg.id,
+                zapiMessageId: msg.zapiMessageId,
+                telefone: cliente.telefone,
+                novoTexto,
+                canal: cliente.canal ?? "alegrando",
+            });
+            if (!res.success) {
+                updateOptimisticRef.current?.(msg.id, anterior);
+                setToast({ type: "error", text: res.error ?? "Não deu para editar a mensagem." });
+            }
+        } catch (err) {
+            updateOptimisticRef.current?.(msg.id, anterior);
+            setToast({ type: "error", text: `Erro ao editar: ${err}` });
+        }
     }
 
     // ========= Tasks handlers =========
@@ -2261,6 +2322,7 @@ export function ConversasLayout() {
                             }}
                             onReply={(msg) => setReplyTo(msg)}
                             onRetryFailed={handleRetryFailed}
+                            onEdit={cliente.canal !== "festas" ? iniciarEdicaoMensagem : undefined}
                         />
 
                         {/* Audio preview */}
@@ -2315,8 +2377,27 @@ export function ConversasLayout() {
                             );
                         })()}
 
+                        {/* Edição: faixa igual à do reply, com o texto original e o X pra cancelar */}
+                        {editandoMsg && (
+                            <div className="px-5 py-2 border-t border-border/50 bg-[#F7F7F5] dark:bg-[#0f1829]/60 flex items-center gap-2">
+                                <div className="w-1 h-8 rounded-full bg-[#6366F1] shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[11px] font-medium text-[#6366F1]">Editando mensagem</p>
+                                    <p className="text-xs text-[#6366F1] dark:text-[#94a3b8] truncate">{editandoMsg.content}</p>
+                                </div>
+                                <button
+                                    onClick={cancelarEdicaoMensagem}
+                                    title="Cancelar edição (Esc)"
+                                    className="p-1 text-[#6366F1] dark:text-[#94a3b8] hover:text-[#191918] dark:hover:text-white transition-colors shrink-0"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+
                         {/* Reply preview */}
                         {replyTo && (
+
                             <div className="px-5 py-2 border-t border-border/50 bg-[#F7F7F5] dark:bg-[#0f1829]/60 flex items-center gap-2">
                                 <div className="w-1 h-8 rounded-full bg-brand-500 shrink-0" />
                                 <div className="flex-1 min-w-0">
@@ -2417,6 +2498,8 @@ export function ConversasLayout() {
                                             placeholder={
                                                 cliente.iaAtiva
                                                     ? "Pause a IA para enviar manualmente..."
+                                                    : editandoMsg
+                                                        ? "Edite a mensagem e pressione Enter"
                                                     : attachments.length > 0
                                                         ? "Adicione legenda nos arquivos acima ou clique em enviar"
                                                         : "Digite uma mensagem..."
@@ -2429,6 +2512,7 @@ export function ConversasLayout() {
                                             // acrescentava nada.
                                             className="rounded-xl flex-1 min-h-10 resize-none overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border px-3 py-2 text-sm leading-6 shadow-xs outline-none transition-[color,box-shadow] disabled:cursor-not-allowed disabled:opacity-50 bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#94a3b8] focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20"
                                             onKeyDown={(e) => {
+                                                if (e.key === "Escape" && editandoMsg) { e.preventDefault(); cancelarEdicaoMensagem(); return; }
                                                 if (e.key !== "Enter") return;
 
                                                 // Acento morto e IME: enquanto a

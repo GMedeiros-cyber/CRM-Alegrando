@@ -47,6 +47,8 @@ interface ChatWindowProps {
     onReady?: (fns: ChatWindowHandles) => void;
     onReply?: (msg: LeadMessage) => void;
     onRetryFailed?: (msg: LeadMessage) => void;
+    /** Editar texto da equipe (Z-API). Ausente = o menu não oferece. */
+    onEdit?: (msg: LeadMessage) => void;
 }
 
 // =============================================
@@ -466,7 +468,7 @@ const MY_USER_ID = "crm-user";
 // =============================================
 // CHAT WINDOW
 // =============================================
-export function ChatWindow({ telefone, canal, leadName, onReady, onReply, onRetryFailed }: ChatWindowProps) {
+export function ChatWindow({ telefone, canal, leadName, onReady, onReply, onRetryFailed, onEdit }: ChatWindowProps) {
     const { messages, loading, hasMore, loadingMore, loadOlder, addOptimisticMessage, updateMessageById, removeMessageById } = useLeadMessages(telefone, canal);
     const isGroup = isGroupTelefone(telefone);
     const chatEndRef = useRef<HTMLDivElement>(null);
@@ -857,6 +859,9 @@ export function ChatWindow({ telefone, canal, leadName, onReady, onReply, onRetr
                                             <MessageContent message={msg} isSelf={isSelf} highlight={searchTerm || undefined} onAbrirImagem={setImagemAberta} />
                                             <p className={cn("text-[10px] mt-1 text-right flex items-center justify-end gap-1", isClient ? "text-[#667781] dark:text-[#8696a0]" : "text-[#111b21]/50 dark:text-white/50")}>
                                                 {isFailed && <AlertTriangle className="w-3 h-3 text-rose-500 shrink-0" />}
+                                                {msg.editedAt && msg.content !== "__DELETED_FOR_ALL__" && (
+                                                    <span title={`Editada em ${new Date(msg.editedAt).toLocaleString("pt-BR")}`}>editada ·</span>
+                                                )}
                                                 {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}
                                             </p>
                                             {isFailed && (
@@ -880,6 +885,7 @@ export function ChatWindow({ telefone, canal, leadName, onReady, onReply, onRetr
                                                     onPin={handlePinClick}
                                                     onDelete={handleDeleteClick}
                                                     onReact={handleReact}
+                                                    onEdit={onEdit}
                                                     align={menuAlign}
                                                 />
                                             </div>
