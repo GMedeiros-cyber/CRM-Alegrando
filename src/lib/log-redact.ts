@@ -34,6 +34,9 @@ export function hostDe(url: string | null | undefined): string {
 const CHAVES_TELEFONE = /(^|_)(phone|lid|reactionBy|participant)$|Phone$|Lid$/i;
 // Chaves que podem ficar em claro: dizem O QUE o evento é, não o que foi dito.
 const CHAVES_ESTRUTURA = /^(type|status|messageId|mimeType|messageType|broadcast|isGroup|fromMe|fromApi|waitingMessage|isEdit|isNewsletter)$|MessageId$|Id$/;
+// Credenciais e identificadores da conta/instância: nunca em claro, nem
+// quando terminam em `Id`. Testada antes de CHAVES_ESTRUTURA por isso.
+const CHAVES_SEGREDO = /^(instanceId|token|clientToken|apikey|apiKey)$/i;
 const CHAVES_LOCALIZACAO = /^(latitude|longitude)$/;
 const PROFUNDIDADE_MAX = 8;
 
@@ -54,6 +57,7 @@ export function redigirEstrutura(valor: unknown, chave = "", profundidade = 0): 
     if (profundidade > PROFUNDIDADE_MAX) return "<profundo demais>";
     if (valor === null || valor === undefined) return valor;
     if (typeof valor === "string") {
+        if (CHAVES_SEGREDO.test(chave)) return "<redigido>";
         if (CHAVES_TELEFONE.test(chave)) return telefoneMascarado(valor);
         if (/^https?:\/\//i.test(valor)) return `<url ${hostDe(valor)}>`;
         if (CHAVES_ESTRUTURA.test(chave)) return valor;

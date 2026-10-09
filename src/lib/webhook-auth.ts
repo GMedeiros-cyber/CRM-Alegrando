@@ -43,25 +43,22 @@ function safeCompare(a: string | null | undefined, b: string | null | undefined)
 const HEADERS_TOKEN_ZAPI = ["client-token", "z-api-token"] as const;
 
 /**
- * ⚠️ TEMPORÁRIO — REDUZIR A UMA SÓ ASSIM QUE O LOG DISSER QUAL É.
+ * A credencial que a Z-API manda no webhook é o token da instância (`ZAPI_TOKEN`).
  *
- * A Z-API manda no header um valor de 24 caracteres começando com `FF7E`, que
- * NÃO é o Client-Token da conta (34 caracteres, começa com `Fdf`). O painel
- * deles não mostra qual credencial vai no webhook, e inspeção manual não
- * convergiu em três tentativas.
+ * Isso foi descoberto pelo log `credencial=...`, numa fase em que o código
+ * aceitava três candidatas porque o painel da Z-API não diz qual vai no header.
+ * Os webhooks de produção casaram com `instance-token`, e só ele ficou.
  *
- * Então o código descobre em vez de perguntar: aceita qualquer uma das três
- * credenciais que já temos e **registra qual casou**. Uma rodada depois disso,
- * esta lista some e fica só a certa, com nome próprio.
+ * O ID da instância (`ZAPI_INSTANCE`) saiu de propósito. Ele não é segredo: vem
+ * em `instanceId` em todo payload. Aceitá-lo deixava qualquer pessoa forjar um
+ * `ReceivedCallback`. O Client-Token da conta também saiu, porque a Z-API não o
+ * usa aqui e uma credencial a menos é uma porta a menos.
  *
- * Não afrouxa a segurança de forma relevante — as três são segredos que só a
- * Z-API e nós conhecemos, e tudo fora da lista continua levando 401. É
- * estritamente melhor que hoje, com a ingestão morta.
+ * Se a Z-API trocar a credencial outra vez, o 401 abaixo registra o tamanho e o
+ * prefixo do que chegou. É isso que diz para qual credencial ela mudou.
  */
 const CREDENCIAIS_ZAPI = [
-    { nome: "client-token", env: "ZAPI_CLIENT_TOKEN" },
     { nome: "instance-token", env: "ZAPI_TOKEN" },
-    { nome: "instance-id", env: "ZAPI_INSTANCE" },
 ] as const;
 
 /**
@@ -78,7 +75,7 @@ export function verifyZapiWebhook(req: Request): { ok: true } | { ok: false; sta
 
     if (candidatas.length === 0) {
         console.error(
-            "[webhook-auth] nenhuma credencial Z-API configurada (ZAPI_CLIENT_TOKEN, ZAPI_TOKEN, ZAPI_INSTANCE) — rejeitando todos os webhooks",
+            "[webhook-auth] ZAPI_TOKEN não configurado — rejeitando todos os webhooks",
         );
         return { ok: false, status: 500, message: "Webhook auth não configurado" };
     }
