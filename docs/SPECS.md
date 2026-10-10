@@ -1250,7 +1250,7 @@ NEXT_PUBLIC_URL=
 3. Configurar webhook no Clerk apontando para `/api/webhooks/clerk` (eventos: `user.created`, `user.updated`, `user.deleted`).
 4. Executar migrations com Drizzle: `npx drizzle-kit push`.
 5. Executar seed para colunas padrão do Kanban.
-6. Criar os 4 usuários no Clerk (Silvana, Jéssica, Márcia, Aniversário).
+6. Criar os 4 usuários no Clerk (gestora comercial, duas consultoras de vendas e Aniversário).
 7. Configurar variáveis de ambiente no Coolify.
 8. Conectar repositório GitHub ao Coolify e fazer deploy.
 9. Configurar webhooks do n8n para recepção de leads e envio de mensagens.

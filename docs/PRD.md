@@ -13,12 +13,12 @@ O Alegrando CRM é uma plataforma de gestão comercial desenvolvida sob medida p
 
 ## 3. PERSONAS
 
-### Silvana (Gestora Comercial)
+### Gestora comercial
 - Responsável por supervisionar o desempenho geral da equipe no funil de vendas.
 - Precisa de métricas e visão macro do pipeline (Dashboard).
 - Necessidade principal: enxergar gargalos no Kanban e intervir rapidamente em leads quentes.
 
-### Jéssica / Márcia (Consultoras de Vendas)
+### Consultoras de vendas
 - Responsáveis pelo contato direto com escolas e fechamento de excursões.
 - Trabalham diretamente no Kanban arrastando cards e conversando via chat integrado.
 - Necessidade principal: interface ágil para gerenciar múltiplos leads simultaneamente, enviar mensagens pelo WhatsApp e pausar a IA quando necessário.
@@ -30,7 +30,7 @@ O Alegrando CRM é uma plataforma de gestão comercial desenvolvida sob medida p
 ## 4. FUNCIONALIDADES CORE
 
 ### 4.1 Autenticação (Clerk)
-- Login com e-mail/senha para os 4 usuários da equipe (Silvana, Jéssica, Márcia, Aniversário).
+- Login com e-mail/senha para os 4 usuários da equipe (gestora comercial, duas consultoras de vendas e Aniversário).
 - Single-tenant: todos compartilham a mesma base de dados e o mesmo Kanban.
 - Clerk gerencia apenas autenticação e sessão; não há controle de roles/permissões (todas são Admin).
 - Proteção de rotas via middleware do Clerk.
@@ -178,7 +178,7 @@ Etiquetas customizáveis para categorizar e organizar leads.
 ## 7. ONBOARDING
 
 **Fluxo:**
-1. Administrador cria as 4 contas no painel do Clerk (Silvana, Jéssica, Márcia, Aniversário).
+1. Administrador cria as 4 contas no painel do Clerk (gestora comercial, duas consultoras de vendas e Aniversário).
 2. Cada usuário acessa a URL do CRM e faz login com suas credenciais.
 3. Webhook do Clerk sincroniza o `user_id` com a tabela `users` no Supabase.
 4. Usuário é redirecionado ao Dashboard.
