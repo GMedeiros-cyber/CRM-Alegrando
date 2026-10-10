@@ -29,6 +29,7 @@ import { fetchWithTimeout } from "@/lib/fetch-utils";
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { redigirEstrutura, telefoneMascarado } from "@/lib/log-redact";
+import { classificarErroInsert } from "@/lib/zapi-insert";
 
 // Tipos de evento que representam uma mensagem real chegando.
 // Callbacks de status (DeliveryCallback, ReadCallback, etc.) são ignorados.
@@ -464,6 +465,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const isFromApi = payload.fromApi === true;
   const isGroup = isGroupChat(payload);
 
+  // Entrega repetida da MESMA mensagem do cliente (reentrega da Z-API, dedup
+  // multi-dispositivo ou colisão do índice único). Quando é verdade, o bloco 5
+  // não repassa ao n8n: a IA já respondeu na primeira entrega, e repassar de
+  // novo faz ela responder duas vezes ao cliente.
+  let duplicada = false;
+
   // --- 1.3. Edição (isEdit): UPDATE da original, antes de qualquer insert ---
   // Se atualizou, o evento está consumido: não vira mensagem nova (blocos 2 e
   // 3 inseririam o texto editado como se fosse outra) e não vai ao n8n (a IA
@@ -759,11 +766,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           .maybeSingle();
 
         if (recentDup) {
+          duplicada = true;
           console.log(`[ZAPI-PROXY] Dedup multi-device: conteúdo idêntico em 2s para ${telefoneMascarado(realPhone)}. Ignorando.`);
         } else {
           const content = await persistMediaContent(supabase, rawContent, media_type, realPhone, payload.messageId);
 
-          supabase.from("messages").insert({
+          // AGUARDADO, e não fire-and-forget: sem o await, um erro virava só
+          // log e o webhook respondia 200 — a Z-API dava a entrega por boa e a
+          // mensagem do cliente se perdia, sem retentativa.
+          const { error } = await supabase.from("messages").insert({
             telefone: realPhone,
             canal: "alegrando",
             sender_type: "cliente",
@@ -775,10 +786,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             media_type,
             created_at: sentAt,
             metadata: { messageId: payload.messageId },
-          }).then(({ error }) => {
-            if (error) console.error("[ZAPI-PROXY] Falha ao salvar msg cliente:", error.message);
           });
+
+          const resultado = classificarErroInsert(error);
+          if (resultado === "duplicada") {
+            duplicada = true;
+            console.log(`[ZAPI-PROXY] Entrega concorrente: messageId=${payload.messageId} já gravado para ${telefoneMascarado(realPhone)} (índice único). Ignorando.`);
+          } else if (resultado === "falha") {
+            console.error(`[ZAPI-PROXY] Falha ao salvar msg cliente: messageId=${payload.messageId} telefone=${telefoneMascarado(realPhone)}:`, error?.message);
+            // 500 para a Z-API reenviar. O índice único em
+            // (metadata->>'messageId', canal) garante que a reentrega não duplica.
+            return NextResponse.json({ status: "error" }, { status: 500 });
+          }
         }
+      } else {
+        // Mesmo messageId já gravado: é reentrega da Z-API. Não grava de novo,
+        // e o bloco 5 não repassa — a IA já respondeu na primeira entrega.
+        duplicada = true;
+        console.log(`[ZAPI-PROXY] Reentrega: messageId=${payload.messageId} já registrado para ${telefoneMascarado(realPhone)}. Ignorando.`);
       }
     }
   }
@@ -898,6 +923,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // --- 5. Repasse ao n8n (aguarda antes de retornar para evitar abort na Vercel) ---
+  // Mensagem duplicada não chega aqui: repassar faria a IA responder de novo
+  // ao cliente, que é o sintoma que a dedup acima existe para evitar.
+  if (duplicada) {
+    return NextResponse.json({ status: "ok", duplicate: true });
+  }
+
   if (n8nWebhookUrl) {
     await forwardToN8n(payload, n8nWebhookUrl);
   } else {
