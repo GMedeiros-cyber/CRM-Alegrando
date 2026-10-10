@@ -2,7 +2,8 @@
  * Cor da tag = hex livre ('#rrggbb', minúsculo). Decisão de 22/09/2026:
  * substituiu os 8 nomes (`slate|red|…`) — manter os dois modelos dobraria o
  * render para sempre. As 16 tags existentes foram convertidas para o tom que
- * já aparecia na tela (o *-200 do Tailwind v4), ver migration_labels_cor_hex.sql.
+ * já aparecia na tela (o *-200 do Tailwind v4), ver
+ * supabase/migrations/20260922060133_labels_cor_hex.sql.
  */
 export type LabelColor = string;
 
