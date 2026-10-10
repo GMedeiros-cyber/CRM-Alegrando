@@ -52,23 +52,10 @@ log.txt
 commits.txt
 history.json
 
-# MCP config (contains API keys — never commit)
+# config local com chaves de API — nunca commitar
 .mcp.json
-
-# n8n MCP local tooling (not part of the app)
-.n8n-mcp/
-.n8n-skills/
-
-# internal reports/notes
-relatorio-jade-testes.md
-
-.vercel
 
 # Playwright visual output
 e2e/__screenshots__/
 test-results/
 playwright-report/
-
-# Claude Code: config local da maquina (permissoes, caminhos, as vezes tokens)
-.claude/settings.local.json
-.claude/scheduled_tasks.lock
