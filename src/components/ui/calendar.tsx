@@ -3,7 +3,7 @@
 import * as React from "react"
 import { DayPicker } from "react-day-picker"
 import { ptBR } from "date-fns/locale"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // CSS padrão da v9 do react-day-picker para garantir a estrutura
@@ -27,7 +27,9 @@ function Calendar({
                 month: "space-y-4",
                 month_caption: "flex justify-center pt-1 relative items-center h-8",
                 caption_label: "text-sm font-semibold text-[#191918] dark:text-white",
-                nav: "flex items-center absolute w-full justify-between z-10 pointers-events-none",
+                // pointer-events-none: o nav cobre a legenda inteira; sem isso
+                // ele engole o clique nos dropdowns de mês/ano.
+                nav: "flex items-center absolute w-full justify-between z-10 pointer-events-none",
                 button_previous: "h-7 w-7 bg-[#EEF2FF] dark:bg-[#1e2536] text-[#37352F] dark:text-[#cbd5e1] hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] hover:text-[#191918] dark:hover:text-white pointer-events-auto rounded-md border border-[#A5B4FC] dark:border-[#4a5568] inline-flex items-center justify-center transition-colors shadow-sm",
                 button_next: "h-7 w-7 bg-[#EEF2FF] dark:bg-[#1e2536] text-[#37352F] dark:text-[#cbd5e1] hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] hover:text-[#191918] dark:hover:text-white pointer-events-auto rounded-md border border-[#A5B4FC] dark:border-[#4a5568] inline-flex items-center justify-center transition-colors shadow-sm",
                 month_grid: "w-full border-collapse space-y-1 mx-auto",
@@ -48,6 +50,10 @@ function Calendar({
                 Chevron: (props) => {
                     if (props.orientation === "left") {
                         return <ChevronLeft className="h-4 w-4" />
+                    }
+                    // "down" é a seta dos dropdowns (captionLayout="dropdown").
+                    if (props.orientation === "down") {
+                        return <ChevronDown className={cn("h-3.5 w-3.5", props.className)} />
                     }
                     return <ChevronRight className="h-4 w-4" />
                 },

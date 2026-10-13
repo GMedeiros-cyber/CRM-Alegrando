@@ -1,11 +1,14 @@
 "use client";
 
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useId, useState } from "react";
 import type { ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ANO_MINIMO, dataParaIso, hojeIso, isoParaTexto, lerData, mascararData } from "@/lib/data-aniversario";
 import { TimePicker } from "@/components/ui/time-picker";
 import {
     Select,
@@ -271,7 +274,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
      * função só GRAVA; quem decide se vale gravar é o `CampoAniversario`.
      */
     function salvarAniversario(campo: "coordenadoraAniversario" | "diretoraAniversario", valor: string) {
-        // `<input type="date">` vazio devolve "", e a coluna é `date`: vira null.
+        // "Limpar" devolve "", e a coluna é `date`: vira null.
         // Quem decide SE vale salvar é o próprio campo (CampoAniversario), que
         // guarda o último valor persistido. Comparar aqui com a prop `cliente`
         // não funcionava: ela não é recarregada depois de salvar, então apagar
@@ -1360,27 +1363,145 @@ export const ClienteDetailPanel = memo(ClienteDetailPanelInner);
  * recarregada depois de salvar: comparar com ela fazia "preencher e depois
  * apagar" ser descartado em silêncio. Quem monta passa `key` com o telefone,
  * então trocar de lead remonta com o valor certo.
+ *
+ * Grava em EXATAMENTE três eventos: dia escolhido no calendário, data digitada
+ * completa e válida, e "Limpar". Nunca no blur: o blur não sabe se o texto é
+ * uma data, e decidir por ele gravaria (ou descartaria) dado errado no meio da
+ * edição. O que não grava fica dito embaixo do campo, nunca em silêncio.
  */
 function CampoAniversario({ inicial, rotulo, onSalvar }: {
     inicial: string | null;
     rotulo: string;
     onSalvar: (valor: string) => void;
 }) {
-    const [valor, setValor] = useState(inicial ?? "");
+    const [texto, setTexto] = useState(isoParaTexto(inicial));
     const [persistido, setPersistido] = useState(inicial ?? "");
+    const [focado, setFocado] = useState(false);
+    const [aberto, setAberto] = useState(false);
+    const idAviso = useId();
+
+    const leitura = lerData(texto, hojeIso());
+    const aviso =
+        leitura.tipo === "invalida" ? `${leitura.motivo} Nada foi salvo.`
+        // Incompleto e vazio só avisam fora do foco: no meio da digitação é ruído.
+        : focado ? null
+        : leitura.tipo === "incompleta" ? "Data incompleta: dd/mm/aaaa, com o ano. Nada foi salvo."
+        // Apagar o texto não apaga a data: quem apaga é o Limpar, que vem junto.
+        : leitura.tipo === "vazio" && persistido ? "Campo vazio não apaga a data salva."
+        : null;
+    const ofereceLimpar = !focado && leitura.tipo === "vazio" && !!persistido;
+
+    function salvar(iso: string) {
+        if (iso === persistido) return;
+        setPersistido(iso);
+        onSalvar(iso);
+    }
+
+    function digitar(bruto: string) {
+        const novo = mascararData(bruto);
+        setTexto(novo);
+        const l = lerData(novo, hojeIso());
+        if (l.tipo === "ok") salvar(l.iso);
+    }
+
+    function escolher(dia: Date) {
+        const iso = dataParaIso(dia);
+        setTexto(isoParaTexto(iso));
+        salvar(iso);
+        setAberto(false);
+    }
+
+    function limpar() {
+        setTexto("");
+        salvar("");
+        setAberto(false);
+    }
+
+    // O calendário abre no que está digitado (se for data), senão no salvo.
+    const selecionado = leitura.tipo === "ok" ? leitura.iso : persistido;
+    const diaSelecionado = selecionado ? new Date(`${selecionado}T12:00:00`) : undefined;
+
     return (
-        <input
-            type="date"
-            value={valor}
-            aria-label={rotulo}
-            onChange={(e) => setValor(e.target.value)}
-            onBlur={() => {
-                if (valor === persistido) return;
-                setPersistido(valor);
-                onSalvar(valor);
-            }}
-            className="w-full rounded-lg h-8 px-3 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20"
-        />
+        <div>
+            <div className="relative">
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="dd/mm/aaaa"
+                    maxLength={10}
+                    value={texto}
+                    aria-label={rotulo}
+                    aria-invalid={aviso && leitura.tipo !== "vazio" ? true : undefined}
+                    aria-describedby={aviso ? idAviso : undefined}
+                    onChange={(e) => digitar(e.target.value)}
+                    onFocus={() => setFocado(true)}
+                    onBlur={() => setFocado(false)}
+                    className={cn(
+                        "w-full rounded-lg h-8 pl-3 pr-9 text-sm tabular-nums bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b] outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20",
+                        "aria-invalid:border-red-500 dark:aria-invalid:border-red-400 aria-invalid:focus:ring-red-500/20",
+                    )}
+                />
+                <Popover open={aberto} onOpenChange={setAberto}>
+                    <PopoverTrigger asChild>
+                        <button
+                            type="button"
+                            aria-label={`Abrir calendário: ${rotulo}`}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-7 inline-flex items-center justify-center rounded-md text-[#6366F1] dark:text-[#94a3b8] hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] hover:text-[#191918] dark:hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 transition-colors"
+                        >
+                            <CalendarDays className="w-3.5 h-3.5" />
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-auto p-0 bg-[#EEF2FF] dark:bg-[#1e2536] border-[#C7D2FE] dark:border-[#3d4a60]">
+                        <Calendar
+                            mode="single"
+                            required
+                            captionLayout="dropdown"
+                            startMonth={new Date(ANO_MINIMO, 0)}
+                            endMonth={new Date()}
+                            disabled={{ after: new Date() }}
+                            selected={diaSelecionado}
+                            defaultMonth={diaSelecionado}
+                            onSelect={escolher}
+                            classNames={{
+                                dropdowns: "flex items-center gap-1.5",
+                                dropdown_root: "relative inline-flex items-center h-7 px-2 rounded-md border border-[#A5B4FC] dark:border-[#4a5568] bg-white dark:bg-[#0f1829] hover:border-brand-500 has-[select:focus-visible]:ring-2 has-[select:focus-visible]:ring-brand-500/40 transition-colors",
+                                dropdown: "absolute inset-0 w-full opacity-0 cursor-pointer appearance-none",
+                                caption_label: "inline-flex items-center gap-1 text-sm font-semibold capitalize text-[#191918] dark:text-white pointer-events-none",
+                                chevron: "text-[#6366F1] dark:text-[#94a3b8]",
+                            }}
+                        />
+                        <div className="flex justify-end border-t border-[#C7D2FE] dark:border-[#3d4a60] px-3 py-2">
+                            <button
+                                type="button"
+                                onClick={limpar}
+                                disabled={!texto && !persistido}
+                                className="px-2 py-1 rounded-md text-xs font-semibold text-[#6366F1] dark:text-[#94a3b8] hover:bg-red-500/10 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                            >
+                                Limpar
+                            </button>
+                        </div>
+                    </PopoverContent>
+                </Popover>
+            </div>
+            {/* Sempre montado: região aria-live só é anunciada se já existia
+                antes do texto mudar. Vazia, não ocupa altura. */}
+            <p id={idAviso} aria-live="polite" className={cn("text-[11px] leading-snug text-red-600 dark:text-red-400", aviso && "mt-1")}>
+                {aviso}
+                {ofereceLimpar && (
+                    <>
+                        {" "}
+                        <button
+                            type="button"
+                            onClick={limpar}
+                            className="font-semibold underline underline-offset-2 hover:text-red-700 dark:hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 rounded-sm"
+                        >
+                            Limpar
+                        </button>
+                    </>
+                )}
+            </p>
+        </div>
     );
 }
 
