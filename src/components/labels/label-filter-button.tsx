@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Tag, Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { type Label } from "@/lib/types/labels";
+import { filtrarLabels, type Label } from "@/lib/types/labels";
+import { LabelSearch } from "./label-search";
 
 interface LabelFilterButtonProps {
     selectedIds: string[];
@@ -17,6 +18,7 @@ export function LabelFilterButton({
     availableLabels,
 }: LabelFilterButtonProps) {
     const [open, setOpen] = useState(false);
+    const [busca, setBusca] = useState("");
     const wrapperRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -47,6 +49,10 @@ export function LabelFilterButton({
     }
 
     // Label do botão
+    // A busca esconde linhas da lista, NUNCA a seleção: tag marcada que o
+    // filtro escondeu continua valendo, e o rótulo do botão segue contando ela.
+    const visiveis = filtrarLabels(availableLabels, busca);
+
     let buttonLabel: React.ReactNode;
     if (count === 0) {
         buttonLabel = <span className="font-semibold">Tags</span>;
@@ -71,7 +77,9 @@ export function LabelFilterButton({
             <button
                 type="button"
                 disabled={isEmpty}
-                onClick={() => setOpen((v) => !v)}
+                // Abrir limpa a busca: o popover nao desmonta, entao o texto da
+                // vez anterior sobrevivia e a lista reabria filtrada sem motivo.
+                onClick={() => { setBusca(""); setOpen((v) => !v); }}
                 title={isEmpty ? "Nenhuma tag criada. Crie tags no painel do cliente." : undefined}
                 className={cn(
                     "flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-lg border transition-all",
@@ -95,8 +103,14 @@ export function LabelFilterButton({
                     <div className="px-3 pt-2 pb-1 text-[9px] font-bold uppercase tracking-wider text-[#6366F1] dark:text-[#94a3b8]">
                         Filtrar por tags
                     </div>
+                    <LabelSearch value={busca} onChange={setBusca} autoFocus />
                     <div className="max-h-64 overflow-y-auto">
-                        {availableLabels.map((l) => {
+                        {visiveis.length === 0 && (
+                            <p className="px-3 py-3 text-[11px] italic text-[#6366F1] dark:text-[#94a3b8]">
+                                Nenhuma tag com “{busca}”.
+                            </p>
+                        )}
+                        {visiveis.map((l) => {
                             const active = selectedIds.includes(l.id);
                             return (
                                 <button

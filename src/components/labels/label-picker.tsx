@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Check, Pencil, Trash2, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { COR_TAG_PADRAO, type Label } from "@/lib/types/labels";
+import { COR_TAG_PADRAO, filtrarLabels, type Label } from "@/lib/types/labels";
+import { LabelSearch } from "./label-search";
 import { ColorPicker } from "./color-picker";
 import {
     createLabel,
@@ -49,6 +50,11 @@ export function LabelPicker({
     const [editColor, setEditColor] = useState<string>(COR_TAG_PADRAO);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [busca, setBusca] = useState("");
+
+    // A busca esconde linhas, nunca a atribuição: tag marcada no lead que o
+    // filtro escondeu continua marcada. Mesma regra do filtro da lista.
+    const visiveis = filtrarLabels(availableLabels, busca);
 
     useEffect(() => {
         function onDoc(e: MouseEvent) {
@@ -163,6 +169,9 @@ export function LabelPicker({
                 </button>
             </div>
 
+            {/* Busca: mesma regra do filtro da lista (filtrarLabels). */}
+            {availableLabels.length > 0 && <LabelSearch value={busca} onChange={setBusca} />}
+
             {/* Lista de tags */}
             <div className="max-h-64 overflow-y-auto">
                 {availableLabels.length === 0 && !creating && (
@@ -170,7 +179,12 @@ export function LabelPicker({
                         Nenhuma tag criada ainda.
                     </p>
                 )}
-                {availableLabels.map((l) => {
+                {availableLabels.length > 0 && visiveis.length === 0 && (
+                    <p className="px-3 py-3 text-[11px] italic text-[#6366F1] dark:text-[#94a3b8]">
+                        Nenhuma tag com “{busca}”.
+                    </p>
+                )}
+                {visiveis.map((l) => {
                     const active = assignedIds.includes(l.id);
                     const isEditing = editingId === l.id;
 

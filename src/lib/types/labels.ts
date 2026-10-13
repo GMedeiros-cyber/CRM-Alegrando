@@ -169,3 +169,21 @@ export function paresDeContraste(hex: string): { claro: [string, string]; escuro
         escuro: [misturar(FUNDO_ESCURO, v["--tag-dot-escuro"], ALFA_ESCURO), v["--tag-fg-escuro"]],
     };
 }
+
+/**
+ * Filtra tags pelo nome, sem acento e sem caixa. Query vazia devolve tudo.
+ *
+ * São 17 tags num popover de altura fixa: achar "SUZANO - PÚBLICA" exigia
+ * rolar e ler. Vive aqui, e não dentro do componente, porque o filtro da
+ * lista e o picker do lead usam a mesma regra — duas implementações
+ * divergiriam no primeiro ajuste.
+ */
+export function filtrarLabels<T extends { name: string }>(labels: T[], query: string): T[] {
+    const q = semAcento(query);
+    if (!q) return labels;
+    return labels.filter((l) => semAcento(l.name).includes(q));
+}
+
+function semAcento(s: string): string {
+    return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
