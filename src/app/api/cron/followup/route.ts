@@ -4,6 +4,33 @@ import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { getSetting } from "@/lib/actions/settings";
 import { applyPlaceholders } from "@/lib/settings_helper";
 import { telefoneMascarado } from "@/lib/log-redact";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * A equipe já falou com este lead nas últimas 23h?
+ *
+ * Trava contra mandar automático em cima de conversa humana. Procurava
+ * `sender_type = 'humano'`, valor que o banco quase não tem (35 linhas, a
+ * última de 09/09) — os reais são 'cliente' e 'equipe'. Na prática a trava
+ * só enxergava as mensagens que o próprio cron havia gravado, e nunca as da
+ * equipe: exatamente o caso que ela existe para impedir.
+ */
+async function equipeFalouRecentemente(
+    supabase: SupabaseClient,
+    telefone: string | number,
+): Promise<boolean> {
+    const desde = new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("telefone", telefone)
+        .eq("canal", "alegrando")
+        .eq("sender_type", "equipe")
+        .gte("created_at", desde)
+        .limit(1)
+        .maybeSingle();
+    return !!data;
+}
 
 export async function POST(req: Request) {
     // 1. Validar token
@@ -95,21 +122,12 @@ export async function POST(req: Request) {
             }
 
             if (diffDias === 1) {
-                // Idempotência: se já enviamos qualquer mensagem da equipe pra
-                // esse lead nas últimas 23h, pulamos. Evita duplicar caso o
-                // cron seja re-disparado (Vercel pode retentar em falha de rede).
-                const ultDia = new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString();
-                const { data: enviadoRecente } = await supabase
-                    .from("messages")
-                    .select("id")
-                    .eq("telefone", lead.telefone)
-                    .eq("canal", "alegrando")
-                    .eq("sender_type", "humano")
-                    .gte("created_at", ultDia)
-                    .limit(1)
-                    .maybeSingle();
-                if (enviadoRecente) {
-                    console.log(`[followup] D+1 skip dedup para ${telefoneMascarado(telefone)} — já enviamos nas últimas 23h`);
+                // Idempotência: se já houve mensagem da equipe pra esse lead
+                // nas últimas 23h, pulamos. Cobre o re-disparo do cron (a
+                // Vercel retenta em falha de rede) e a conversa humana em
+                // andamento.
+                if (await equipeFalouRecentemente(supabase, lead.telefone)) {
+                    console.log(`[followup] D+1 skip dedup para ${telefoneMascarado(telefone)} — equipe falou nas últimas 23h`);
                     continue;
                 }
 
@@ -130,7 +148,7 @@ export async function POST(req: Request) {
                     await supabase.from("messages").insert({
                         telefone: lead.telefone,
                         canal: "alegrando",
-                        sender_type: "humano",
+                        sender_type: "equipe",
                         sender_name: "Alegrando",
                         content: mensagem,
                     });
@@ -143,6 +161,13 @@ export async function POST(req: Request) {
             }
 
             if (diffDias === followupDias) {
+                // O mesmo guard do D+1: antes este ramo não tinha nenhum, e o
+                // follow-up saía em cima de conversa que a equipe acabara de ter.
+                if (await equipeFalouRecentemente(supabase, lead.telefone)) {
+                    console.log(`[followup] D+${followupDias} skip dedup para ${telefoneMascarado(telefone)} — equipe falou nas últimas 23h`);
+                    continue;
+                }
+
                 const mensagem = applyPlaceholders(followupTemplate, {
                     nome,
                     link_google: googleReviewLink,
@@ -160,7 +185,7 @@ export async function POST(req: Request) {
                     await supabase.from("messages").insert({
                         telefone: lead.telefone,
                         canal: "alegrando",
-                        sender_type: "humano",
+                        sender_type: "equipe",
                         sender_name: "Alegrando",
                         content: mensagem,
                     });
