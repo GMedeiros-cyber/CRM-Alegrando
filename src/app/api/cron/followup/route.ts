@@ -4,6 +4,7 @@ import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { getSetting } from "@/lib/actions/settings";
 import { applyPlaceholders } from "@/lib/settings_helper";
 import { telefoneMascarado } from "@/lib/log-redact";
+import { dentroDaJanelaFollowup } from "@/lib/hora-sao-paulo";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -109,15 +110,10 @@ export async function POST(req: Request) {
             const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
             const followupDias = lead.followup_dias ?? 45;
 
-            // Verificar se é a hora certa para este lead
-            const followupHora = lead.followup_hora || "09:00";
-            const [horaAlvo, minAlvo] = followupHora.split(":").map(Number);
-            const agora = new Date();
-            const horaAtual = agora.getHours();
-            const minAtual = agora.getMinutes();
-
-            // Só enviar se estiver dentro da janela de 59min do horário configurado
-            if (Math.abs((horaAtual * 60 + minAtual) - (horaAlvo * 60 + minAlvo)) > 59) {
+            // Hora certa para este lead? `followup_hora` é horário de Brasília,
+            // e a comparação também — antes era a hora do runtime (UTC na
+            // Vercel) e nada saía. Ver lib/hora-sao-paulo.ts.
+            if (!dentroDaJanelaFollowup(lead.followup_hora || "09:00", new Date())) {
                 continue;
             }
 
