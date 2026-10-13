@@ -5,6 +5,7 @@ import { getSetting } from "@/lib/actions/settings";
 import { applyPlaceholders } from "@/lib/settings_helper";
 import { telefoneMascarado } from "@/lib/log-redact";
 import { dentroDaJanelaFollowup } from "@/lib/hora-sao-paulo";
+import { enviaAvaliacao, enviaFollowup } from "@/lib/followup-regra";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -117,7 +118,7 @@ export async function POST(req: Request) {
                 continue;
             }
 
-            if (diffDias === 1) {
+            if (enviaAvaliacao(diffDias)) {
                 // Idempotência: se já houve mensagem da equipe pra esse lead
                 // nas últimas 23h, pulamos. Cobre o re-disparo do cron (a
                 // Vercel retenta em falha de rede) e a conversa humana em
@@ -156,7 +157,8 @@ export async function POST(req: Request) {
                 }
             }
 
-            if (diffDias === followupDias) {
+            // Do vencimento até 7 dias depois, se ainda não foi — ver lib/followup-regra.ts.
+            if (enviaFollowup(diffDias, followupDias, lead.followup_enviado)) {
                 // O mesmo guard do D+1: antes este ramo não tinha nenhum, e o
                 // follow-up saía em cima de conversa que a equipe acabara de ter.
                 if (await equipeFalouRecentemente(supabase, lead.telefone)) {
@@ -186,8 +188,11 @@ export async function POST(req: Request) {
                         content: mensagem,
                     });
 
-                    // Marca como enviado no banco
-                    await supabase
+                    // Marca como enviado no banco. É esta marca que impede a
+                    // repetição: com a tolerância de 7 dias, se ela falhar o
+                    // lead volta amanhã e recebe de novo — por isso o erro não
+                    // pode passar calado.
+                    const { error: errMarca } = await supabase
                         .from("Clientes _WhatsApp")
                         .update({
                             followup_enviado: true,
@@ -195,6 +200,12 @@ export async function POST(req: Request) {
                         })
                         .eq("telefone", lead.telefone)
                         .eq("canal", "alegrando");
+                    if (errMarca) {
+                        erros++;
+                        console.error(
+                            `[followup] Follow-up ENVIADO mas NÃO marcado para ${telefoneMascarado(telefone)} — reenvia na próxima execução em janela: ${errMarca.message}`
+                        );
+                    }
                 } else {
                     erros++;
                     console.error(
