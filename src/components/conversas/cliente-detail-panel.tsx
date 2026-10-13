@@ -49,6 +49,7 @@ import type { AgendamentoEvent } from "@/lib/actions/agenda";
 import { Tag } from "lucide-react";
 import { LabelBadge } from "@/components/labels/label-badge";
 import { LabelPicker } from "@/components/labels/label-picker";
+import { definicaoDoLead } from "@/lib/lead-profiles";
 import { assignLabel, removeLabel } from "@/lib/actions/labels";
 import type { Label as LabelType, LeadLabel } from "@/lib/types/labels";
 import { LeadEmailSection } from "./lead-email-section";
@@ -245,6 +246,10 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
     const sortedTasks = [...pendingTasks, ...doneTasks];
     const allTasksDone = tasks.length > 0 && pendingTasks.length === 0;
     const isGroup = isGroupTelefone(cliente.telefone);
+
+    // Perfil do lead pelas tags (lib/lead-profiles.ts): decide o documento e
+    // se o bloco institucional aparece. Sem tag de perfil, `escola` — o padrão.
+    const perfil = definicaoDoLead(leadLabels);
 
     const [labelPickerOpen, setLabelPickerOpen] = useState(false);
 
@@ -471,8 +476,9 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                 )}
             </div>
 
-            {/* Fields — não-festas mostra a instituição completa (Nome do local,
-                CNPJ, Endereço, Telefone, E-mail) ligada às colunas do cliente */}
+            {/* Fields — o PERFIL (decidido pelas tags, ver lib/lead-profiles.ts)
+                escolhe qual documento aparece e se o bloco institucional existe.
+                Esconder não apaga: o dado escondido continua no banco. */}
             <div className="space-y-3">
                 <FieldGroup
                     icon={cliente.canal === "festas" || isGroup ? <User className="w-3 h-3" /> : <Building2 className="w-3 h-3" />}
@@ -499,13 +505,27 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                     </FieldGroup>
                 )}
 
-                {cliente.canal !== "festas" && (
+                {cliente.canal !== "festas" && perfil.documento === "cnpj" && (
                     <FieldGroup label="CNPJ">
                         <Input
                             value={form.cnpj}
                             onChange={(e) => onFormChange({ cnpj: e.target.value })}
                             onBlur={onSave}
                             placeholder="00.000.000/0000-00"
+                            className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
+                        />
+                    </FieldGroup>
+                )}
+
+                {/* Transportador é pessoa física: CPF no lugar do CNPJ. A coluna
+                    `cpf` já existia e não era renderizada por nenhum perfil. */}
+                {cliente.canal !== "festas" && perfil.documento === "cpf" && (
+                    <FieldGroup label="CPF">
+                        <Input
+                            value={form.cpf}
+                            onChange={(e) => onFormChange({ cpf: e.target.value })}
+                            onBlur={onSave}
+                            placeholder="000.000.000-00"
                             className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                         />
                     </FieldGroup>
@@ -544,7 +564,7 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                     </FieldGroup>
                 )}
 
-                {cliente.canal === "alegrando" && (
+                {cliente.canal === "alegrando" && perfil.blocoInstituicao && (
                     <div className="pt-2 border-t border-[#C7D2FE] dark:border-[#3d4a60]/60 space-y-3">
                         <div className="flex items-center gap-1.5 mb-2">
                             <GraduationCap className="w-3.5 h-3.5 text-brand-400/70" />
