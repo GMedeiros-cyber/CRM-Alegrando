@@ -49,7 +49,7 @@ import type { AgendamentoEvent } from "@/lib/actions/agenda";
 import { Tag } from "lucide-react";
 import { LabelBadge } from "@/components/labels/label-badge";
 import { LabelPicker } from "@/components/labels/label-picker";
-import { definicaoDoLead } from "@/lib/lead-profiles";
+import { camposDocumento, definicaoDoLead, perfilDoLead } from "@/lib/lead-profiles";
 import { ContratosBloco } from "./contratos-bloco";
 import { assignLabel, removeLabel } from "@/lib/actions/labels";
 import type { Label as LabelType, LeadLabel } from "@/lib/types/labels";
@@ -251,6 +251,16 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
     // Perfil do lead pelas tags (lib/lead-profiles.ts): decide o documento e
     // se o bloco institucional aparece. Sem tag de perfil, `escola` — o padrão.
     const perfil = definicaoDoLead(leadLabels);
+    // Quais campos de documento aparecem: o primário do perfil sempre, e o
+    // outro SÓ se já tiver valor. Ver `camposDocumento`.
+    //
+    // A decisão olha o valor PERSISTIDO (`cliente`), não o do form. Com o form,
+    // limpar o campo o fazia desaparecer no mesmo instante — antes do `onBlur`
+    // disparar —, então o valor nunca era salvo e o campo voltava no reload.
+    // Medido: o CNPJ continuava no banco depois de "limpar". Com o persistido,
+    // o campo fica na tela durante a edição, o save grava `null`, e o fallback
+    // some no próximo carregamento do lead: é assim que ele se cura.
+    const documentos = camposDocumento(perfilDoLead(leadLabels), { cpf: cliente.cpf, cnpj: cliente.cnpj });
 
     /**
      * Persiste uma das datas de aniversário direto pela action, como o kanban e
@@ -531,31 +541,17 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                     </FieldGroup>
                 )}
 
-                {cliente.canal !== "festas" && perfil.documento === "cnpj" && (
-                    <FieldGroup label="CNPJ">
+                {cliente.canal !== "festas" && documentos.map((campo) => (
+                    <FieldGroup key={campo} label={campo === "cpf" ? "CPF" : "CNPJ"}>
                         <Input
-                            value={form.cnpj}
-                            onChange={(e) => onFormChange({ cnpj: e.target.value })}
+                            value={campo === "cpf" ? form.cpf : form.cnpj}
+                            onChange={(e) => onFormChange(campo === "cpf" ? { cpf: e.target.value } : { cnpj: e.target.value })}
                             onBlur={onSave}
-                            placeholder="00.000.000/0000-00"
+                            placeholder={campo === "cpf" ? "000.000.000-00" : "00.000.000/0000-00"}
                             className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
                         />
                     </FieldGroup>
-                )}
-
-                {/* Transportador é pessoa física: CPF no lugar do CNPJ. A coluna
-                    `cpf` já existia e não era renderizada por nenhum perfil. */}
-                {cliente.canal !== "festas" && perfil.documento === "cpf" && (
-                    <FieldGroup label="CPF">
-                        <Input
-                            value={form.cpf}
-                            onChange={(e) => onFormChange({ cpf: e.target.value })}
-                            onBlur={onSave}
-                            placeholder="000.000.000-00"
-                            className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:text-[#94a3b8]"
-                        />
-                    </FieldGroup>
-                )}
+                ))}
 
                 {cliente.canal !== "festas" && (
                     <FieldGroup icon={<MapPin className="w-3 h-3" />} label="Endereço">

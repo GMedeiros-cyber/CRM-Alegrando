@@ -70,3 +70,53 @@ test("definicaoDoLead entrega a definição pronta", () => {
     assert.equal(definicaoDoLead(t("PARCEIROS")).documento, "cnpj");
     assert.equal(definicaoDoLead([]).blocoInstituicao, true);
 });
+
+// ===== Documento com fallback por valor (decisão B, 13/10/2026) =====
+
+import { camposDocumento, temValor } from "./lead-profiles";
+
+test("temValor: null, undefined e string vazia são vazios", () => {
+    assert.equal(temValor(null), false);
+    assert.equal(temValor(undefined), false);
+    assert.equal(temValor(""), false);
+    assert.equal(temValor("   "), false);
+    assert.equal(temValor("123"), true);
+});
+
+test("transportador com só CNPJ: CPF visível (vazio) + CNPJ visível (com valor)", () => {
+    assert.deepEqual(camposDocumento("transportador", { cnpj: "12.345.678/0001-00", cpf: null }), ["cpf", "cnpj"]);
+});
+
+test("transportador com só CPF: CPF visível, CNPJ ausente", () => {
+    assert.deepEqual(camposDocumento("transportador", { cpf: "123.456.789-00", cnpj: null }), ["cpf"]);
+});
+
+test("transportador sem nada: CPF visível, CNPJ ausente", () => {
+    assert.deepEqual(camposDocumento("transportador", { cpf: null, cnpj: null }), ["cpf"]);
+    assert.deepEqual(camposDocumento("transportador", {}), ["cpf"]);
+});
+
+test("transportador com CNPJ vazio ('') : CNPJ ausente, não visível-e-vazio", () => {
+    assert.deepEqual(camposDocumento("transportador", { cnpj: "", cpf: null }), ["cpf"]);
+    assert.deepEqual(camposDocumento("transportador", { cnpj: "   ", cpf: null }), ["cpf"]);
+});
+
+test("parceiro com só CNPJ: CNPJ visível, CPF ausente", () => {
+    assert.deepEqual(camposDocumento("parceiro", { cnpj: "12.345.678/0001-00", cpf: null }), ["cnpj"]);
+});
+
+test("parceiro sem nada: CNPJ visível, CPF ausente", () => {
+    assert.deepEqual(camposDocumento("parceiro", { cpf: null, cnpj: null }), ["cnpj"]);
+});
+
+test("parceiro com CPF preenchido: o fallback aparece e se cura ao ser limpo", () => {
+    assert.deepEqual(camposDocumento("parceiro", { cpf: "123.456.789-00", cnpj: null }), ["cnpj", "cpf"]);
+    // Operador move o numero e limpa o antigo: no proximo render o campo sai.
+    assert.deepEqual(camposDocumento("parceiro", { cpf: "", cnpj: "12.345.678/0001-00" }), ["cnpj"]);
+});
+
+test("escola não muda: só cnpj no nível do lead, qualquer que seja o cpf", () => {
+    assert.deepEqual(camposDocumento("escola", { cpf: null, cnpj: null }), ["cnpj"]);
+    assert.deepEqual(camposDocumento("escola", { cpf: "123.456.789-00", cnpj: null }), ["cnpj"]);
+    assert.deepEqual(camposDocumento("escola", { cpf: "123.456.789-00", cnpj: "12.345.678/0001-00" }), ["cnpj"]);
+});

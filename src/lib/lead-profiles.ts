@@ -99,3 +99,46 @@ export function perfilDoLead(tags: ReadonlyArray<{ name: string }> | null | unde
 export function definicaoDoLead(tags: ReadonlyArray<{ name: string }> | null | undefined): DefinicaoPerfil {
     return PERFIS[perfilDoLead(tags)];
 }
+
+export type CampoDocumento = "cpf" | "cnpj";
+
+/**
+ * Tem valor = não-nulo E não-string-vazia.
+ *
+ * Os dois contam como vazio desde já. Hoje não existe `''` em `cpf`/`cnpj`
+ * nas tags de perfil (medido: 0), mas vai existir: input controlado gravando
+ * campo limpo escreve `''`, não `null`, e nem todo caminho de escrita passa
+ * pelo `|| null` da tela.
+ */
+export function temValor(v: string | null | undefined): boolean {
+    return typeof v === "string" && v.trim() !== "";
+}
+
+/**
+ * Quais campos de documento o painel renderiza, na ordem.
+ *
+ * Nos perfis reduzidos o documento tem duas partes:
+ *   - PRIMÁRIO, sempre visível e editável (`cpf` no transportador, `cnpj` no
+ *     parceiro). É onde dado novo entra, sempre.
+ *   - FALLBACK, o outro campo, visível SÓ quando já tem valor. Também
+ *     editável, nunca read-only.
+ *
+ * O fallback SE CURA, e isso é o desenho, não bug: medido em 13/10/2026, 14
+ * dos 69 transportadores têm só CNPJ e 12 têm só CPF (nenhum tem os dois).
+ * O operador move o número para o campo certo, limpa o antigo e salva — no
+ * próximo render o campo antigo não existe mais, porque deixou de ter valor.
+ * Sem migration de dados e sem campo travado em read-only.
+ *
+ * `escola` não entra nessa regra: segue mostrando só `cnpj` no nível do lead,
+ * exatamente como antes dos perfis existirem (o `cpf` do lead continua fora da
+ * tela, e os CPFs que aparecem ali são `coordenadora_cpf` e `diretora_cpf`).
+ */
+export function camposDocumento(
+    perfil: PerfilLead,
+    valores: { cpf?: string | null; cnpj?: string | null },
+): CampoDocumento[] {
+    if (perfil === "escola") return ["cnpj"];
+    const primario = PERFIS[perfil].documento;
+    const fallback: CampoDocumento = primario === "cpf" ? "cnpj" : "cpf";
+    return temValor(valores[fallback]) ? [primario, fallback] : [primario];
+}
