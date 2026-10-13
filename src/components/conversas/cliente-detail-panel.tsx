@@ -50,6 +50,7 @@ import { Tag } from "lucide-react";
 import { LabelBadge } from "@/components/labels/label-badge";
 import { LabelPicker } from "@/components/labels/label-picker";
 import { definicaoDoLead } from "@/lib/lead-profiles";
+import { ContratosBloco } from "./contratos-bloco";
 import { assignLabel, removeLabel } from "@/lib/actions/labels";
 import type { Label as LabelType, LeadLabel } from "@/lib/types/labels";
 import { LeadEmailSection } from "./lead-email-section";
@@ -729,6 +730,14 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                             />
                         </FieldGroup>
                     </div>
+                )}
+
+                {/* Contratos: um por passeio. Só no perfil que tem contrato
+                    (escola) — ver lib/lead-profiles.ts. */}
+                {cliente.canal === "alegrando" && perfil.contratos && (
+                    // `key`: trocar de lead remonta o bloco, que recarrega a lista
+                    // e volta ao estado "carregando" sem setState em efeito.
+                    <ContratosBloco key={cliente.id} leadId={cliente.id} onToast={onToast} />
                 )}
 
                 <FieldGroup label="Status (Kanban)">

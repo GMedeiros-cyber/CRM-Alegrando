@@ -142,6 +142,8 @@ const CONTAGENS_ZERADAS: ContagensAbas = {
 
 /** Detalhe completo do cliente selecionado */
 export type ClienteDetail = {
+    /** uuid da linha. É a FK de lead_labels e de contratos. */
+    id: string;
     telefone: string;
     nome: string | null;
     status: string | null;
@@ -662,6 +664,7 @@ export async function getClienteByTelefone(
         .filter((l): l is LeadLabel => l !== null);
 
     return {
+        id: String(data.id),
         telefone: String(data.telefone),
         nome: data.nome,
         status: data.status,
