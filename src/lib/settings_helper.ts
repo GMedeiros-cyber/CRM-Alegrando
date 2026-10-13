@@ -12,18 +12,43 @@ export const SETTING_DEFAULTS: Record<string, string> = {
         "Olá {{nome}}! 😊\n\nEsperamos que o passeio tenha sido incrível para todos!\n\nSe puder, deixa uma avaliação pra gente no Google — ajuda muito a Alegrando a levar mais crianças a experiências incríveis! 🌟\n\n{{link_google}}",
 };
 
+/** Nome do placeholder → valor. `link` é apelido de `link_google`. */
+export type VarsPlaceholder = { nome?: string; link_google?: string; link?: string };
+
+// Aceita `{nome}` e `{{nome}}` na mesma passada, com ou sem espaço dentro das
+// chaves. Captura o nome do placeholder para decidir item a item.
+const PLACEHOLDER = /\{\{?\s*([a-z_]+)\s*\}?\}/gi;
+
 /**
- * Substitui placeholders na mensagem:
- *   {{nome}} → nome do cliente
- *   {{link_google}} → link de avaliação Google
+ * Substitui placeholders na mensagem, nas DUAS convenções que convivem no
+ * projeto: `{{nome}}` (textos antigos: followup_mensagem, avaliacao_mensagem)
+ * e `{nome}` (textos novos: pos_passeio_mensagem, respostas rápidas).
+ *
+ * Por que as duas: a tela de Configurações documenta `{{nome}}` num campo e
+ * `{nome}` noutro. Quem editar um texto seguindo a dica do campo errado
+ * escreveria um placeholder que a função não reconhecia — e o cliente
+ * receberia `{nome}` literal. Migrar os textos guardados seria risco sem
+ * ganho; aceitar as duas formas resolve de um lado só.
+ *
+ * Placeholder DESCONHECIDO fica como está, intocado — não vira string vazia.
+ * Apagar silenciosamente esconderia o erro de digitação; deixar à vista faz
+ * quem revisa a mensagem perceber antes de enviar.
+ *
+ * Substitui TODAS as ocorrências: o `.replace()` com string trocava só a
+ * primeira, então um texto com dois `{nome}` saía meio preenchido.
  */
-export function applyPlaceholders(
-    template: string,
-    vars: { nome?: string; link_google?: string }
-): string {
-    let result = template;
-    if (vars.nome) result = result.replace(/\{\{nome\}\}/g, vars.nome);
-    if (vars.link_google)
-        result = result.replace(/\{\{link_google\}\}/g, vars.link_google);
-    return result;
+export function applyPlaceholders(template: string, vars: VarsPlaceholder): string {
+    // Um link só, dois nomes: tanto faz qual o texto usa e qual quem chama
+    // passou. Resolver só num sentido deixava `{{link_google}}` literal
+    // quando o chamador mandava `link` — e vice-versa.
+    const link = vars.link ?? vars.link_google;
+    const valores: Record<string, string | undefined> = {
+        nome: vars.nome,
+        link_google: link,
+        link,
+    };
+    return template.replace(PLACEHOLDER, (original, chave: string) => {
+        const valor = valores[chave.toLowerCase()];
+        return valor ? valor : original;
+    });
 }
