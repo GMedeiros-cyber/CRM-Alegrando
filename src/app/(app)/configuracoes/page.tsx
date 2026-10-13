@@ -4,6 +4,8 @@ import { useState, useEffect, useTransition } from "react";
 import { getSetting, updateSetting } from "@/lib/actions/settings";
 import { SETTING_DEFAULTS } from "@/lib/settings_helper";
 import { PasseiosPanel } from "@/components/configuracoes/passeios-panel";
+import { EditorMensagem } from "@/components/configuracoes/editor-mensagem";
+import { PLACEHOLDERS_ANIVERSARIO, validarMensagem } from "@/lib/mensagem-placeholders";
 
 const POS_PASSEIO_DEFAULT =
     "Olá {nome}! 🎉 Foi um prazer ter você no passeio! Caso queira ver as fotos ou deixar uma avaliação, o link está aqui: {link}";
@@ -11,6 +13,8 @@ const POS_PASSEIO_DEFAULT =
 export default function ConfiguracoesPage() {
     const [followupMsg, setFollowupMsg] = useState("");
     const [posPasseioMsg, setPosPasseioMsg] = useState("");
+    const [aniversarioMsg, setAniversarioMsg] = useState("");
+    const [aniversarioInvalido, setAniversarioInvalido] = useState(false);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState("");
     const [isPending, startTransition] = useTransition();
@@ -18,12 +22,14 @@ export default function ConfiguracoesPage() {
     useEffect(() => {
         async function load() {
             try {
-                const [followup, posPasseio] = await Promise.all([
+                const [followup, posPasseio, aniversario] = await Promise.all([
                     getSetting("followup_mensagem"),
                     getSetting("pos_passeio_mensagem"),
+                    getSetting("aniversario_mensagem"),
                 ]);
                 setFollowupMsg(followup);
                 setPosPasseioMsg(posPasseio || POS_PASSEIO_DEFAULT);
+                setAniversarioMsg(aniversario);
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Erro ao carregar configurações");
             }
@@ -36,11 +42,21 @@ export default function ConfiguracoesPage() {
         setSaved(false);
         setError("");
 
+        // Placeholder que o envio não sabe preencher chegaria literal ao
+        // cliente ("Olá {nmoe}!"): não deixa salvar, e diz qual é.
+        const erroAniversario = validarMensagem(aniversarioMsg, PLACEHOLDERS_ANIVERSARIO);
+        if (erroAniversario) {
+            setAniversarioInvalido(true);
+            setError(`Mensagem de aniversário: ${erroAniversario}`);
+            return;
+        }
+
         startTransition(async () => {
             try {
                 await Promise.all([
                     updateSetting("followup_mensagem", followupMsg),
                     updateSetting("pos_passeio_mensagem", posPasseioMsg),
+                    updateSetting("aniversario_mensagem", aniversarioMsg),
                 ]);
                 setSaved(true);
                 setTimeout(() => setSaved(false), 3000);
@@ -156,7 +172,30 @@ export default function ConfiguracoesPage() {
                 </div>
             </div>
 
-            <div className="flex items-center gap-4 bento-enter [animation-delay:350ms]">
+            {/* Bloco Aniversário — primeiro a usar o EditorMensagem */}
+            <div className="rounded-xl border bg-card p-6 space-y-4 bento-enter [animation-delay:350ms]">
+                <div>
+                    <h2 id="titulo-aniversario" className="text-lg font-semibold text-[#191918] dark:text-white">
+                        Mensagem de aniversário
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                        Texto do parabéns para a coordenadora e a diretora, no dia do aniversário.
+                    </p>
+                </div>
+                <EditorMensagem
+                    valor={aniversarioMsg}
+                    onChange={(v) => {
+                        setAniversarioMsg(v);
+                        // Mexeu no texto que bloqueou: o aviso deixa de valer.
+                        if (aniversarioInvalido) { setAniversarioInvalido(false); setError(""); }
+                    }}
+                    placeholders={PLACEHOLDERS_ANIVERSARIO}
+                    rotuloId="titulo-aniversario"
+                    invalido={aniversarioInvalido}
+                />
+            </div>
+
+            <div className="flex items-center gap-4 bento-enter [animation-delay:400ms]">
                 <button
                     onClick={handleSave}
                     disabled={isPending}
@@ -169,11 +208,10 @@ export default function ConfiguracoesPage() {
                         Salvo com sucesso!
                     </span>
                 )}
-                {error && (
-                    <span className="text-sm text-red-600 font-medium">
-                        {error}
-                    </span>
-                )}
+                {/* Sempre montado: aria-live só anuncia se a região já existia. */}
+                <span role="status" aria-live="polite" className="text-sm text-red-600 dark:text-red-400 font-medium">
+                    {error}
+                </span>
             </div>
 
             <hr className="border-border/50" />
