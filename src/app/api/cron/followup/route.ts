@@ -6,6 +6,7 @@ import { applyPlaceholders } from "@/lib/settings_helper";
 import { telefoneMascarado } from "@/lib/log-redact";
 import { dentroDaJanelaFollowup } from "@/lib/hora-sao-paulo";
 import { enviaAvaliacao, enviaFollowup } from "@/lib/followup-regra";
+import { enviarFollowupComReserva } from "@/lib/followup-envio";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
     const { data: leads, error } = await supabase
         .from("Clientes _WhatsApp")
         .select(
-            "telefone, nome, ultimo_passeio, followup_dias, followup_enviado, followup_hora"
+            "id, telefone, nome, ultimo_passeio, followup_dias, followup_enviado, followup_enviado_em, followup_hora"
         )
         .eq("canal", "alegrando")
         .eq("followup_ativo", true)
@@ -171,46 +172,20 @@ export async function POST(req: Request) {
                     link_google: googleReviewLink,
                 });
 
-                const result = await sendWhatsAppMessage(telefone, mensagem);
-
-                if (result.success) {
+                // Reserva → envia → desfaz se falhar: ver lib/followup-envio.ts.
+                const resultado = await enviarFollowupComReserva(
+                    supabase,
+                    lead,
+                    mensagem,
+                    () => sendWhatsAppMessage(telefone, mensagem),
+                );
+                if (resultado === "enviado") {
                     followupsEnviados++;
-                    console.log(
-                        `[followup] D+${followupDias} follow-up enviado para ${telefoneMascarado(telefone)}`
-                    );
-
-                    // Salvar no histórico de chat (cron só atende canal alegrando)
-                    await supabase.from("messages").insert({
-                        telefone: lead.telefone,
-                        canal: "alegrando",
-                        sender_type: "equipe",
-                        sender_name: "Alegrando",
-                        content: mensagem,
-                    });
-
-                    // Marca como enviado no banco. É esta marca que impede a
-                    // repetição: com a tolerância de 7 dias, se ela falhar o
-                    // lead volta amanhã e recebe de novo — por isso o erro não
-                    // pode passar calado.
-                    const { error: errMarca } = await supabase
-                        .from("Clientes _WhatsApp")
-                        .update({
-                            followup_enviado: true,
-                            followup_enviado_em: new Date().toISOString(),
-                        })
-                        .eq("telefone", lead.telefone)
-                        .eq("canal", "alegrando");
-                    if (errMarca) {
-                        erros++;
-                        console.error(
-                            `[followup] Follow-up ENVIADO mas NÃO marcado para ${telefoneMascarado(telefone)} — reenvia na próxima execução em janela: ${errMarca.message}`
-                        );
-                    }
+                    console.log(`[followup] D+${diffDias} follow-up enviado para ${telefoneMascarado(telefone)} (vencia D+${followupDias})`);
+                } else if (resultado === "ja-reservado") {
+                    console.log(`[followup] Follow-up de ${telefoneMascarado(telefone)} já reservado por outra execução — pulando`);
                 } else {
                     erros++;
-                    console.error(
-                        `[followup] Erro follow-up para ${telefone}: ${result.error}`
-                    );
                 }
             }
         } catch (err) {
