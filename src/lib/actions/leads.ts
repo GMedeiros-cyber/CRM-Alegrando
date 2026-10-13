@@ -48,6 +48,10 @@ const updateClienteSchema = z.object({
     coordenadoraNumero: z.string().max(255).nullable().optional(),
     coordenadoraEmail: z.string().max(255).nullable().optional(),
     coordenadoraCpf: z.string().max(255).nullable().optional(),
+    // `date` no banco: aceita só 'YYYY-MM-DD'. String vazia do input vira null
+    // em quem chama, não aqui — o schema recusa formato inválido de propósito.
+    coordenadoraAniversario: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    diretoraAniversario: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 }).strict();
 
 const createClienteSchema = z.object({
@@ -180,6 +184,9 @@ export type ClienteDetail = {
     coordenadoraNumero: string | null;
     coordenadoraEmail: string | null;
     coordenadoraCpf: string | null;
+    /** Datas de nascimento. O `*_enviado_em` é controle do cron e não sobe para a UI. */
+    coordenadoraAniversario: string | null;
+    diretoraAniversario: string | null;
     labels: LeadLabel[];
 };
 
@@ -697,6 +704,8 @@ export async function getClienteByTelefone(
         coordenadoraNumero: data.coordenadora_numero || null,
         coordenadoraEmail: data.coordenadora_email || null,
         coordenadoraCpf: data.coordenadora_cpf || null,
+        coordenadoraAniversario: data.coordenadora_aniversario || null,
+        diretoraAniversario: data.diretora_aniversario || null,
         labels,
     };
 }
@@ -759,6 +768,8 @@ export async function updateCliente(
         coordenadoraNumero?: string | null;
         coordenadoraEmail?: string | null;
         coordenadoraCpf?: string | null;
+        coordenadoraAniversario?: string | null;
+        diretoraAniversario?: string | null;
     },
     canal: string = "alegrando"
 ) {
@@ -815,6 +826,8 @@ export async function updateCliente(
     if (parsed.coordenadoraNumero !== undefined) updateData.coordenadora_numero = parsed.coordenadoraNumero;
     if (parsed.coordenadoraEmail !== undefined) updateData.coordenadora_email = parsed.coordenadoraEmail;
     if (parsed.coordenadoraCpf !== undefined) updateData.coordenadora_cpf = parsed.coordenadoraCpf;
+    if (parsed.coordenadoraAniversario !== undefined) updateData.coordenadora_aniversario = parsed.coordenadoraAniversario;
+    if (parsed.diretoraAniversario !== undefined) updateData.diretora_aniversario = parsed.diretoraAniversario;
 
     await supabase
         .from("Clientes _WhatsApp")

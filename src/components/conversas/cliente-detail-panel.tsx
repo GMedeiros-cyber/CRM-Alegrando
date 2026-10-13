@@ -251,6 +251,31 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
     // se o bloco institucional aparece. Sem tag de perfil, `escola` — o padrão.
     const perfil = definicaoDoLead(leadLabels);
 
+    /**
+     * Persiste uma das datas de aniversário direto pela action, como o kanban e
+     * os switches de follow-up já fazem neste arquivo.
+     *
+     * Fora do `FormState` de propósito: a hidratação e o payload daquele form
+     * vivem em `conversas-layout.tsx`, que esta rodada não deve tocar. Esta
+     * função só GRAVA; quem decide se vale gravar é o `CampoAniversario`.
+     */
+    function salvarAniversario(campo: "coordenadoraAniversario" | "diretoraAniversario", valor: string) {
+        // `<input type="date">` vazio devolve "", e a coluna é `date`: vira null.
+        // Quem decide SE vale salvar é o próprio campo (CampoAniversario), que
+        // guarda o último valor persistido. Comparar aqui com a prop `cliente`
+        // não funcionava: ela não é recarregada depois de salvar, então apagar
+        // a data logo após preenchê-la era descartado em silêncio — medido.
+        const novo = valor.trim() === "" ? null : valor;
+        startSavingCliente(async () => {
+            try {
+                await updateCliente(selectedTelefone, { [campo]: novo }, cliente.canal);
+                onToast({ type: "success", text: "Cliente atualizado!" });
+            } catch (err) {
+                onToast({ type: "error", text: `Erro ao salvar: ${err}` });
+            }
+        });
+    }
+
     const [labelPickerOpen, setLabelPickerOpen] = useState(false);
 
     async function handleToggleLabel(labelId: string, currentlyAssigned: boolean) {
@@ -635,6 +660,17 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                             />
                         </FieldGroup>
 
+                        <FieldGroup icon={<Cake className="w-3 h-3" />} label="Aniversário">
+                            {/* Ano fica à vista e é gravado: a coluna é `date`. O cron
+                                compara só dia e mês — ver /api/cron/followup. */}
+                            <CampoAniversario
+                                key={`coord-aniv-${selectedTelefone}`}
+                                inicial={cliente.coordenadoraAniversario}
+                                rotulo="Aniversário da coordenadora"
+                                onSalvar={(v) => salvarAniversario("coordenadoraAniversario", v)}
+                            />
+                        </FieldGroup>
+
                         {/* ===== Diretora ===== */}
                         <div className="flex items-center gap-1.5 pt-1">
                             <UserRound className="w-3 h-3 text-brand-400/70" />
@@ -681,6 +717,15 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
                                 onBlur={onSave}
                                 placeholder="000.000.000-00"
                                 className="rounded-lg h-8 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b]"
+                            />
+                        </FieldGroup>
+
+                        <FieldGroup icon={<Cake className="w-3 h-3" />} label="Aniversário">
+                            <CampoAniversario
+                                key={`dir-aniv-${selectedTelefone}`}
+                                inicial={cliente.diretoraAniversario}
+                                rotulo="Aniversário da diretora"
+                                onSalvar={(v) => salvarAniversario("diretoraAniversario", v)}
                             />
                         </FieldGroup>
                     </div>
@@ -1301,6 +1346,38 @@ const ClienteDetailPanelInner = function ClienteDetailPanel({
 };
 
 export const ClienteDetailPanel = memo(ClienteDetailPanelInner);
+
+/**
+ * Campo de data com baseline próprio: guarda o último valor PERSISTIDO e só
+ * chama `onSalvar` quando o conteúdo mudou de verdade.
+ *
+ * O baseline mora aqui, e não na prop `cliente`, porque a prop não é
+ * recarregada depois de salvar: comparar com ela fazia "preencher e depois
+ * apagar" ser descartado em silêncio. Quem monta passa `key` com o telefone,
+ * então trocar de lead remonta com o valor certo.
+ */
+function CampoAniversario({ inicial, rotulo, onSalvar }: {
+    inicial: string | null;
+    rotulo: string;
+    onSalvar: (valor: string) => void;
+}) {
+    const [valor, setValor] = useState(inicial ?? "");
+    const [persistido, setPersistido] = useState(inicial ?? "");
+    return (
+        <input
+            type="date"
+            value={valor}
+            aria-label={rotulo}
+            onChange={(e) => setValor(e.target.value)}
+            onBlur={() => {
+                if (valor === persistido) return;
+                setPersistido(valor);
+                onSalvar(valor);
+            }}
+            className="w-full rounded-lg h-8 px-3 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20"
+        />
+    );
+}
 
 function FieldGroup({
     icon,
