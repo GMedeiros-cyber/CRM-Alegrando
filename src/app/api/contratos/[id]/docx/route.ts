@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { contentDisposition } from "@/lib/content-disposition";
-import { dadosDoContrato, gerarContratoDocx, nomeArquivoContrato } from "@/lib/contrato-docx";
+import { dadosDoContrato, gerarContratoDocx, motivoDoErroDocx, nomeArquivoContrato } from "@/lib/contrato-docx";
 import { DOCX_MIME, lerModelo, ModeloIndisponivel } from "@/lib/modelo-contrato-storage";
 
 /**
@@ -57,8 +57,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
             valor_por_aluno: numero(c.valor_por_aluno),
             valor_total: numero(c.valor_total),
         }, new Date()));
-    } catch {
-        console.error(`[contrato-docx] falha ao gerar o contrato ${id}`);
+    } catch (e) {
+        // Só os ids do erro (vêm do modelo, nunca do lead) — sem eles o log não
+        // diz se foi tag quebrada, laço aberto ou outra coisa.
+        console.error(`[contrato-docx] falha ao gerar o contrato ${id}: ${motivoDoErroDocx(e)}`);
         return texto("O modelo de contrato tem um problema. Envie uma versão corrigida em Modelos › Contrato.", 500);
     }
 

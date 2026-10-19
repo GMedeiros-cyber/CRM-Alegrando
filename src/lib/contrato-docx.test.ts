@@ -177,3 +177,19 @@ test("nome do arquivo: Contrato - {escola} - {data}.docx, sem caractere proibido
     assert.equal(nomeArquivoContrato('Escola A/B: "X"?', "2026-11-05"), "Contrato - Escola A-B X - 05-11-2026.docx");
     assert.equal(nomeArquivoContrato("", null), "Contrato - sem nome - sem data.docx");
 });
+
+// ---------- motivo do erro, para o log ----------
+
+import { motivoDoErroDocx } from "./contrato-docx";
+
+test("motivo do erro: os properties.id do docxtemplater, sem dado de lead", () => {
+    const quebrado = modeloSintetico([paragrafo(run("{escola e {#cnpj} sem fechar"))]);
+    let erro: unknown;
+    try { gerarContratoDocx(quebrado, dadosDoContrato(LEAD, CONTRATO, AGORA)); } catch (e) { erro = e; }
+    const motivo = motivoDoErroDocx(erro);
+    assert.match(motivo, /unclosed_tag/);
+    assert.match(motivo, /unclosed_loop/);
+    assert.ok(!motivo.includes("Escola Exemplo"), motivo);
+    assert.equal(motivoDoErroDocx(new Error("qualquer")), "Error");
+    assert.equal(motivoDoErroDocx("texto solto"), "desconhecido");
+});

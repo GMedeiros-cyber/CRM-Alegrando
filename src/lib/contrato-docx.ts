@@ -142,3 +142,15 @@ export function nomeArquivoContrato(escola: string | null, dataPasseio: string |
     const data = dataPasseio ? isoParaTexto(dataPasseio).replace(/\//g, "-") : "sem data";
     return `Contrato - ${limpo || "sem nome"} - ${data}.docx`;
 }
+
+/**
+ * Motivo de um erro do docxtemplater para o LOG: só os `properties.id`
+ * ("unclosed_tag", "multi_error", ...), que vêm do modelo e nunca carregam
+ * dado de lead. Nada de `explanation` nem de valores.
+ */
+export function motivoDoErroDocx(e: unknown): string {
+    if (typeof e !== "object" || e === null) return "desconhecido";
+    const p = (e as { properties?: { id?: string; errors?: ErroDeTag[] } }).properties;
+    const ids = [p?.id, ...(p?.errors ?? []).map((x) => x.properties?.id)].filter((x): x is string => !!x);
+    return ids.length ? [...new Set(ids)].join(", ") : ((e as { name?: string }).name ?? "desconhecido");
+}
