@@ -3,7 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth";
 import { z } from "zod";
-import { getSetting } from "@/lib/actions/settings";
+import { lerSetting } from "@/lib/settings-leitura";
 import { listLeadsWithUnreadEmail } from "@/lib/actions/emails";
 import { applyPlaceholders, mensagemPosPasseio } from "@/lib/settings_helper";
 import { diasDesdeOPasseio } from "@/lib/hora-sao-paulo";
@@ -878,11 +878,11 @@ export async function sendManualFollowup(telefone: string): Promise<{ success: b
     let mensagem: string;
     if (diffDias <= 1) {
         tipo = "avaliacao";
-        const template = await getSetting("avaliacao_mensagem");
+        const template = await lerSetting("avaliacao_mensagem");
         mensagem = applyPlaceholders(template, { nome, link_google: googleReviewLink });
     } else {
         tipo = "followup";
-        const template = await getSetting("followup_mensagem");
+        const template = await lerSetting("followup_mensagem");
         mensagem = applyPlaceholders(template, { nome, link_google: googleReviewLink });
     }
 
@@ -1041,8 +1041,8 @@ export async function sendPosPasseio(
         return { success: false, error: "Cliente não encontrado" };
     }
 
-    // getSetting nunca devolve null: cai no default de settings_helper.
-    const template = await getSetting("pos_passeio_mensagem");
+    // lerSetting nunca devolve null: cai no default de settings_helper.
+    const template = await lerSetting("pos_passeio_mensagem");
     const mensagem = mensagemPosPasseio(template, lead.nome ?? "", link);
     if (mensagem === null) {
         return { success: false, error: "Lead sem nome: preencha o nome antes de enviar o pós-passeio." };

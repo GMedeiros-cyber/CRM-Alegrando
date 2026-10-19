@@ -1,4 +1,4 @@
-import { getSetting } from "@/lib/actions/settings";
+import { lerSetting } from "@/lib/settings-leitura";
 import { CHAVES_MENSAGEM, LINK_GOOGLE_PADRAO, type ChaveMensagem } from "@/lib/mensagem-placeholders";
 import { ModelosAbas, type Aba } from "@/components/modelos/modelos-abas";
 import { infoModelos, type InfoModelos } from "@/lib/modelo-contrato-storage";
@@ -10,7 +10,7 @@ import { infoModelos, type InfoModelos } from "@/lib/modelo-contrato-storage";
 export default async function ModelosPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
     const { aba } = await searchParams;
     const textos = Object.fromEntries(
-        await Promise.all(CHAVES_MENSAGEM.map(async (c) => [c, await getSetting(c)] as const)),
+        await Promise.all(CHAVES_MENSAGEM.map(async (c) => [c, await lerSetting(c)] as const)),
     ) as Record<ChaveMensagem, string>;
     // O mesmo valor que o envio usa (cron e envio manual): a prévia mostra o link de verdade.
     const linkGoogle = process.env.GOOGLE_REVIEW_LINK || LINK_GOOGLE_PADRAO;

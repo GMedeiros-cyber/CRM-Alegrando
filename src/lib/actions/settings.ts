@@ -3,26 +3,23 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { requireAuth } from "@/lib/auth";
 
-import { SETTING_DEFAULTS } from "@/lib/settings_helper";
 import { validarSetting } from "@/lib/mensagem-placeholders";
+import { lerSetting } from "@/lib/settings-leitura";
 
 // =============================================
 // GET
 // =============================================
 
 /**
- * Busca uma configuração do CRM pela chave.
- * Retorna o valor salvo ou o fallback padrão.
+ * Busca uma configuração do CRM pela chave — para quem chama do NAVEGADOR.
+ * Exige sessão: server action pode ser invocada por qualquer página, inclusive
+ * as públicas do proxy (/sign-in), e sem esta checagem devolvia os textos a
+ * quem não está logado. Código de servidor (cron, actions que já fizeram
+ * requireAuth, páginas) usa `lerSetting` de lib/settings-leitura.ts.
  */
 export async function getSetting(chave: string): Promise<string> {
-    const supabase = createServerSupabaseClient();
-    const { data } = await supabase
-        .from("crm_settings")
-        .select("valor")
-        .eq("chave", chave)
-        .maybeSingle();
-
-    return data?.valor ?? SETTING_DEFAULTS[chave] ?? "";
+    await requireAuth();
+    return lerSetting(chave);
 }
 
 // =============================================

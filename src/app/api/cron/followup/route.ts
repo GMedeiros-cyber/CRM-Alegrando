@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
-import { getSetting } from "@/lib/actions/settings";
+import { lerSetting } from "@/lib/settings-leitura";
 import { applyPlaceholders } from "@/lib/settings_helper";
 import { telefoneMascarado } from "@/lib/log-redact";
 import { dentroDaJanelaFollowup, diasDesdeOPasseio } from "@/lib/hora-sao-paulo";
@@ -66,8 +66,8 @@ export async function POST(req: Request) {
 
     // Buscar templates configuráveis
     const [followupTemplate, avaliacaoTemplate] = await Promise.all([
-        getSetting("followup_mensagem"),
-        getSetting("avaliacao_mensagem"),
+        lerSetting("followup_mensagem"),
+        lerSetting("avaliacao_mensagem"),
     ]);
 
     // 2. Buscar leads elegíveis (followup só existe no canal alegrando)
