@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { FileText, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { FileDown, FileText, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
     createContrato,
@@ -152,6 +152,32 @@ export function ContratosBloco({ leadId, onToast }: {
         });
     }
 
+    const [gerando, setGerando] = useState<string | null>(null);
+
+    /**
+     * Baixa o .docx do contrato. fetch, e não <a href>: sem modelo enviado, um
+     * link abriria a página de erro em texto puro; assim o erro vira toast.
+     */
+    async function gerarDocx(c: Contrato) {
+        setGerando(c.id);
+        try {
+            const r = await fetch(`/api/contratos/${c.id}/docx`);
+            if (!r.ok) { onToast({ type: "error", text: await r.text() }); return; }
+            const cab = r.headers.get("Content-Disposition") ?? "";
+            const nome = decodeURIComponent(cab.match(/filename\*=UTF-8''([^;]+)/)?.[1] ?? "Contrato.docx");
+            const url = URL.createObjectURL(await r.blob());
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = nome;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        } catch {
+            onToast({ type: "error", text: "Não foi possível gerar o contrato agora. Tente de novo." });
+        } finally {
+            setGerando(null);
+        }
+    }
+
     function confirmarApagar() {
         const alvo = apagando;
         if (!alvo) return;
@@ -251,6 +277,11 @@ export function ContratosBloco({ leadId, onToast }: {
                         {c.observacoes && (
                             <p className="text-[10px] text-[#6366F1] dark:text-[#94a3b8] whitespace-pre-line line-clamp-2">{c.observacoes}</p>
                         )}
+                        <button type="button" onClick={() => gerarDocx(c)} disabled={gerando === c.id}
+                            className="w-full inline-flex items-center justify-center gap-1.5 h-10 md:h-7 mt-1 rounded-md border border-[#A5B4FC] dark:border-[#4a5568] text-[11px] font-semibold text-[#4338CA] dark:text-[#c7d2fe] hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] transition-colors disabled:opacity-60">
+                            {gerando === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />}
+                            Gerar contrato (.docx)
+                        </button>
                     </div>
                 )
             ))}

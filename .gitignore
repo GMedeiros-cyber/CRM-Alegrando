@@ -59,3 +59,6 @@ history.json
 e2e/__screenshots__/
 test-results/
 playwright-report/
+
+# Arquivos reais da Alegrando (modelo de contrato etc.) — o repo e publico
+.local/

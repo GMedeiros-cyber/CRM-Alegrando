@@ -3,16 +3,19 @@
 import { useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ChaveMensagem } from "@/lib/mensagem-placeholders";
+import type { InfoModelos } from "@/lib/contrato-campos";
 import { MensagensModelos } from "./mensagens-modelos";
+import { ContratoModelo } from "./contrato-modelo";
 
-const ABAS = [{ id: "mensagens", rotulo: "Mensagens" }] as const;
+const ABAS = [{ id: "mensagens", rotulo: "Mensagens" }, { id: "contrato", rotulo: "Contrato" }] as const;
 export type Aba = (typeof ABAS)[number]["id"];
 
 /** Abas de Modelos. Setas do teclado trocam de aba, como pede o padrão de tablist. */
-export function ModelosAbas({ abaInicial, textos, linkGoogle }: {
+export function ModelosAbas({ abaInicial, textos, linkGoogle, infoContrato }: {
     abaInicial: Aba;
     textos: Record<ChaveMensagem, string>;
     linkGoogle: string;
+    infoContrato: InfoModelos;
 }) {
     const [aba, setAba] = useState<Aba>(ABAS.some((a) => a.id === abaInicial) ? abaInicial : "mensagens");
     const botoes = useRef<Array<HTMLButtonElement | null>>([]);
@@ -54,6 +57,7 @@ export function ModelosAbas({ abaInicial, textos, linkGoogle }: {
 
             <div role="tabpanel" id={`painel-${aba}`} aria-labelledby={`aba-${aba}`}>
                 {aba === "mensagens" && <MensagensModelos textos={textos} linkGoogle={linkGoogle} />}
+                {aba === "contrato" && <ContratoModelo infoInicial={infoContrato} />}
             </div>
         </div>
     );

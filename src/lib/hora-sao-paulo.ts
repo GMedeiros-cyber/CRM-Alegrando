@@ -33,3 +33,15 @@ export function dentroDaJanelaFollowup(hora: string, agora: Date): boolean {
     const [h, m] = hora.split(":").map(Number);
     return Math.abs(minutosEmSaoPaulo(agora) - (h * 60 + m)) <= 59;
 }
+
+const DATA_EXTENSO_SP = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+});
+
+/** "19 de outubro de 2026" — o dia de São Paulo, mesmo quando o UTC já virou. */
+export function dataPorExtensoEmSaoPaulo(agora: Date): string {
+    return DATA_EXTENSO_SP.format(agora);
+}
