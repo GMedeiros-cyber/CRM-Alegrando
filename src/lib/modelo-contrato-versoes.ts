@@ -57,3 +57,68 @@ export async function infoVersoes(bucket: BucketModelos): Promise<InfoModelos> {
     };
     return { atual: achar("atual"), anterior: achar("anterior") };
 }
+
+// ===== Gravação: nenhum caminho de falha perde uma versão =====
+
+/** Cópia de segurança durante uma troca. Só sobra se o próprio desfazer falhar. */
+export const CAMINHO_TROCA = `${PASTA}/troca.docx`;
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+async function gravar(bucket: BucketModelos, caminho: string, bytes: Uint8Array): Promise<void> {
+    const { error } = await bucket.upload(caminho, bytes, { upsert: true, contentType: DOCX_MIME });
+    if (error) throw new ModeloIndisponivel(`gravar ${caminho}`, error);
+}
+
+/**
+ * As duas gravações de uma troca: `destino.caminho` recebe `destino.novo`, e
+ * depois `segundo.caminho` recebe `segundo.novo`. Antes da primeira, o conteúdo de `destino` vai
+ * para `CAMINHO_TROCA`. Se a segunda falhar, `destino` é restaurado; se até a
+ * restauração falhar, a cópia fica em `CAMINHO_TROCA` e o erro diz isso. Em
+ * nenhum caminho uma versão existe só na memória.
+ */
+async function gravarEmDoisPassos(
+    bucket: BucketModelos,
+    destino: { caminho: string; antigo: Uint8Array; novo: Uint8Array },
+    segundo: { caminho: string; novo: Uint8Array },
+): Promise<void> {
+    await gravar(bucket, CAMINHO_TROCA, destino.antigo);
+    try {
+        await gravar(bucket, destino.caminho, destino.novo);
+    } catch (e) {
+        await bucket.remove([CAMINHO_TROCA]); // nada mudou; a cópia era redundante
+        throw e;
+    }
+    try {
+        await gravar(bucket, segundo.caminho, segundo.novo);
+    } catch (e) {
+        try {
+            await gravar(bucket, destino.caminho, destino.antigo);
+        } catch {
+            throw new ModeloIndisponivel(`desfazer a troca (a versão sobrescrita está guardada em ${CAMINHO_TROCA})`, e);
+        }
+        await bucket.remove([CAMINHO_TROCA]);
+        throw e;
+    }
+    await bucket.remove([CAMINHO_TROCA]);
+}
+
+/** Envio de versão nova: o atual vira o anterior, o novo vira o atual. */
+export async function trocarVersao(bucket: BucketModelos, novo: Uint8Array): Promise<void> {
+    const [atual, anterior] = await Promise.all([lerVersao(bucket, "atual"), lerVersao(bucket, "anterior")]);
+    if (!atual) return gravar(bucket, CAMINHO.atual, novo);
+    if (!anterior) {
+        // Sem anterior não há o que perder: se a 2ª falhar, sobra uma cópia do atual.
+        await gravar(bucket, CAMINHO.anterior, atual);
+        return gravar(bucket, CAMINHO.atual, novo);
+    }
+    await gravarEmDoisPassos(bucket, { caminho: CAMINHO.anterior, antigo: anterior, novo: atual }, { caminho: CAMINHO.atual, novo });
+}
+
+/** Volta para a anterior trocando as duas de lugar — então "voltar" também se desfaz. */
+export async function voltarVersao(bucket: BucketModelos): Promise<boolean> {
+    const [atual, anterior] = await Promise.all([lerVersao(bucket, "atual"), lerVersao(bucket, "anterior")]);
+    if (!anterior) return false;
+    if (!atual) { await gravar(bucket, CAMINHO.atual, anterior); return true; }
+    await gravarEmDoisPassos(bucket, { caminho: CAMINHO.atual, antigo: atual, novo: anterior }, { caminho: CAMINHO.anterior, novo: atual });
+    return true;
+}
