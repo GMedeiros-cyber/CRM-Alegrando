@@ -270,16 +270,19 @@ export function PasseiosPanel() {
                             Usados pela IA para responder dúvidas dos leads.
                         </p>
                     </div>
-                    <div className="flex gap-2">
+                    {/* flex-wrap e h-10 no celular: a 320px a linha ia a 369px e os
+                        botões tinham 32px de altura (SKILL §3). A partir de md, igual. */}
+                    <div className="flex gap-2 flex-wrap">
                         <Button
                             variant={showCategorias ? "default" : "secondary"}
                             size="sm"
                             onClick={() => setShowCategorias((v) => !v)}
+                            className="h-10 md:h-8"
                         >
                             <FolderTree className="size-4" />
                             {showCategorias ? "Ocultar categorias" : "Categorias"}
                         </Button>
-                        <Button onClick={openCreate} size="sm">
+                        <Button onClick={openCreate} size="sm" className="h-10 md:h-8">
                             <Plus className="size-4" /> Novo Passeio
                         </Button>
                     </div>
@@ -295,17 +298,17 @@ export function PasseiosPanel() {
 
                 {/* Barra de filtros */}
                 <div className="flex items-center gap-2 flex-wrap">
-                    <div className="relative flex-1 min-w-[200px]">
+                    <div className="relative flex-1 min-w-[min(200px,100%)]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
                         <Input
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             placeholder="Buscar passeio..."
-                            className="pl-9 border-2 border-[#A5B4FC]/40 dark:border-[#3d4a60] hover:border-[#6366F1]/60 dark:hover:border-[#A5B4FC]/60 transition-colors"
+                            className="pl-9 h-10 md:h-9 border-2 border-[#A5B4FC]/40 dark:border-[#3d4a60] hover:border-[#6366F1]/60 dark:hover:border-[#A5B4FC]/60 transition-colors"
                         />
                     </div>
                     <Select value={filterCat} onValueChange={setFilterCat}>
-                        <SelectTrigger className="w-[180px] border-2 border-[#A5B4FC]/40 dark:border-[#3d4a60] hover:border-[#6366F1]/60 dark:hover:border-[#A5B4FC]/60 transition-colors">
+                        <SelectTrigger className="w-full sm:w-[180px] data-[size=default]:h-10 md:data-[size=default]:h-9 border-2 border-[#A5B4FC]/40 dark:border-[#3d4a60] hover:border-[#6366F1]/60 dark:hover:border-[#A5B4FC]/60 transition-colors">
                             <SelectValue placeholder="Categoria" />
                         </SelectTrigger>
                         <SelectContent>
@@ -322,7 +325,7 @@ export function PasseiosPanel() {
                         size="sm"
                         onClick={() => setSortOrder((o) => (o === "az" ? "za" : "az"))}
                         title={sortOrder === "az" ? "A → Z" : "Z → A"}
-                        className="border-2 border-[#A5B4FC]/40 dark:border-[#3d4a60] hover:border-[#6366F1]/60 dark:hover:border-[#A5B4FC]/60 transition-colors"
+                        className="h-10 md:h-8 border-2 border-[#A5B4FC]/40 dark:border-[#3d4a60] hover:border-[#6366F1]/60 dark:hover:border-[#A5B4FC]/60 transition-colors"
                     >
                         {sortOrder === "az" ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />}
                         {sortOrder === "az" ? "A → Z" : "Z → A"}
@@ -375,7 +378,7 @@ export function PasseiosPanel() {
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                                            <Button variant="ghost" size="sm" onClick={() => openEdit(p)} aria-label="Editar">
+                                            <Button variant="ghost" size="sm" onClick={() => openEdit(p)} aria-label="Editar" className="h-10 md:h-8">
                                                 <Pencil className="size-4" />
                                             </Button>
                                             <Button
@@ -383,7 +386,7 @@ export function PasseiosPanel() {
                                                 size="sm"
                                                 onClick={() => handleDelete(p)}
                                                 aria-label="Excluir"
-                                                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                                                className="h-10 md:h-8 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
                                             >
                                                 <Trash2 className="size-4" />
                                             </Button>
