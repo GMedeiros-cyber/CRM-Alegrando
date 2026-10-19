@@ -3,15 +3,14 @@
 import { useRef } from "react";
 import { CheckCheck, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { inserirNoCursor, partesDaMensagem, type Placeholder } from "@/lib/mensagem-placeholders";
+import { inserirNoCursor, previaDaMensagem, type Placeholder } from "@/lib/mensagem-placeholders";
 
 /**
  * Editor de mensagem automática: blocos de placeholder, a caixa de texto puro
  * e a prévia como balão do WhatsApp.
  *
- * Genérico de propósito — recebe o catálogo por prop. Hoje só a mensagem de
- * aniversário usa; follow-up, avaliação e pós-passeio seguem na textarea
- * simples até migrarem.
+ * Genérico de propósito — recebe o catálogo por prop (`catalogoDaMensagem`).
+ * As quatro mensagens de Modelos › Mensagens usam este editor.
  *
  * O que fica gravado é o texto da caixa (`Olá {nome}!`). Os blocos só
  * escrevem `{chave}` nela: clique insere no cursor; arrastar usa o drop
@@ -41,7 +40,8 @@ export function EditorMensagem({ valor, onChange, placeholders, rotuloId, invali
         });
     }
 
-    const partes = partesDaMensagem(valor, placeholders);
+    // Mesma função do envio (applyPlaceholders), com os exemplos do catálogo.
+    const partes = previaDaMensagem(valor, placeholders);
 
     return (
         <div className="space-y-3">
@@ -58,7 +58,7 @@ export function EditorMensagem({ valor, onChange, placeholders, rotuloId, invali
                         onClick={() => inserir(p)}
                         aria-label={`Inserir ${p.rotulo} no texto`}
                         title={`Clique para inserir onde está o cursor, ou arraste para o texto. Vira ${p.exemplo} na mensagem.`}
-                        className="inline-flex items-center gap-1 h-7 pl-1.5 pr-2.5 rounded-md border border-[#A5B4FC] dark:border-[#4a5568] bg-[#EEF2FF] dark:bg-[#1e2536] text-xs font-semibold text-[#4338CA] dark:text-[#c7d2fe] hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366F1]/50 transition-colors"
+                        className="inline-flex items-center gap-1 h-10 md:h-7 pl-1.5 pr-2.5 rounded-md border border-[#A5B4FC] dark:border-[#4a5568] bg-[#EEF2FF] dark:bg-[#1e2536] text-xs font-semibold text-[#4338CA] dark:text-[#c7d2fe] hover:bg-[#E0E7FF] dark:hover:bg-[#2d3347] cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366F1]/50 transition-colors"
                     >
                         <GripVertical className="w-3.5 h-3.5 opacity-60" aria-hidden />
                         {p.rotulo}

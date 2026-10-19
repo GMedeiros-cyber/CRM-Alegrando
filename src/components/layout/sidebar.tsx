@@ -12,6 +12,7 @@ import {
     CalendarDays,
     ClipboardCheck,
     Mail,
+    FileText,
     Settings,
     Menu,
     X,
@@ -29,6 +30,7 @@ const navigation = [
     { name: "Agenda", href: "/agenda", icon: CalendarDays },
     { name: "Tarefas", href: "/tarefas", icon: ClipboardCheck },
     { name: "E-mails", href: "/emails", icon: Mail },
+    { name: "Modelos", href: "/modelos", icon: FileText },
     { name: "Configurações", href: "/configuracoes", icon: Settings },
 ];
 

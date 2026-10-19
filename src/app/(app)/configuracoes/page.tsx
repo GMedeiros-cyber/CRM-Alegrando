@@ -1,80 +1,11 @@
-"use client";
-
-import { useState, useEffect, useTransition } from "react";
-import { getSetting, updateSetting } from "@/lib/actions/settings";
-import { SETTING_DEFAULTS } from "@/lib/settings_helper";
+import Link from "next/link";
 import { PasseiosPanel } from "@/components/configuracoes/passeios-panel";
-import { EditorMensagem } from "@/components/configuracoes/editor-mensagem";
-import { PLACEHOLDERS_ANIVERSARIO, validarMensagem } from "@/lib/mensagem-placeholders";
 
-const POS_PASSEIO_DEFAULT =
-    "Olá {nome}! 🎉 Foi um prazer ter você no passeio! Caso queira ver as fotos ou deixar uma avaliação, o link está aqui: {link}";
-
+/**
+ * Configurações ficou só com a base de conhecimento do assistente (RAG). As
+ * mensagens automáticas e o contrato foram para Modelos (19/10/2026).
+ */
 export default function ConfiguracoesPage() {
-    const [followupMsg, setFollowupMsg] = useState("");
-    const [posPasseioMsg, setPosPasseioMsg] = useState("");
-    const [aniversarioMsg, setAniversarioMsg] = useState("");
-    const [aniversarioInvalido, setAniversarioInvalido] = useState(false);
-    const [saved, setSaved] = useState(false);
-    const [error, setError] = useState("");
-    const [isPending, startTransition] = useTransition();
-
-    useEffect(() => {
-        async function load() {
-            try {
-                const [followup, posPasseio, aniversario] = await Promise.all([
-                    getSetting("followup_mensagem"),
-                    getSetting("pos_passeio_mensagem"),
-                    getSetting("aniversario_mensagem"),
-                ]);
-                setFollowupMsg(followup);
-                setPosPasseioMsg(posPasseio || POS_PASSEIO_DEFAULT);
-                setAniversarioMsg(aniversario);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "Erro ao carregar configurações");
-            }
-        }
-
-        load();
-    }, []);
-
-    function handleSave() {
-        setSaved(false);
-        setError("");
-
-        // Placeholder que o envio não sabe preencher chegaria literal ao
-        // cliente ("Olá {nmoe}!"): não deixa salvar, e diz qual é.
-        const erroAniversario = validarMensagem(aniversarioMsg, PLACEHOLDERS_ANIVERSARIO);
-        if (erroAniversario) {
-            setAniversarioInvalido(true);
-            setError(`Mensagem de aniversário: ${erroAniversario}`);
-            return;
-        }
-
-        startTransition(async () => {
-            try {
-                await Promise.all([
-                    updateSetting("followup_mensagem", followupMsg),
-                    updateSetting("pos_passeio_mensagem", posPasseioMsg),
-                    updateSetting("aniversario_mensagem", aniversarioMsg),
-                ]);
-                setSaved(true);
-                setTimeout(() => setSaved(false), 3000);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "Erro ao salvar");
-            }
-        });
-    }
-
-    function handleResetFollowup() {
-        const defaultValue = SETTING_DEFAULTS.followup_mensagem || "";
-        setFollowupMsg(defaultValue);
-    }
-
-    function handleResetPosPasseio() {
-        setPosPasseioMsg(POS_PASSEIO_DEFAULT);
-    }
-
     return (
         <div className="space-y-8 max-w-6xl">
             <div className="bento-enter">
@@ -82,139 +13,13 @@ export default function ConfiguracoesPage() {
                     Configurações
                 </h1>
                 <p className="text-muted-foreground mt-1">
-                    Personalize as mensagens automáticas do CRM.
+                    A base de conhecimento do assistente. As mensagens automáticas e o contrato ficam em{" "}
+                    <Link href="/modelos" className="font-medium text-[#4338CA] dark:text-[#c7d2fe] underline underline-offset-2">
+                        Modelos
+                    </Link>
+                    .
                 </p>
             </div>
-
-            {/* Bloco Follow-up */}
-            <div className="rounded-xl border bg-card p-6 space-y-4 bento-enter [animation-delay:150ms]">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h2 className="text-lg font-semibold text-[#191918] dark:text-white">
-                            Mensagem de Follow-up
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                            Enviada automaticamente após o número de dias configurado no lead.
-                        </p>
-                    </div>
-                    <button
-                        onClick={handleResetFollowup}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
-                    >
-                        Restaurar padrão
-                    </button>
-                </div>
-                <textarea
-                    value={followupMsg}
-                    onChange={(e) => setFollowupMsg(e.target.value)}
-                    rows={7}
-                    className="w-full rounded-lg border border-[#C7D2FE] dark:border-[#3d4a60] bg-[#F0F4FF] dark:bg-[#1e2536] px-4 py-3 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50 text-[#191918] dark:text-white font-medium placeholder:text-[#9B9A97] dark:placeholder:text-[#94a3b8]"
-                    placeholder="Mensagem de follow-up..."
-                />
-            </div>
-
-            <div className="rounded-xl border border-dashed bg-muted/30 p-5 bento-enter [animation-delay:200ms]">
-                <h3 className="text-sm font-semibold mb-2 text-[#191918] dark:text-white">
-                    Variáveis disponíveis
-                </h3>
-                <div className="flex flex-wrap gap-3 text-sm">
-                    <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
-                        {"{{nome}}"}
-                    </code>
-                    <span className="text-muted-foreground">→ Nome do cliente</span>
-                </div>
-            </div>
-
-            {/* Bloco Pós-Passeio */}
-            <div className="rounded-xl border bg-card p-6 space-y-4 bento-enter [animation-delay:250ms]">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h2 className="text-lg font-semibold text-[#191918] dark:text-white">
-                            Mensagem de Pós-Passeio
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                            Enviada manualmente após cada passeio. Escreva o texto livremente — inclua o link das fotos ou de avaliação diretamente no texto onde quiser.
-                        </p>
-                    </div>
-                    <button
-                        onClick={handleResetPosPasseio}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
-                    >
-                        Restaurar padrão
-                    </button>
-                </div>
-                <textarea
-                    value={posPasseioMsg}
-                    onChange={(e) => setPosPasseioMsg(e.target.value)}
-                    rows={7}
-                    className="w-full rounded-lg border border-[#C7D2FE] dark:border-[#3d4a60] bg-[#F0F4FF] dark:bg-[#1e2536] px-4 py-3 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-[#6366F1]/50 text-[#191918] dark:text-white font-medium placeholder:text-[#9B9A97] dark:placeholder:text-[#94a3b8]"
-                    placeholder="Mensagem de pós-passeio..."
-                />
-            </div>
-
-            <div className="rounded-xl border border-dashed bg-muted/30 p-5 bento-enter [animation-delay:300ms]">
-                <h3 className="text-sm font-semibold mb-2 text-[#191918] dark:text-white">
-                    Variáveis disponíveis
-                </h3>
-                <div className="flex flex-wrap gap-3 text-sm">
-                    <div className="flex items-center gap-1.5">
-                        <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
-                            {"{nome}"}
-                        </code>
-                        <span className="text-muted-foreground">→ Nome do cliente</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
-                            {"{link}"}
-                        </code>
-                        <span className="text-muted-foreground">→ Link que será colado na hora do envio (fotos, Drive, avaliação etc.)</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Bloco Aniversário — primeiro a usar o EditorMensagem */}
-            <div className="rounded-xl border bg-card p-6 space-y-4 bento-enter [animation-delay:350ms]">
-                <div>
-                    <h2 id="titulo-aniversario" className="text-lg font-semibold text-[#191918] dark:text-white">
-                        Mensagem de aniversário
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                        Texto do parabéns para a coordenadora e a diretora, no dia do aniversário.
-                    </p>
-                </div>
-                <EditorMensagem
-                    valor={aniversarioMsg}
-                    onChange={(v) => {
-                        setAniversarioMsg(v);
-                        // Mexeu no texto que bloqueou: o aviso deixa de valer.
-                        if (aniversarioInvalido) { setAniversarioInvalido(false); setError(""); }
-                    }}
-                    placeholders={PLACEHOLDERS_ANIVERSARIO}
-                    rotuloId="titulo-aniversario"
-                    invalido={aniversarioInvalido}
-                />
-            </div>
-
-            <div className="flex items-center gap-4 bento-enter [animation-delay:400ms]">
-                <button
-                    onClick={handleSave}
-                    disabled={isPending}
-                    className="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                    {isPending ? "Salvando..." : "Salvar alterações"}
-                </button>
-                {saved && (
-                    <span className="text-sm text-green-600 font-medium animate-in fade-in">
-                        Salvo com sucesso!
-                    </span>
-                )}
-                {/* Sempre montado: aria-live só anuncia se a região já existia. */}
-                <span role="status" aria-live="polite" className="text-sm text-red-600 dark:text-red-400 font-medium">
-                    {error}
-                </span>
-            </div>
-
-            <hr className="border-border/50" />
 
             <PasseiosPanel />
         </div>

@@ -7,12 +7,54 @@
  * `{{x}}`. Por isso a prévia também reconhece as duas formas.
  */
 
+import { applyPlaceholders, type VarsPlaceholder } from "./settings_helper";
+
 export type Placeholder = { chave: string; rotulo: string; exemplo: string };
 
-/** Catálogo da mensagem de aniversário: só o nome de quem faz aniversário. */
-export const PLACEHOLDERS_ANIVERSARIO: Placeholder[] = [
-    { chave: "nome", rotulo: "Nome", exemplo: "Maria Fernanda Souza" },
-];
+/** As mensagens automáticas editáveis em Modelos › Mensagens. */
+export const CHAVES_MENSAGEM = [
+    "aniversario_mensagem",
+    "followup_mensagem",
+    "avaliacao_mensagem",
+    "pos_passeio_mensagem",
+] as const;
+export type ChaveMensagem = (typeof CHAVES_MENSAGEM)[number];
+
+/**
+ * O mesmo fallback do envio (`process.env.GOOGLE_REVIEW_LINK || ...` no cron e
+ * em `sendManualFollowup`). Quem tem o env passa o valor real para a prévia.
+ */
+export const LINK_GOOGLE_PADRAO = "https://g.page/alegrando";
+
+/**
+ * Catálogo de cada mensagem = o que o código de envio DELA preenche (medido em
+ * 19/10/2026), não o que a tela gostaria:
+ * - aniversário: `{ nome }` — o disparo (ainda fora do ar) só passa o nome;
+ * - follow-up e avaliação: `{ nome, link_google }` — cron e envio manual
+ *   passam os dois aos dois textos;
+ * - pós-passeio: `{ nome, link }` — o link colado no painel na hora do envio.
+ */
+export function catalogoDaMensagem(chave: ChaveMensagem, linkGoogle: string = LINK_GOOGLE_PADRAO): Placeholder[] {
+    const nomeLead: Placeholder = { chave: "nome", rotulo: "Nome", exemplo: "Escola Monte Verde" };
+    switch (chave) {
+        case "aniversario_mensagem":
+            return [{ chave: "nome", rotulo: "Nome", exemplo: "Maria Fernanda Souza" }];
+        case "followup_mensagem":
+        case "avaliacao_mensagem":
+            return [nomeLead, { chave: "link_google", rotulo: "Link de avaliação no Google", exemplo: linkGoogle }];
+        case "pos_passeio_mensagem":
+            return [nomeLead, { chave: "link", rotulo: "Link colado no envio", exemplo: "https://drive.google.com/drive/folders/exemplo" }];
+    }
+}
+
+/**
+ * Validação do lado do servidor (`updateSetting`): só para as mensagens.
+ * `null` = pode gravar. Outras chaves de `crm_settings` passam direto.
+ */
+export function validarSetting(chave: string, valor: string): string | null {
+    if (!(CHAVES_MENSAGEM as readonly string[]).includes(chave)) return null;
+    return validarMensagem(valor, catalogoDaMensagem(chave as ChaveMensagem));
+}
 
 export type ParteMensagem =
     | { tipo: "texto"; valor: string }
@@ -37,6 +79,17 @@ export function partesDaMensagem(texto: string, catalogo: Placeholder[]): ParteM
     }
     if (desde < texto.length) partes.push({ tipo: "texto", valor: texto.slice(desde) });
     return partes;
+}
+
+/**
+ * A prévia passa pela MESMA função do envio (`applyPlaceholders`), com os
+ * exemplos do catálogo no lugar dos valores reais — o que aparece no balão é
+ * o que sairia. O que sobra entre chaves é o que o envio mandaria literal ao
+ * cliente, e vem marcado.
+ */
+export function previaDaMensagem(texto: string, catalogo: Placeholder[]): ParteMensagem[] {
+    const exemplos = Object.fromEntries(catalogo.map((p) => [p.chave, p.exemplo])) as VarsPlaceholder;
+    return partesDaMensagem(applyPlaceholders(texto, exemplos), []);
 }
 
 /** `null` se pode salvar; senão, o aviso que diz o que corrigir. */

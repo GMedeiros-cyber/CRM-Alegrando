@@ -10,6 +10,11 @@ export const SETTING_DEFAULTS: Record<string, string> = {
         "Olá {nome}! 🎉 Foi um prazer ter você no passeio! Caso queira ver as fotos ou deixar uma avaliação, o link está aqui: {link}",
     avaliacao_mensagem:
         "Olá {{nome}}! 😊\n\nEsperamos que o passeio tenha sido incrível para todos!\n\nSe puder, deixa uma avaliação pra gente no Google — ajuda muito a Alegrando a levar mais crianças a experiências incríveis! 🌟\n\n{{link_google}}",
+    // Mesmo texto da seed em supabase/migrations/20261013143000_*. É o que o
+    // "Restaurar padrão" de Modelos põe na caixa, e o que getSetting devolve se
+    // a linha faltar.
+    aniversario_mensagem:
+        "Olá {nome}! 🎉\n\nA equipe da Alegrando passou para desejar um feliz aniversário! Que o seu dia seja tão especial quanto as experiências que você proporciona para as crianças.\n\nUm abraço de todos nós! 🥳",
 };
 
 /** Nome do placeholder → valor. `link` é apelido de `link_google`. */
@@ -37,6 +42,20 @@ const PLACEHOLDER = /\{\{?\s*([a-z_]+)\s*\}?\}/gi;
  * Substitui TODAS as ocorrências: o `.replace()` com string trocava só a
  * primeira, então um texto com dois `{nome}` saía meio preenchido.
  */
+/**
+ * Texto do pós-passeio, pela mesma substituição do resto (`applyPlaceholders`).
+ *
+ * Antes era `.replace("{nome}").replace("{link}")`: só a primeira ocorrência,
+ * só chave simples, e lead sem nome saía "Olá !". Para os textos atuais o
+ * resultado é o mesmo (teste em settings_helper.test.ts). Sem nome devolve
+ * `null`: `applyPlaceholders` deixaria `{nome}` literal, e o envio é imediato,
+ * sem ninguém revisar — melhor recusar e pedir o nome.
+ */
+export function mensagemPosPasseio(template: string, nome: string, link: string): string | null {
+    if (!nome.trim()) return null;
+    return applyPlaceholders(template, { nome, link });
+}
+
 export function applyPlaceholders(template: string, vars: VarsPlaceholder): string {
     // Um link só, dois nomes: tanto faz qual o texto usa e qual quem chama
     // passou. Resolver só num sentido deixava `{{link_google}}` literal

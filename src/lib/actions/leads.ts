@@ -5,7 +5,7 @@ import { requireAuth } from "@/lib/auth";
 import { z } from "zod";
 import { getSetting } from "@/lib/actions/settings";
 import { listLeadsWithUnreadEmail } from "@/lib/actions/emails";
-import { applyPlaceholders } from "@/lib/settings_helper";
+import { applyPlaceholders, mensagemPosPasseio } from "@/lib/settings_helper";
 import { canalDaConsulta } from "@/lib/canal";
 import type { LabelColor, LeadLabel } from "@/lib/types/labels";
 
@@ -1043,12 +1043,12 @@ export async function sendPosPasseio(
         return { success: false, error: "Cliente não encontrado" };
     }
 
-    const template = await getSetting("pos_passeio_mensagem") ??
-        "Olá {nome}! 🎉 Foi um prazer ter você no passeio! {link}";
-
-    const mensagem = template
-        .replace("{nome}", lead.nome ?? "")
-        .replace("{link}", link);
+    // getSetting nunca devolve null: cai no default de settings_helper.
+    const template = await getSetting("pos_passeio_mensagem");
+    const mensagem = mensagemPosPasseio(template, lead.nome ?? "", link);
+    if (mensagem === null) {
+        return { success: false, error: "Lead sem nome: preencha o nome antes de enviar o pós-passeio." };
+    }
 
     const tel = String(lead.telefone);
     const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
