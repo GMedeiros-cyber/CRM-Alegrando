@@ -895,7 +895,8 @@ export async function sendManualFollowup(telefone: string): Promise<{ success: b
     await supabase.from("messages").insert({
         telefone: lead.telefone,
         canal: "alegrando",
-        sender_type: "humano",
+        // 'equipe', como o resto: a trava de 23h do cron não enxerga 'humano'.
+        sender_type: "equipe",
         sender_name: "Alegrando",
         content: mensagem,
     });
@@ -1057,7 +1058,7 @@ export async function sendPosPasseio(
         await supabase.from("messages").insert({
             telefone: tel,
             canal: "alegrando",
-            sender_type: "humano",
+            sender_type: "equipe", // idem: 'humano' some da trava de 23h
             sender_name: "Alegrando",
             content: mensagem,
         });
