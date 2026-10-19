@@ -6,7 +6,10 @@ import { infoModelos, trocarModelo, voltarParaAnterior, type InfoModelos } from 
 
 // Arquivo "use server": só funções async exportadas (SKILL §8, item 11).
 
-type Resultado = { ok: true; info: InfoModelos } | { ok: false; error: string };
+/** `info: null` = gravou, mas a releitura do bucket falhou agora. */
+type Resultado = { ok: true; info: InfoModelos | null } | { ok: false; error: string };
+
+const releitura = () => infoModelos().catch((e) => { console.error("[modelos]", e instanceof Error ? e.message : e); return null; });
 
 export async function infoModeloContrato(): Promise<InfoModelos> {
     await requireAuth();
@@ -33,7 +36,7 @@ export async function enviarModeloContrato(form: FormData): Promise<Resultado> {
         console.error("[modelos] falha ao gravar modelo de contrato:", e instanceof Error ? e.message : e);
         return { ok: false, error: "Não foi possível guardar o modelo agora. Tente de novo." };
     }
-    return { ok: true, info: await infoModelos() };
+    return { ok: true, info: await releitura() };
 }
 
 export async function voltarModeloAnterior(): Promise<Resultado> {
@@ -44,5 +47,5 @@ export async function voltarModeloAnterior(): Promise<Resultado> {
         console.error("[modelos] falha ao voltar o modelo:", e instanceof Error ? e.message : e);
         return { ok: false, error: "Não foi possível voltar para a versão anterior agora." };
     }
-    return { ok: true, info: await infoModelos() };
+    return { ok: true, info: await releitura() };
 }

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { contentDisposition } from "@/lib/content-disposition";
 import { dadosDoContrato, gerarContratoDocx, nomeArquivoContrato } from "@/lib/contrato-docx";
-import { DOCX_MIME, lerModelo } from "@/lib/modelo-contrato-storage";
+import { DOCX_MIME, lerModelo, ModeloIndisponivel } from "@/lib/modelo-contrato-storage";
 
 /**
  * Gera o contrato em Word de UMA linha de `contratos`, na hora, a partir do
@@ -38,7 +38,16 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         .maybeSingle();
     if (!lead) return texto("O lead deste contrato não foi encontrado.", 404);
 
-    const modelo = await lerModelo("atual");
+    let modelo: Uint8Array | null;
+    try {
+        modelo = await lerModelo("atual");
+    } catch (e) {
+        // Falha de leitura NÃO é "nenhum modelo": a tela diria para enviar um
+        // modelo que já existe.
+        if (!(e instanceof ModeloIndisponivel)) throw e;
+        console.error(`[contrato-docx] ${e.message} (contrato ${id})`);
+        return texto("Não consegui ler o modelo de contrato agora. Tente de novo em instantes.", 503);
+    }
     if (!modelo) return texto("Nenhum modelo de contrato foi enviado ainda. Envie em Modelos › Contrato.", 409);
 
     let docx: Buffer;

@@ -16,7 +16,7 @@ const BOTAO = "inline-flex items-center justify-center gap-2 h-10 md:h-9 px-4 ro
  * só troca os campos `{…}`. O contrato de cada passeio sai do bloco de
  * contratos do lead ("Gerar contrato (.docx)").
  */
-export function ContratoModelo({ infoInicial }: { infoInicial: InfoModelos }) {
+export function ContratoModelo({ infoInicial }: { infoInicial: InfoModelos | null }) {
     const [info, setInfo] = useState(infoInicial);
     const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
     const [ocupado, startOcupado] = useTransition();
@@ -53,7 +53,9 @@ export function ContratoModelo({ infoInicial }: { infoInicial: InfoModelos }) {
                 <div className="space-y-1.5">
                     <h2 id="titulo-modelo-contrato" className="text-lg font-semibold text-[#191918] dark:text-white">Modelo de contrato</h2>
                     <p className="text-sm text-muted-foreground">
-                        {info.atual ? `Versão em uso enviada em ${quando(info.atual.atualizadoEm)}.` : "Nenhum modelo enviado ainda."}
+                        {info === null
+                            ? "Não consegui ler o modelo agora. Recarregue a página em instantes."
+                            : info.atual ? `Versão em uso enviada em ${quando(info.atual.atualizadoEm)}.` : "Nenhum modelo enviado ainda."}
                     </p>
                     <p className="text-sm text-muted-foreground">
                         Baixe, ajuste no Word mantendo os campos entre chaves e envie a nova versão (arquivo .docx de até
@@ -64,8 +66,8 @@ export function ContratoModelo({ infoInicial }: { infoInicial: InfoModelos }) {
                 <div className="flex flex-wrap items-center gap-2">
                     <a
                         href="/api/modelos/contrato"
-                        aria-disabled={!info.atual}
-                        className={cn(BOTAO, "bg-primary text-primary-foreground hover:opacity-90", !info.atual && "opacity-50 pointer-events-none")}
+                        aria-disabled={info?.atual === null}
+                        className={cn(BOTAO, "bg-primary text-primary-foreground hover:opacity-90", info?.atual === null && "opacity-50 pointer-events-none")}
                     >
                         <Download className="w-4 h-4" aria-hidden /> Baixar modelo atual
                     </a>
@@ -90,8 +92,8 @@ export function ContratoModelo({ infoInicial }: { infoInicial: InfoModelos }) {
                     <button
                         type="button"
                         onClick={voltar}
-                        disabled={ocupado || !info.anterior}
-                        title={info.anterior ? `Anterior enviada em ${quando(info.anterior.atualizadoEm)}` : "Não há versão anterior guardada"}
+                        disabled={ocupado || !info?.anterior}
+                        title={info?.anterior ? `Anterior enviada em ${quando(info.anterior.atualizadoEm)}` : "Não há versão anterior guardada"}
                         className={cn(BOTAO, "sm:ml-auto text-muted-foreground hover:text-foreground hover:bg-muted")}
                     >
                         <RotateCcw className="w-4 h-4" aria-hidden /> Voltar para a versão anterior

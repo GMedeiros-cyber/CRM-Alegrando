@@ -15,7 +15,7 @@ export function ModelosAbas({ abaInicial, textos, linkGoogle, infoContrato }: {
     abaInicial: Aba;
     textos: Record<ChaveMensagem, string>;
     linkGoogle: string;
-    infoContrato: InfoModelos;
+    infoContrato: InfoModelos | null;
 }) {
     const [aba, setAba] = useState<Aba>(ABAS.some((a) => a.id === abaInicial) ? abaInicial : "mensagens");
     const botoes = useRef<Array<HTMLButtonElement | null>>([]);

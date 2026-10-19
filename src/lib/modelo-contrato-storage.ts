@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { InfoModelos } from "@/lib/contrato-campos";
+import { CAMINHO, infoVersoes, lerVersao, type BucketModelos, type VersaoModelo } from "@/lib/modelo-contrato-versoes";
 
 /**
  * O modelo do contrato mora no bucket `modelos` do Supabase: PRIVADO, só
@@ -8,37 +9,32 @@ import type { InfoModelos } from "@/lib/contrato-campos";
  * nunca entra no git (fica em `.local/`, ignorado).
  *
  * Duas versões, para dar volta: `contrato/atual.docx` e `contrato/anterior.docx`.
+ * A lógica de leitura (e o que é "não existe" x "não consegui ler") está em
+ * `modelo-contrato-versoes.ts`; aqui só se liga o Supabase.
  */
 const BUCKET = "modelos";
-const CAMINHO = { atual: "contrato/atual.docx", anterior: "contrato/anterior.docx" } as const;
-export type VersaoModelo = keyof typeof CAMINHO;
 export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+export { ModeloIndisponivel } from "@/lib/modelo-contrato-versoes";
+export type { InfoModelos, VersaoModelo };
 
-export async function lerModelo(versao: VersaoModelo): Promise<Uint8Array | null> {
-    const { data, error } = await createServerSupabaseClient().storage.from(BUCKET).download(CAMINHO[versao]);
-    if (error || !data) return null;
-    return new Uint8Array(await data.arrayBuffer());
-}
+const bucket = (): BucketModelos => createServerSupabaseClient().storage.from(BUCKET);
+
+/** Bytes da versão; `null` só se ela não existe. Falha de leitura lança `ModeloIndisponivel`. */
+export const lerModelo = (versao: VersaoModelo) => lerVersao(bucket(), versao);
+
+/** Quando cada versão foi gravada. Falha ao listar lança `ModeloIndisponivel`. */
+export const infoModelos = (): Promise<InfoModelos> => infoVersoes(bucket());
 
 async function gravar(versao: VersaoModelo, bytes: Uint8Array): Promise<void> {
-    const { error } = await createServerSupabaseClient().storage
-        .from(BUCKET)
-        .upload(CAMINHO[versao], bytes, { upsert: true, contentType: DOCX_MIME });
-    if (error) throw new Error(`Falha ao gravar o modelo (${versao}): ${error.message}`);
+    const { error } = await bucket().upload(CAMINHO[versao], bytes, { upsert: true, contentType: DOCX_MIME });
+    if (error) throw new Error(`Falha ao gravar o modelo (${versao}): ${(error as { message?: string }).message ?? error}`);
 }
 
-export type { InfoModelos };
-
-export async function infoModelos(): Promise<InfoModelos> {
-    const { data } = await createServerSupabaseClient().storage.from(BUCKET).list("contrato");
-    const achar = (nome: string) => {
-        const o = data?.find((x) => x.name === nome);
-        return o ? { atualizadoEm: o.updated_at ?? o.created_at ?? "" } : null;
-    };
-    return { atual: achar("atual.docx"), anterior: achar("anterior.docx") };
-}
-
-/** O atual vira o anterior, o novo vira o atual. */
+/**
+ * O atual vira o anterior, o novo vira o atual. Se a leitura do atual falhar,
+ * `lerModelo` lança e nada é gravado — antes, a falha virava "não existe" e o
+ * atual era sobrescrito sem ir para o anterior.
+ */
 export async function trocarModelo(novo: Uint8Array): Promise<void> {
     const atual = await lerModelo("atual");
     if (atual) await gravar("anterior", atual);

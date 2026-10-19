@@ -1,7 +1,7 @@
 import { getSetting } from "@/lib/actions/settings";
 import { CHAVES_MENSAGEM, LINK_GOOGLE_PADRAO, type ChaveMensagem } from "@/lib/mensagem-placeholders";
 import { ModelosAbas, type Aba } from "@/components/modelos/modelos-abas";
-import { infoModelos } from "@/lib/modelo-contrato-storage";
+import { infoModelos, type InfoModelos } from "@/lib/modelo-contrato-storage";
 
 /**
  * Modelos: o que sai do CRM com texto pronto — as mensagens automáticas e o
@@ -14,7 +14,13 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
     ) as Record<ChaveMensagem, string>;
     // O mesmo valor que o envio usa (cron e envio manual): a prévia mostra o link de verdade.
     const linkGoogle = process.env.GOOGLE_REVIEW_LINK || LINK_GOOGLE_PADRAO;
-    const infoContrato = await infoModelos();
+    // null = não consegui ler o bucket agora (a aba diz isso, e não "nenhum modelo").
+    let infoContrato: InfoModelos | null = null;
+    try {
+        infoContrato = await infoModelos();
+    } catch (e) {
+        console.error("[modelos]", e instanceof Error ? e.message : e);
+    }
 
     return (
         <div className="space-y-6 max-w-6xl">
