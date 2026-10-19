@@ -45,3 +45,26 @@ const DATA_EXTENSO_SP = new Intl.DateTimeFormat("pt-BR", {
 export function dataPorExtensoEmSaoPaulo(agora: Date): string {
     return DATA_EXTENSO_SP.format(agora);
 }
+
+const DIA_SP = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+});
+
+/** 'YYYY-MM-DD' de hoje em São Paulo, qualquer que seja o fuso do processo. */
+export function diaEmSaoPaulo(agora: Date): string {
+    return DIA_SP.format(agora);
+}
+
+/**
+ * Dias desde o passeio (`ultimo_passeio`, coluna date 'YYYY-MM-DD'), com o
+ * "hoje" de São Paulo. Antes era `setHours(0,0,0,0)` no fuso do processo: na
+ * Vercel (UTC) um clique depois das 21h de Brasília já contava o dia
+ * seguinte; no dev (Brasília) o passeio de ontem virava D+2.
+ */
+export function diasDesdeOPasseio(ultimoPasseio: string, agora: Date): number {
+    const meiaNoiteUTC = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
+    return Math.round((meiaNoiteUTC(diaEmSaoPaulo(agora)) - meiaNoiteUTC(ultimoPasseio)) / 86_400_000);
+}

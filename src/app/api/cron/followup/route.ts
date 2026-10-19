@@ -4,7 +4,7 @@ import { sendWhatsAppMessage } from "@/lib/whatsapp/sender";
 import { getSetting } from "@/lib/actions/settings";
 import { applyPlaceholders } from "@/lib/settings_helper";
 import { telefoneMascarado } from "@/lib/log-redact";
-import { dentroDaJanelaFollowup } from "@/lib/hora-sao-paulo";
+import { dentroDaJanelaFollowup, diasDesdeOPasseio } from "@/lib/hora-sao-paulo";
 import { enviaAvaliacao, enviaFollowup } from "@/lib/followup-regra";
 import { enviarFollowupComReserva } from "@/lib/followup-envio";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -94,8 +94,8 @@ export async function POST(req: Request) {
         });
     }
 
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+    // "Hoje" é o dia de São Paulo (diasDesdeOPasseio), não o do fuso do processo.
+    const agora = new Date();
 
     let avaliacaoEnviadas = 0;
     let followupsEnviados = 0;
@@ -105,11 +105,7 @@ export async function POST(req: Request) {
         try {
             const telefone = String(lead.telefone);
             const nome = lead.nome || "Olá";
-            const ultimoPasseio = new Date(lead.ultimo_passeio);
-            ultimoPasseio.setHours(0, 0, 0, 0);
-
-            const diffMs = hoje.getTime() - ultimoPasseio.getTime();
-            const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const diffDias = diasDesdeOPasseio(lead.ultimo_passeio, agora);
             const followupDias = lead.followup_dias ?? 45;
 
             // Hora certa para este lead? `followup_hora` é horário de Brasília,

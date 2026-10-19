@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getSetting } from "@/lib/actions/settings";
 import { listLeadsWithUnreadEmail } from "@/lib/actions/emails";
 import { applyPlaceholders, mensagemPosPasseio } from "@/lib/settings_helper";
+import { diasDesdeOPasseio } from "@/lib/hora-sao-paulo";
 import { canalDaConsulta } from "@/lib/canal";
 import type { LabelColor, LeadLabel } from "@/lib/types/labels";
 
@@ -869,12 +870,9 @@ export async function sendManualFollowup(telefone: string): Promise<{ success: b
     const { sendWhatsAppMessage } = await import("@/lib/whatsapp/sender");
     const googleReviewLink = process.env.GOOGLE_REVIEW_LINK || "https://g.page/alegrando";
 
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const ultimoPasseio = new Date(lead.ultimo_passeio);
-    ultimoPasseio.setHours(0, 0, 0, 0);
-    const diffMs = hoje.getTime() - ultimoPasseio.getTime();
-    const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    // Dia de hoje em São Paulo: com setHours no fuso do processo, na Vercel
+    // (UTC) um clique depois das 21h de Brasília já contava o dia seguinte.
+    const diffDias = diasDesdeOPasseio(lead.ultimo_passeio, new Date());
 
     let tipo: string;
     let mensagem: string;
