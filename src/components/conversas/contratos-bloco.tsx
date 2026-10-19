@@ -12,6 +12,7 @@ import {
     type Contrato,
 } from "@/lib/actions/contratos";
 import { STATUS_CONTRATO, type StatusContrato } from "@/lib/contratos-status";
+import { formatarInteiroBR, formatarMoedaBR, lerInteiroBR, lerNumeroBR } from "@/lib/numero-br";
 
 /**
  * Contratos do lead: um por passeio.
@@ -56,23 +57,29 @@ const CLASSE_STATUS: Record<StatusContrato, string> = {
 const campo =
     "w-full rounded-lg h-8 px-3 text-sm bg-[#EEF2FF] dark:bg-[#1e2536] border border-[#A5B4FC] dark:border-[#4a5568] text-[#191918] dark:text-white placeholder:text-[#6366F1] dark:placeholder:text-[#64748b] outline-none focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/20";
 
-/** `"12,50"` e `"12.50"` viram 12.5; vazio vira null. */
-function paraNumero(v: string): number | null {
-    const t = v.replace(/\s/g, "").replace(",", ".");
-    if (t === "") return null;
-    const n = Number(t);
-    return Number.isFinite(n) ? n : null;
-}
+/**
+ * Os quatro campos numéricos, lidos em pt-BR (lib/numero-br.ts). Antes
+ * "3.420" virava 3,42 e "1.200 alunos" virava 1, calados. Agora o que não é
+ * número não salva: o campo fica marcado e o aviso diz qual (SKILL §8, item 1).
+ */
+type CampoNumerico = "qtdAlunos" | "qtdProfessores" | "valorPorAluno" | "valorTotal";
+const NUMERICOS: Record<CampoNumerico, { rotulo: string; inteiro: boolean; exemplo: string }> = {
+    qtdAlunos: { rotulo: "Alunos", inteiro: true, exemplo: "1.200" },
+    qtdProfessores: { rotulo: "Professores", inteiro: true, exemplo: "4" },
+    valorPorAluno: { rotulo: "Valor por aluno", inteiro: false, exemplo: "90,00" },
+    valorTotal: { rotulo: "Valor total", inteiro: false, exemplo: "3.420,00" },
+};
+const lerCampo = (c: CampoNumerico, texto: string) => (NUMERICOS[c].inteiro ? lerInteiroBR(texto) : lerNumeroBR(texto));
+const formatarCampo = (c: CampoNumerico, n: number | null) =>
+    n === null ? "" : NUMERICOS[c].inteiro ? formatarInteiroBR(n) : formatarMoedaBR(n);
+const erroDoCampo = (c: CampoNumerico, texto: string) =>
+    `${NUMERICOS[c].rotulo}: “${texto.trim()}” não é um número. Exemplo: ${NUMERICOS[c].exemplo}.`;
+/** Valor do campo, ou null se vazio OU inválido — só para a sugestão do total. */
+const valorOuNull = (c: CampoNumerico, texto: string) => { const r = lerCampo(c, texto); return r.ok ? r.valor : null; };
 
-function paraInteiro(v: string): number | null {
-    const t = v.trim();
-    if (t === "") return null;
-    const n = Number.parseInt(t, 10);
-    return Number.isFinite(n) ? n : null;
-}
+type Invalido = { campo: CampoNumerico; erro: string } | null;
 
-const moeda = (n: number | null) =>
-    n === null ? "—" : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const moeda = (n: number | null) => (n === null ? "—" : formatarMoedaBR(n));
 
 const dataBr = (iso: string | null) =>
     iso ? new Date(iso + "T00:00:00").toLocaleDateString("pt-BR") : "Sem data";
@@ -81,27 +88,34 @@ function rascunhoDe(c: Contrato): Rascunho {
     return {
         dataPasseio: c.dataPasseio ?? "",
         destino: c.destino ?? "",
-        qtdAlunos: c.qtdAlunos?.toString() ?? "",
-        qtdProfessores: c.qtdProfessores?.toString() ?? "",
-        valorPorAluno: c.valorPorAluno?.toString() ?? "",
-        valorTotal: c.valorTotal?.toString() ?? "",
+        // Já formatados: antes o valor salvo voltava como "3420.5", ponto do JS.
+        qtdAlunos: formatarCampo("qtdAlunos", c.qtdAlunos),
+        qtdProfessores: formatarCampo("qtdProfessores", c.qtdProfessores),
+        valorPorAluno: formatarCampo("valorPorAluno", c.valorPorAluno),
+        valorTotal: formatarCampo("valorTotal", c.valorTotal),
         formaPagamento: c.formaPagamento ?? "",
         observacoes: c.observacoes ?? "",
         status: c.status,
     };
 }
 
-function camposDe(r: Rascunho): CamposContrato {
+function camposDe(r: Rascunho): { ok: true; campos: CamposContrato } | { ok: false; invalido: NonNullable<Invalido> } {
+    const numeros = {} as Record<CampoNumerico, number | null>;
+    for (const c of Object.keys(NUMERICOS) as CampoNumerico[]) {
+        const lido = lerCampo(c, r[c]);
+        if (!lido.ok) return { ok: false, invalido: { campo: c, erro: erroDoCampo(c, r[c]) } };
+        numeros[c] = lido.valor;
+    }
     return {
-        dataPasseio: r.dataPasseio.trim() === "" ? null : r.dataPasseio,
-        destino: r.destino.trim() || null,
-        qtdAlunos: paraInteiro(r.qtdAlunos),
-        qtdProfessores: paraInteiro(r.qtdProfessores),
-        valorPorAluno: paraNumero(r.valorPorAluno),
-        valorTotal: paraNumero(r.valorTotal),
-        formaPagamento: r.formaPagamento.trim() || null,
-        observacoes: r.observacoes.trim() || null,
-        status: r.status,
+        ok: true,
+        campos: {
+            dataPasseio: r.dataPasseio.trim() === "" ? null : r.dataPasseio,
+            destino: r.destino.trim() || null,
+            ...numeros,
+            formaPagamento: r.formaPagamento.trim() || null,
+            observacoes: r.observacoes.trim() || null,
+            status: r.status,
+        },
     };
 }
 
@@ -127,12 +141,28 @@ export function ContratosBloco({ leadId, onToast }: {
         return () => { vivo = false; };
     }, [leadId]);
 
-    function abrirNovo() { setRascunho(VAZIO); setEditando("novo"); }
-    function abrirEdicao(c: Contrato) { setRascunho(rascunhoDe(c)); setEditando(c.id); }
-    function fechar() { setEditando(null); setRascunho(VAZIO); }
+    const [invalido, setInvalido] = useState<Invalido>(null);
+
+    function abrirNovo() { setRascunho(VAZIO); setInvalido(null); setEditando("novo"); }
+    function abrirEdicao(c: Contrato) { setRascunho(rascunhoDe(c)); setInvalido(null); setEditando(c.id); }
+    function fechar() { setEditando(null); setRascunho(VAZIO); setInvalido(null); }
+
+    /** Ao sair do campo: número válido aparece formatado; inválido já fica marcado. */
+    function sair(c: CampoNumerico) {
+        const lido = lerCampo(c, rascunho[c]);
+        if (!lido.ok) { setInvalido({ campo: c, erro: erroDoCampo(c, rascunho[c]) }); return; }
+        if (lido.valor !== null) setRascunho({ ...rascunho, [c]: formatarCampo(c, lido.valor) });
+    }
+
+    function editar(r: Rascunho) {
+        if (invalido && r[invalido.campo] !== rascunho[invalido.campo]) setInvalido(null);
+        setRascunho(r);
+    }
 
     function salvar() {
-        const campos = camposDe(rascunho);
+        const lido = camposDe(rascunho);
+        if (!lido.ok) { setInvalido(lido.invalido); return; }
+        const campos = lido.campos;
         iniciarSalvar(async () => {
             const res = editando === "novo"
                 ? await createContrato(leadId, campos)
@@ -193,9 +223,9 @@ export function ContratosBloco({ leadId, onToast }: {
     // Sugestão, não imposição: `valor_total` é digitado porque desconto e
     // professor isento fazem valor_por_aluno × alunos não fechar.
     const sugestao = (() => {
-        const por = paraNumero(rascunho.valorPorAluno);
-        const qtd = paraInteiro(rascunho.qtdAlunos);
-        return por !== null && qtd !== null ? por * qtd : null;
+        const por = valorOuNull("valorPorAluno", rascunho.valorPorAluno);
+        const qtd = valorOuNull("qtdAlunos", rascunho.qtdAlunos);
+        return por !== null && qtd !== null ? Math.round(por * qtd * 100) / 100 : null;
     })();
 
     return (
@@ -234,7 +264,7 @@ export function ContratosBloco({ leadId, onToast }: {
                 editando === c.id ? (
                     <Formulario
                         key={c.id}
-                        rascunho={rascunho} setRascunho={setRascunho} sugestao={sugestao}
+                        rascunho={rascunho} setRascunho={editar} sugestao={sugestao} invalido={invalido} onSair={sair}
                         salvando={salvando} onSalvar={salvar} onCancelar={fechar}
                     />
                 ) : (
@@ -288,7 +318,7 @@ export function ContratosBloco({ leadId, onToast }: {
 
             {editando === "novo" && (
                 <Formulario
-                    rascunho={rascunho} setRascunho={setRascunho} sugestao={sugestao}
+                    rascunho={rascunho} setRascunho={editar} sugestao={sugestao} invalido={invalido} onSair={sair}
                     salvando={salvando} onSalvar={salvar} onCancelar={fechar}
                 />
             )}
@@ -314,15 +344,26 @@ export function ContratosBloco({ leadId, onToast }: {
     );
 }
 
-function Formulario({ rascunho, setRascunho, sugestao, salvando, onSalvar, onCancelar }: {
+function Formulario({ rascunho, setRascunho, sugestao, invalido, onSair, salvando, onSalvar, onCancelar }: {
     rascunho: Rascunho;
     setRascunho: (r: Rascunho) => void;
     sugestao: number | null;
+    invalido: Invalido;
+    onSair: (c: CampoNumerico) => void;
     salvando: boolean;
     onSalvar: () => void;
     onCancelar: () => void;
 }) {
     const set = (p: Partial<Rascunho>) => setRascunho({ ...rascunho, ...p });
+    /** Props comuns dos campos numéricos: marcação de inválido e formatação ao sair. */
+    const numerico = (c: CampoNumerico) => ({
+        value: rascunho[c],
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) => set({ [c]: e.target.value }),
+        onBlur: () => onSair(c),
+        "aria-invalid": invalido?.campo === c || undefined,
+        "aria-describedby": invalido?.campo === c ? "contrato-erro-numero" : undefined,
+        className: cn(campo, "aria-invalid:border-red-500 dark:aria-invalid:border-red-400"),
+    });
     return (
         <div className="rounded-lg border-2 border-brand-500/40 bg-[#EEF2FF]/40 dark:bg-[#1e2536]/40 p-2.5 space-y-2">
             <div className="flex items-center justify-between">
@@ -345,25 +386,27 @@ function Formulario({ rascunho, setRascunho, sugestao, salvando, onSalvar, onCan
                 onChange={(e) => set({ destino: e.target.value })} className={campo} />
 
             <div className="grid grid-cols-2 gap-1.5">
-                <input inputMode="numeric" aria-label="Quantidade de alunos" placeholder="Alunos" value={rascunho.qtdAlunos}
-                    onChange={(e) => set({ qtdAlunos: e.target.value })} className={campo} />
-                <input inputMode="numeric" aria-label="Quantidade de professores" placeholder="Professores" value={rascunho.qtdProfessores}
-                    onChange={(e) => set({ qtdProfessores: e.target.value })} className={campo} />
+                <input inputMode="numeric" aria-label="Quantidade de alunos" placeholder="Alunos" {...numerico("qtdAlunos")} />
+                <input inputMode="numeric" aria-label="Quantidade de professores" placeholder="Professores" {...numerico("qtdProfessores")} />
             </div>
 
             <div className="grid grid-cols-2 gap-1.5">
-                <input inputMode="decimal" aria-label="Valor por aluno" placeholder="R$ por aluno" value={rascunho.valorPorAluno}
-                    onChange={(e) => set({ valorPorAluno: e.target.value })} className={campo} />
-                <input inputMode="decimal" aria-label="Valor total" placeholder="R$ total" value={rascunho.valorTotal}
-                    onChange={(e) => set({ valorTotal: e.target.value })} className={campo} />
+                <input inputMode="decimal" aria-label="Valor por aluno" placeholder="R$ por aluno" {...numerico("valorPorAluno")} />
+                <input inputMode="decimal" aria-label="Valor total" placeholder="R$ total" {...numerico("valorTotal")} />
             </div>
+
+            {invalido && (
+                <p id="contrato-erro-numero" role="alert" className="text-[11px] font-medium text-red-600 dark:text-red-400">
+                    {invalido.erro} Nada foi salvo.
+                </p>
+            )}
 
             {/* O total é digitado. A sugestão é um atalho, nunca escreve sozinha:
                 desconto e professor isento fazem o produto não fechar. */}
-            {sugestao !== null && paraNumero(rascunho.valorTotal) !== sugestao && (
-                <button type="button" onClick={() => set({ valorTotal: String(sugestao) })}
+            {sugestao !== null && valorOuNull("valorTotal", rascunho.valorTotal) !== sugestao && (
+                <button type="button" onClick={() => set({ valorTotal: formatarMoedaBR(sugestao) })}
                     className="text-[10px] text-brand-500 dark:text-brand-400 hover:underline">
-                    Usar sugestão: {moeda(sugestao)} ({rascunho.qtdAlunos} × {moeda(paraNumero(rascunho.valorPorAluno))})
+                    Usar sugestão: {moeda(sugestao)} ({rascunho.qtdAlunos} × {moeda(valorOuNull("valorPorAluno", rascunho.valorPorAluno))})
                 </button>
             )}
 

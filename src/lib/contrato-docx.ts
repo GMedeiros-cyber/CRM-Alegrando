@@ -15,6 +15,7 @@ import Docxtemplater from "docxtemplater";
 import { isoParaTexto } from "./data-aniversario";
 import { dataPorExtensoEmSaoPaulo } from "./hora-sao-paulo";
 import { CAMPOS_CONTRATO } from "./contrato-campos";
+import { formatarMoedaBR } from "./numero-br";
 
 export { CAMPOS_CONTRATO, LIMITE_MODELO_BYTES } from "./contrato-campos";
 const CHAVES = new Set(CAMPOS_CONTRATO.map((c) => c.chave));
@@ -46,11 +47,9 @@ export function representanteEscola(lead: LeadParaContrato): string {
     return [lead.responsavel, lead.diretora_nome, lead.coordenadora_nome].map(texto).find(Boolean) ?? "";
 }
 
-const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-
 /** "R$ 3.420,00"; vazio quando não há valor. */
 export function moedaBRL(v: number | null): string {
-    return v === null || v === undefined ? "" : BRL.format(v);
+    return v === null || v === undefined ? "" : formatarMoedaBR(v);
 }
 
 /** Os valores do modelo. Todo campo vai como string — vazio ("") liga o marcador. */
